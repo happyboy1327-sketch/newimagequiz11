@@ -163,7 +163,7 @@ async function fillCache() {
 
               for (const cand of candidates.slice(0, 10)) { 
                   if (QUIZ_CACHE.length >= CACHE_SIZE) break;
-                  if (/\(.*\)|목록|분류|선수|배우|가수|작가|기업|작품|드라마|영화|앨범|만화/.test(cand.title)) continue; 
+                  if (/\(.*\)|선수|음악|작가|기업|독립운동|미술|의사|간호사|영화/.test(cand.title)) continue; 
 
                   const detailRes = await axios.get(`https://ko.wikipedia.org/w/api.php`, {
                       headers: WIKI_HEADERS,
