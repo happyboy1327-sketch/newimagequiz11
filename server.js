@@ -54,99 +54,168 @@ const WIKI_HEADERS = {
   'Accept': 'application/json'
 };
 
+// ===============================
+// 1) 이름 alias 자동 생성
+// ===============================
+function makeNameAliases(title) {
+    const cleanKo = title.replace(/\(.+?\)/g, "").trim();
+    const lowerKo = cleanKo.toLowerCase();
+
+    // 기본 alias 세트
+    let aliases = [
+        lowerKo,
+        lowerKo.replace(/\s+/g, "-")
+    ];
+
+    // 영어 이름 추론 (ko → en 대체)
+    // 실제로 wiki redirect가 자동으로 영어표기와 연결되어 있어 성공률이 매우 높음
+    if (/모차르트|mozart|아마데우스/.test(cleanKo)) {
+        aliases.push("wolfgang amadeus mozart".toLowerCase());
+        aliases.push("wolfgang-amadeus-mozart");
+        aliases.push("mozart");
+    }
+    if (/베토벤/.test(cleanKo)) {
+        aliases.push("ludwig van beethoven");
+        aliases.push("beethoven");
+    }
+    if (/피카소/.test(cleanKo)) {
+        aliases.push("pablo picasso");
+        aliases.push("picasso");
+    }
+    if (/간디/.test(cleanKo)) {
+        aliases.push("mahatma gandhi");
+        aliases.push("gandhi");
+    }
+
+    return [...new Set(aliases)];
+}
+
+// ===============================
+// 2) infobox 이미지 추출 (강화 버전)
+// ===============================
+function extractInfoboxImage(html) {
+    const patterns = [
+        /class="infobox[^"]*"[\s\S]*?<img[^>]+src="([^"]+)"/i,
+        /infobox[\s\S]*?<img[^>]+src="([^"]+)"/i,
+        /<td[^>]*class="infobox-image"[^>]*>[\s\S]*?<img[^>]+src="([^"]+)"/i
+    ];
+
+    for (const p of patterns) {
+        const m = html.match(p);
+        if (m) {
+            const url = m[1].startsWith("http") ? m[1] : "https:" + m[1];
+            return url;
+        }
+    }
+    return null;
+}
+
+// ===============================
+// 3) 사람이 나온 이미지 필터
+// ===============================
+function isHumanPhoto(filename, aliases) {
+    const n = filename.toLowerCase();
+
+    if (!/\.(jpg|jpeg|png)$/i.test(n)) return false;
+
+    // 기념비/상징류 제외
+    if (/(memorial|monument|statue|grave|tomb|plaque|museum)/i.test(n)) return false;
+    if (/(emblem|flag|symbol|coat|arms|seal|logo|icon)/i.test(n)) return false;
+    if (/signature/i.test(n)) return false;
+
+    // 긍정 단서
+    if (/(portrait|photo|face|painting)/i.test(n)) return true;
+
+    // alias 기반 이름 매칭 (KO/EN/하이픈 모두 포함)
+    for (const a of aliases) {
+        if (a && n.includes(a)) return true;
+    }
+
+    return false;
+}
+
+// ===============================
+// 4) 최종 — getStableMainImage(title)
+// ===============================
 async function getStableMainImage(title) {
+
+    const aliases = makeNameAliases(title);
+
     const baseParams = {
         action: "query",
         format: "json",
         origin: "*",
-        titles: title,
-        prop: "revisions",
-        rvprop: "content",
-        rvslots: "main"
+        titles: title
     };
 
-    // 1) pageimages (썸네일)
-    const thumbRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-        headers: WIKI_HEADERS,
-        params: {
-            action: "query",
-            format: "json",
-            origin: "*",
-            titles: title,
-            prop: "pageimages",
-            piprop: "thumbnail|name",
-            pithumbsize: 800
-        }
-    });
-
-    const pageId = Object.keys(thumbRes.data.query.pages)[0];
-    const thumbPage = thumbRes.data.query.pages[pageId];
-    let thumbnail = thumbPage?.thumbnail?.source || null;
-
-    // 2) 문서 HTML에서 infobox 이미지 추출
-    const parseRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-        headers: WIKI_HEADERS,
-        params: {
-            action: "parse",
-            page: title,
-            prop: "images|text",
-            format: "json",
-            origin: "*"
-        }
-    });
-
-    const imagesInPage = parseRes.data.parse.images || [];
-    const html = parseRes.data.parse.text["*"];
-
-    // infobox 내부 이미지 정규식
-    const infoboxMatch = html.match(/infobox[^>]+>[\s\S]*?<img[^>]+src="([^"]+)"/i);
-    if (infoboxMatch) {
-        const infoboxUrl = infoboxMatch[1].startsWith("http")
-            ? infoboxMatch[1]
-            : "https:" + infoboxMatch[1];
-        return infoboxUrl;
-    }
-
-    // 3) images 목록 정리
-    const filtered = imagesInPage.filter(img => {
-        const n = img.toLowerCase();
-        if (!/\.(jpg|jpeg|png)$/i.test(n)) return false;
-
-        // 기념비/상징 제거
-        if (/(memorial|monument|statue|bust|grave|tomb|artifact|museum)/i.test(n)) return false;
-        if (/(emblem|flag|symbol|coat|arms|seal|logo|icon)/i.test(n)) return false;
-
-        // 인물이름 포함 강제 우선
-        const clean = title.replace(/\(.+?\)/g, "").trim().toLowerCase();
-        if (n.includes(clean)) return true;
-
-        // 일반적인 인물 사진 패턴
-        if (/(portrait|photo|face)/i.test(n)) return true;
-
-        return false;
-    });
-
-    if (filtered.length > 0) {
-        const fileTitle = "File:" + filtered[0];
-
-        const imgInfo = await axios.get("https://ko.wikipedia.org/w/api.php", {
+    // 1) 대표 thumbnail 우선 확보
+    let bestThumb = null;
+    try {
+        const thumbRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
             headers: WIKI_HEADERS,
             params: {
-                action: "query",
-                format: "json",
-                prop: "imageinfo",
-                iiprop: "url",
-                titles: fileTitle,
-                origin: "*"
+                ...baseParams,
+                prop: "pageimages",
+                piprop: "thumbnail|name",
+                pithumbsize: 800
             }
         });
 
-        const page = Object.values(imgInfo.data.query.pages)[0];
-        const url = page?.imageinfo?.[0]?.url;
-        if (url) return url;
+        const thumbPage = Object.values(thumbRes.data.query.pages)[0];
+        bestThumb = thumbPage.thumbnail?.source || null;
+    } catch (e) {
+        bestThumb = null;
     }
 
-    return thumbnail;
+    // 2) 문서 HTML 가져오기 → infobox 추출 시도
+    let infoboxImage = null;
+    try {
+        const htmlRes = await axios.get(
+            `https://ko.wikipedia.org/wiki/${encodeURIComponent(title)}`,
+            { headers: WIKI_HEADERS }
+        );
+        infoboxImage = extractInfoboxImage(htmlRes.data);
+    } catch (e) {}
+
+    // 3) 이미지 리스트 전체 요청 → 사람이 나온 후보 필터링
+    let bestFace = null;
+    try {
+        const imgListRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+            headers: WIKI_HEADERS,
+            params: {
+                ...baseParams,
+                prop: "images",
+                imlimit: 50
+            }
+        });
+
+        const imgListPage = Object.values(imgListRes.data.query.pages)[0];
+        const images = imgListPage.images || [];
+
+        const faceCandidates = images.filter(img => isHumanPhoto(img.title, aliases));
+
+        if (faceCandidates.length > 0) {
+            const first = faceCandidates[0].title;
+
+            const infoRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+                headers: WIKI_HEADERS,
+                params: {
+                    action: "query",
+                    format: "json",
+                    titles: first,
+                    prop: "imageinfo",
+                    iiprop: "url",
+                    origin: "*"
+                }
+            });
+
+            const infoPage = Object.values(infoRes.data.query.pages)[0];
+            bestFace = infoPage.imageinfo?.[0]?.url || null;
+        }
+    } catch (e) {}
+
+    // 4) 우선순위 결론
+    return bestFace || infoboxImage || bestThumb || null;
 }
 
 
