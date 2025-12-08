@@ -21,6 +21,14 @@ app.use((req, res, next) => {
     next();
 });
 
+// 프로세스 수준 안전장치 (파일 상단에 한 번만 추가)
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason && reason.stack ? reason.stack : reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err && err.stack ? err.stack : err);
+});
+
 // --- 설정 ---
 const CACHE_SIZE = 20;       
 const VALIDATION_TRY = 3;    
@@ -127,10 +135,11 @@ async function checkUrlStability(url) {
   
   for (let i = 1; i <= VALIDATION_TRY; i++) {
     try {
-      const res = await axios.head(url, { 
-        headers: WIKI_HEADERS, 
-        timeout: 2000 
-      });
+      const res = await axios.get(url, {
+        headers: WIKI_HEADERS,
+        timeout: 2000,
+        responseType: "arraybuffer"
+});
       
       const contentType = res.headers['content-type'] || '';
       if (res.status !== 200 || !contentType.includes('image')) {
@@ -232,6 +241,7 @@ async function fillCache() {
                         console.log(`❌ [유명인] ${pickName} 이미지 없음/불안정.`);
                         continue;
                     }
+                    const isStable = await checkUrlStability(imgUrl);
 
                     // 저장
                     console.log(`✅ [유명인] ${pickName} 통과.`);
@@ -307,6 +317,7 @@ async function fillCache() {
                         console.log(`❌ [랜덤] ${pageData.title} 이미지 없음/불안정.`);
                         continue;
                     }
+                    const isStable = await checkUrlStability(imgUrl);
 
                     console.log(`✅ [랜덤] ${pageData.title} 통과.`);
                     const maskedHint = createMaskedHint(pageData.title, pageData.extract);
