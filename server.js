@@ -59,117 +59,93 @@ async function getStableMainImage(title) {
         action: "query",
         format: "json",
         origin: "*",
-        titles: title
+        titles: title,
+        prop: "revisions",
+        rvprop: "content",
+        rvslots: "main"
     };
 
-    /** ---------------------------
-     * 1) 대표 썸네일 요청 (pageimages)
-     * --------------------------- */
+    // 1) pageimages (썸네일)
     const thumbRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
         headers: WIKI_HEADERS,
         params: {
-            ...baseParams,
+            action: "query",
+            format: "json",
+            origin: "*",
+            titles: title,
             prop: "pageimages",
             piprop: "thumbnail|name",
             pithumbsize: 800
         }
     });
 
-    const thumbPage = Object.values(thumbRes.data.query.pages)[0];
-    const thumbnail = thumbPage.thumbnail?.source || null;
+    const pageId = Object.keys(thumbRes.data.query.pages)[0];
+    const thumbPage = thumbRes.data.query.pages[pageId];
+    let thumbnail = thumbPage?.thumbnail?.source || null;
 
-    /** ---------------------------
-     * 2) 문서 내 이미지 목록 요청 (images)
-     * --------------------------- */
-    const imgListRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+    // 2) 문서 HTML에서 infobox 이미지 추출
+    const parseRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
         headers: WIKI_HEADERS,
         params: {
-            ...baseParams,
-            prop: "images",
-            imlimit: 100
+            action: "parse",
+            page: title,
+            prop: "images|text",
+            format: "json",
+            origin: "*"
         }
     });
 
-    const imgListPage = Object.values(imgListRes.data.query.pages)[0];
-    const images = imgListPage.images || [];
+    const imagesInPage = parseRes.data.parse.images || [];
+    const html = parseRes.data.parse.text["*"];
 
-    /** ---------------------------
-     * 3) 대표 썸네일이 얼굴인지 판단
-     *    - "기념비/상징/로고/지도" 제외
-     * --------------------------- */
-    function looksLikeFace(urlOrTitle) {
-        if (!urlOrTitle) return false;
-
-        const s = urlOrTitle.toLowerCase();
-
-        // 무조건 제외
-        if (/(coat of arms|emblem|flag|seal|symbol|logo|icon|map|location|signature|marker)/i.test(s)) return false;
-        if (/(memorial|monument|statue|sculpture|stamp|coin)/i.test(s)) return false;
-
-        // 얼굴 가능성이 높은 키워드
-        if (/(portrait|photo|face|depiction|painting of|bust)/i.test(s)) return true;
-
-        // 인물 이름 포함 → 매우 높은 확률
-        const cleanedName = title.replace(/\(.+?\)/, '').trim().toLowerCase();
-        if (s.includes(cleanedName)) return true;
-
-        return false;
+    // infobox 내부 이미지 정규식
+    const infoboxMatch = html.match(/infobox[^>]+>[\s\S]*?<img[^>]+src="([^"]+)"/i);
+    if (infoboxMatch) {
+        const infoboxUrl = infoboxMatch[1].startsWith("http")
+            ? infoboxMatch[1]
+            : "https:" + infoboxMatch[1];
+        return infoboxUrl;
     }
 
-    /** ---------------------------
-     * 4) 썸네일이 얼굴이면 그대로 사용
-     * --------------------------- */
-    if (thumbnail && looksLikeFace(thumbnail)) {
-        return thumbnail;
-    }
+    // 3) images 목록 정리
+    const filtered = imagesInPage.filter(img => {
+        const n = img.toLowerCase();
+        if (!/\.(jpg|jpeg|png)$/i.test(n)) return false;
 
-    /** ---------------------------
-     * 5) 썸네일이 얼굴이 아니면
-     *    이미지 목록에서 얼굴 후보 검색
-     * --------------------------- */
-    const faceCandidates = images.filter(img => {
-        const name = img.title.toLowerCase();
+        // 기념비/상징 제거
+        if (/(memorial|monument|statue|bust|grave|tomb|artifact|museum)/i.test(n)) return false;
+        if (/(emblem|flag|symbol|coat|arms|seal|logo|icon)/i.test(n)) return false;
 
-        if (!/\.(jpg|jpeg|png)$/i.test(name)) return false;
-        if (/(coat of arms|emblem|flag|seal|symbol|logo|icon|map|location|signature|marker)/i.test(name)) return false;
-        if (/(memorial|monument|statue|sculpture|stamp|coin)/i.test(name)) return false;
+        // 인물이름 포함 강제 우선
+        const clean = title.replace(/\(.+?\)/g, "").trim().toLowerCase();
+        if (n.includes(clean)) return true;
 
-        const cleanedName = title.replace(/\(.+?\)/, '').trim().toLowerCase();
-        if (name.includes(cleanedName)) return true;
-
-        if (/(portrait|photo|face|depiction|painting of|bust)/i.test(name)) return true;
+        // 일반적인 인물 사진 패턴
+        if (/(portrait|photo|face)/i.test(n)) return true;
 
         return false;
     });
 
-    /** ---------------------------
-     * 6) 얼굴 후보가 있다면 첫 번째를 URL 변환
-     * --------------------------- */
-    if (faceCandidates.length > 0) {
-        const first = faceCandidates[0].title;
+    if (filtered.length > 0) {
+        const fileTitle = "File:" + filtered[0];
 
-        const infoRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+        const imgInfo = await axios.get("https://ko.wikipedia.org/w/api.php", {
             headers: WIKI_HEADERS,
             params: {
                 action: "query",
-                titles: first,
+                format: "json",
                 prop: "imageinfo",
                 iiprop: "url",
-                format: "json",
+                titles: fileTitle,
                 origin: "*"
             }
         });
 
-        const infoPage = Object.values(infoRes.data.query.pages)[0];
-        const finalUrl = infoPage.imageinfo?.[0]?.url;
-
-        if (finalUrl) return finalUrl;
+        const page = Object.values(imgInfo.data.query.pages)[0];
+        const url = page?.imageinfo?.[0]?.url;
+        if (url) return url;
     }
 
-    /** ---------------------------
-     * 7) 그래도 사람이 안 나오면
-     *    마지막 fallback = 썸네일
-     * --------------------------- */
     return thumbnail;
 }
 
