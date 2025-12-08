@@ -26,7 +26,6 @@
   button:disabled {background:#dee2e6; cursor:not-allowed;}
   
   #timer {font-weight:800; color:#fa5252; margin-bottom:8px; font-size:1.4rem;}
-  #remaining {font-size:0.85rem; color:#adb5bd; margin-bottom:20px;}
   
   #result {margin-top:20px; text-align:left;}
   .res-header {font-size:1.2rem; font-weight:800; margin-bottom:8px; text-align:center;}
@@ -44,7 +43,7 @@
   </div>
   
   <div id="hint">데이터 검증 및 수신 중...</div>
-  <div id="remaining"></div>
+
   
   <input id="answer" placeholder="정답 입력" autocomplete="off">
   
@@ -93,7 +92,6 @@ async function loadQuiz(){
     currentData = data;
     img.src = data.image;
     document.getElementById('hint').textContent = data.hint;
-    document.getElementById('remaining').textContent = `오늘 남은 호출: ${data.remaining}`;
     
     document.getElementById('checkBtn').disabled = false;
     startTimer();
