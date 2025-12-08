@@ -38,7 +38,6 @@ const LEGACY_NAMES = [
 let QUIZ_CACHE = [];
 let isCaching = false;
 // 🌟 [수정] 세션 카운트 대신 요청 카운트만 유지
-let callCount = 0;
 // 🌟 [수정] 캐싱 작업의 Promise를 저장할 변수
 let cachePromise = null; 
 
@@ -348,12 +347,6 @@ app.get("/api/quiz", async (req, res) => {
     if (isCaching && cachePromise) {
         await cachePromise; 
     }
-
-    if (callCount >= DAILY_LIMIT) {
-      return res.status(429).json({ error: "오늘 호출 한도 초과", requestId });
-    }
-  
-    callCount++;
   
     // 캐시가 비어있으면 다시 채우고, 채워질 때까지 다시 대기 
     if (QUIZ_CACHE.length === 0) {
@@ -372,9 +365,7 @@ app.get("/api/quiz", async (req, res) => {
 
     res.json({ 
       ...item, 
-      imageUrl: item.image, 
-      remaining: DAILY_LIMIT - callCount, 
-      // 🌟 [수정] 요청 ID를 응답에 포함
+      imageUrl: item.image,
       requestId 
     });
 
