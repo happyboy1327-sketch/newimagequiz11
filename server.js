@@ -48,6 +48,81 @@ const WIKI_HEADERS = {
   'Accept': 'application/json'
 };
 
+async function getStableMainImage(title) {
+    const baseParams = {
+        action: "query",
+        format: "json",
+        origin: "*",
+        titles: title
+    };
+
+    // 1) pageimages로 대표 thumbnail 우선 확보
+    const thumbRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+        headers: WIKI_HEADERS,
+        params: {
+            ...baseParams,
+            prop: "pageimages",
+            piprop: "thumbnail|name",
+            pithumbsize: 800
+        }
+    });
+
+    const thumbPage = Object.values(thumbRes.data.query.pages)[0];
+    let bestImg = thumbPage.thumbnail?.source || null;
+
+    // 2) 이미지 전체 리스트 요청
+    const imgListRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+        headers: WIKI_HEADERS,
+        params: {
+            ...baseParams,
+            prop: "images",
+            imlimit: 50
+        }
+    });
+
+    const imgListPage = Object.values(imgListRes.data.query.pages)[0];
+    const images = imgListPage.images || [];
+
+    // 사람이 나온 사진으로 보이는 이미지 선별 규칙
+    const faceLike = images.filter(img => {
+        const n = img.title.toLowerCase();
+
+        if (!/\.(jpg|jpeg|png)$/i.test(n)) return false;
+        if (/(coat of arms|emblem|flag|seal|icon|symbol|map|signature)/i.test(n)) return false;
+
+        // 긍정적 단서
+        if (/(portrait|photo|face|depiction|painting of|bust)/i.test(n)) return true;
+
+        // 파일명이 인물 이름을 포함하는 경우 (가장 강력)
+        const cleanedName = title.replace(/\(.+?\)/, '').trim().toLowerCase();
+        if (n.includes(cleanedName)) return true;
+
+        return false;
+    });
+
+    if (faceLike.length === 0) return bestImg;
+
+    // 첫 번째 얼굴류 이미지를 풀 URL로 변환
+    const firstImageTitle = faceLike[0].title;
+
+    const imageInfoRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+        headers: WIKI_HEADERS,
+        params: {
+            action: "query",
+            titles: firstImageTitle,
+            prop: "imageinfo",
+            iiprop: "url",
+            format: "json",
+            origin: "*"
+        }
+    });
+
+    const imageInfoPage = Object.values(imageInfoRes.data.query.pages)[0];
+    const finalUrl = imageInfoPage.imageinfo?.[0]?.url;
+
+    return finalUrl || bestImg;
+}
+
 // --- [핵심] 3회 연속 타격 검증 (이미지 안정성 체크) ---
 async function checkUrlStability(url) {
   if (!url) return false;
@@ -135,7 +210,7 @@ async function fillCache() {
                   if (!pages) continue;
                   const pageData = Object.values(pages)[0];
                   if (pageData.thumbnail?.source && pageData.extract && pageData.extract.length > 30) {
-                      const imgUrl = pageData.thumbnail.source;
+                      const imgUrl = await getStableMainImage(pageData.title);
                       const isStable = await checkUrlStability(imgUrl);
                       if (isStable) {
                           console.log(`✅ [유명인] ${pickName} 통과.`);
@@ -175,7 +250,7 @@ async function fillCache() {
                   const pageData = Object.values(pages)[0];
 
                   if (pageData.thumbnail?.source && pageData.extract && pageData.extract.length > 300) { 
-                      const imgUrl = pageData.thumbnail.source;
+                      const imgUrl = pawait getStableMainImage(pageData.title);
                       const isStable = await checkUrlStability(imgUrl);
                       
                       if (isStable) {
