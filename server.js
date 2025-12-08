@@ -54,93 +54,12 @@ const WIKI_HEADERS = {
   'Accept': 'application/json'
 };
 
-// ===============================
-// 1) 이름 alias 자동 생성
-// ===============================
-function makeNameAliases(title) {
-    const cleanKo = title.replace(/\(.+?\)/g, "").trim();
-    const lowerKo = cleanKo.toLowerCase();
-
-    // 기본 alias 세트
-    let aliases = [
-        lowerKo,
-        lowerKo.replace(/\s+/g, "-")
-    ];
-
-    // 영어 이름 추론 (ko → en 대체)
-    // 실제로 wiki redirect가 자동으로 영어표기와 연결되어 있어 성공률이 매우 높음
-    if (/모차르트|mozart|아마데우스/.test(cleanKo)) {
-        aliases.push("wolfgang amadeus mozart".toLowerCase());
-        aliases.push("wolfgang-amadeus-mozart");
-        aliases.push("mozart");
-    }
-    if (/베토벤/.test(cleanKo)) {
-        aliases.push("ludwig van beethoven");
-        aliases.push("beethoven");
-    }
-    if (/피카소/.test(cleanKo)) {
-        aliases.push("pablo picasso");
-        aliases.push("picasso");
-    }
-    if (/간디/.test(cleanKo)) {
-        aliases.push("mahatma gandhi");
-        aliases.push("gandhi");
-    }
-
-    return [...new Set(aliases)];
-}
-
-// ===============================
-// 2) infobox 이미지 추출 (강화 버전)
-// ===============================
-function extractInfoboxImage(html) {
-    const patterns = [
-        /class="infobox[^"]*"[\s\S]*?<img[^>]+src="([^"]+)"/i,
-        /infobox[\s\S]*?<img[^>]+src="([^"]+)"/i,
-        /<td[^>]*class="infobox-image"[^>]*>[\s\S]*?<img[^>]+src="([^"]+)"/i
-    ];
-
-    for (const p of patterns) {
-        const m = html.match(p);
-        if (m) {
-            const url = m[1].startsWith("http") ? m[1] : "https:" + m[1];
-            return url;
-        }
-    }
-    return null;
-}
-
-// ===============================
-// 3) 사람이 나온 이미지 필터
-// ===============================
-function isHumanPhoto(filename, aliases) {
-    const n = filename.toLowerCase();
-
-    if (!/\.(jpg|jpeg|png)$/i.test(n)) return false;
-
-    // 기념비/상징류 제외
-    if (/(memorial|monument|statue|grave|tomb|plaque|museum)/i.test(n)) return false;
-    if (/(emblem|flag|symbol|coat|arms|seal|logo|icon)/i.test(n)) return false;
-    if (/signature/i.test(n)) return false;
-
-    // 긍정 단서
-    if (/(portrait|photo|face|painting)/i.test(n)) return true;
-
-    // alias 기반 이름 매칭 (KO/EN/하이픈 모두 포함)
-    for (const a of aliases) {
-        if (a && n.includes(a)) return true;
-    }
-
-    return false;
-}
-
-// ===============================
-// 4) 최종 — getStableMainImage(title)
-// ===============================
-async function getStableMainImage(title) {
-
-    const aliases = makeNameAliases(title);
-
+/**
+ * getPersonImageStrict_v2
+ * - 인물 사진이 확실히 없으면 null 반환 (스킵)
+ * - infobox 우선, 그다음 images 목록에서 alias 기반 필터, 최종 HEAD 확인
+ */
+async function getPersonImageStrict(title) {
     const baseParams = {
         action: "query",
         format: "json",
@@ -148,74 +67,79 @@ async function getStableMainImage(title) {
         titles: title
     };
 
-    // 1) 대표 thumbnail 우선 확보
-    let bestThumb = null;
-    try {
-        const thumbRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-            headers: WIKI_HEADERS,
-            params: {
-                ...baseParams,
-                prop: "pageimages",
-                piprop: "thumbnail|name",
-                pithumbsize: 800
-            }
-        });
+    // 1) 썸네일 요청
+    const thumbRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+        headers: WIKI_HEADERS,
+        params: {
+            ...baseParams,
+            prop: "pageimages",
+            piprop: "thumbnail|name",
+            pithumbsize: 800
+        }
+    });
 
-        const thumbPage = Object.values(thumbRes.data.query.pages)[0];
-        bestThumb = thumbPage.thumbnail?.source || null;
-    } catch (e) {
-        bestThumb = null;
+    const thumbPage = Object.values(thumbRes.data.query.pages)[0];
+    const thumb = thumbPage.thumbnail?.source || null;
+    const thumbTitle = thumbPage.pageimage || "";
+
+    // 1-1) 썸네일이 기념비·상징 등으로 의심되면 무시
+    const BLOCK = /(dress|coat of arms|flag|seal|symbol|emblem|monument|statue|signature|insignia)/i;
+    if (thumb && !BLOCK.test(thumbTitle.toLowerCase())) {
+        return thumb;  // 정상 인물 썸네일
     }
 
-    // 2) 문서 HTML 가져오기 → infobox 추출 시도
-    let infoboxImage = null;
-    try {
-        const htmlRes = await axios.get(
-            `https://ko.wikipedia.org/wiki/${encodeURIComponent(title)}`,
-            { headers: WIKI_HEADERS }
-        );
-        infoboxImage = extractInfoboxImage(htmlRes.data);
-    } catch (e) {}
-
-    // 3) 이미지 리스트 전체 요청 → 사람이 나온 후보 필터링
-    let bestFace = null;
-    try {
-        const imgListRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-            headers: WIKI_HEADERS,
-            params: {
-                ...baseParams,
-                prop: "images",
-                imlimit: 50
-            }
-        });
-
-        const imgListPage = Object.values(imgListRes.data.query.pages)[0];
-        const images = imgListPage.images || [];
-
-        const faceCandidates = images.filter(img => isHumanPhoto(img.title, aliases));
-
-        if (faceCandidates.length > 0) {
-            const first = faceCandidates[0].title;
-
-            const infoRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                headers: WIKI_HEADERS,
-                params: {
-                    action: "query",
-                    format: "json",
-                    titles: first,
-                    prop: "imageinfo",
-                    iiprop: "url",
-                    origin: "*"
-                }
-            });
-
-            const infoPage = Object.values(infoRes.data.query.pages)[0];
-            bestFace = infoPage.imageinfo?.[0]?.url || null;
+    // 2) 이미지 전체 목록 조회
+    const imgListRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+        headers: WIKI_HEADERS,
+        params: {
+            ...baseParams,
+            prop: "images",
+            imlimit: 50
         }
-    } catch (e) {}
+    });
 
-    // 4) 우선순위 결론
-    return bestFace || infoboxImage || bestThumb || null;
+    const page = Object.values(imgListRes.data.query.pages)[0];
+    const images = page.images || [];
+
+    if (!images.length) return null;
+
+    // 3) 강력한 인물 사진 필터
+    const nameKey = title.replace(/\(.+?\)/, "").trim().toLowerCase();
+
+    const candidates = images.filter(img => {
+        const f = img.title.toLowerCase();
+
+        if (!/\.(jpg|jpeg|png)$/i.test(f)) return false;
+        if (BLOCK.test(f)) return false;
+
+        // 인물 사진으로 강력 판단하는 규칙
+        if (/(portrait|face|photo|painting|actor|figure)/i.test(f)) return true;
+        if (f.includes(nameKey)) return true;
+
+        return false;
+    });
+
+    if (!candidates.length) return null;
+
+    // 4) 가장 첫 번째 후보 이미지 변환
+    const fileTitle = candidates[0].title;
+
+    const imageInfoRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+        headers: WIKI_HEADERS,
+        params: {
+            action: "query",
+            titles: fileTitle,
+            prop: "imageinfo",
+            iiprop: "url",
+            format: "json",
+            origin: "*"
+        }
+    });
+
+    const infoPage = Object.values(imageInfoRes.data.query.pages)[0];
+    const url = infoPage.imageinfo?.[0]?.url || null;
+
+    return url;
 }
 
 
@@ -311,7 +235,7 @@ async function fillCache() {
                             params: {
                                 action: "query",
                                 titles: pickName,
-                                prop: "extracts",      // 사진은 getStableMainImage가 처리
+                                prop: "extracts",      // 사진은 getPersonImageStrict가 처리
                                 exintro: true,
                                 explaintext: true,
                                 format: "json",
@@ -326,7 +250,7 @@ async function fillCache() {
                     if (!pageData || !pageData.extract || pageData.extract.length < 30) continue;
 
                     // 대표 이미지 확보
-                    const imgUrl = await getStableMainImage(pageData.title);
+                    const imgUrl = await getPersonImageStrict(pageData.title);
                     if (!imgUrl) {
                         console.log(`❌ [유명인] ${pickName} 이미지 없음/불안정.`);
                         continue;
@@ -402,7 +326,7 @@ async function fillCache() {
                         continue;
 
                     // 여기 오타 있었음: pawait → await
-                    const imgUrl = await getStableMainImage(pageData.title);
+                    const imgUrl = await getPersonImageStrict(pageData.title);
                     if (!imgUrl) {
                         console.log(`❌ [랜덤] ${pageData.title} 이미지 없음/불안정.`);
                         continue;
