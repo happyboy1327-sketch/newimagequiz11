@@ -70,20 +70,18 @@ function makeNameAliases(title) {
     // 영어 이름 추론 (ko → en 대체)
     // 실제로 wiki redirect가 자동으로 영어표기와 연결되어 있어 성공률이 매우 높음
     if (/모차르트|mozart|아마데우스/.test(cleanKo)) {
-        aliases.push("wolfgang amadeus mozart".toLowerCase());
-        aliases.push("wolfgang-amadeus-mozart");
+        aliases.push("Wolfgang Amadeus Mozart".toLowerCase());
         aliases.push("mozart");
     }
     if (/베토벤/.test(cleanKo)) {
-        aliases.push("ludwig van beethoven");
-        aliases.push("beethoven");
+        aliases.push("Ludwig van Beethoven");
     }
     if (/피카소/.test(cleanKo)) {
-        aliases.push("pablo picasso");
+        aliases.push("Pablo Picasso");
         aliases.push("picasso");
     }
     if (/간디/.test(cleanKo)) {
-        aliases.push("mahatma gandhi");
+        aliases.push("Mahatma Gandhi");
         aliases.push("gandhi");
     }
 
@@ -120,11 +118,11 @@ function isHumanPhoto(filename, aliases) {
 
     // 기념비/상징류 제외
     if (/(memorial|monument|statue|grave|tomb|plaque|museum)/i.test(n)) return false;
-    if (/(emblem|flag|symbol|coat|arms|seal|logo|icon)/i.test(n)) return false;
+    if (/(emblem|flag|symbol|coat|arms|seal|logo|icon|painting)/i.test(n)) return false;
     if (/signature/i.test(n)) return false;
 
     // 긍정 단서
-    if (/(portrait|photo|face|painting)/i.test(n)) return true;
+    if (/(portrait|photo|face)/i.test(n)) return true;
 
     // alias 기반 이름 매칭 (KO/EN/하이픈 모두 포함)
     for (const a of aliases) {
