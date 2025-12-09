@@ -92,21 +92,32 @@ function makeNameAliases(title) {
 // 2) infobox 이미지 추출 (강화 버전)
 // ===============================
 function extractInfoboxImage(html) {
+    // 1) 기존 패턴들 우선
     const patterns = [
         /class="infobox[^"]*"[\s\S]*?<img[^>]+src="([^"]+)"/i,
         /infobox[\s\S]*?<img[^>]+src="([^"]+)"/i,
         /<td[^>]*class="infobox-image"[^>]*>[\s\S]*?<img[^>]+src="([^"]+)"/i
     ];
-
     for (const p of patterns) {
         const m = html.match(p);
+        if (m) return normalizeImgUrl(m[1]);
+    }
+
+    // 2) data-src, data-image-src, srcset 등에서 첫번째 유효 URL 추출
+    const dataPatterns = [
+        /<img[^>]+data-src=["']([^"']+)["']/i,
+        /<img[^>]+data-image-src=["']([^"']+)["']/i,
+        /<img[^>]+srcset=["']([^"']+)["']/i
+    ];
+    for (const p of dataPatterns) {
+        const m = html.match(p);
         if (m) {
-            const url = m[1].startsWith("http") ? m[1] : "https:" + m[1];
-            return url;
+            const v = m[1];
+            // srcset일 경우 첫 URL만 취함
+            const first = v.split(',')[0].trim().split(/\s+/)[0];
+            return normalizeImgUrl(first);
         }
     }
-    return null;
-}
 
 // ===============================
 // 3) 사람이 나온 이미지 필터
@@ -213,7 +224,7 @@ async function getStableMainImage(title) {
     } catch (e) {}
 
     // 4) 우선순위 결론
-    return infoboxImage || bestFace || bestThumb || null;
+    return infoboxImage || bestThumb || bestFace  || null;
 }
 
 
