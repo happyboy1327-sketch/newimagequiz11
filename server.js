@@ -213,7 +213,7 @@ async function getStableMainImage(title) {
     } catch (e) {}
 
     // 4) 우선순위 결론
-    return bestFace || infoboxImage || bestThumb || null;
+    return infoboxImage || bestFace || bestThumb || null;
 }
 
 
