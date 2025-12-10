@@ -11,13 +11,18 @@ const PORT = process.env.PORT || 3000;
 app.disable('x-powered-by'); 
 
 app.use((req, res, next) => {
-    res.setHeader('Server', 'A Generic Web Server'); 
+    // 보안 헤더
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
     
+    // 캐시 제어
     if (req.path === '/api/quiz') {
-        res.setHeader('Cache-Control', 'no-store, max-age=0');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     } else {
-        res.setHeader('Cache-Control', 'public, max-age=600'); 
+        res.setHeader('Cache-Control', 'public, max-age=3600, immutable');
     }
+    
     next();
 });
 
@@ -89,7 +94,7 @@ function makeNameAliases(title) {
 }
 
 // ===============================
-// 2) infobox 이미지 추출 (강화 버전)
+// 2) infobox 이미지 추출 (SVG 완벽 제외)
 // ===============================
 function extractInfoboxImage(html) {
     const patterns = [
@@ -101,10 +106,10 @@ function extractInfoboxImage(html) {
     for (const p of patterns) {
         const m = html.match(p);
         if (m) {
-            const url = m[1].startsWith("http") ? m[1] : "https:" + m[1];
-            // 🔥 [수정] SVG 이미지는 제외
-            if (/\.svg$/i.test(url)) {
-                continue;
+            let url = m[1].startsWith("http") ? m[1] : "https:" + m[1];
+            // 🔥 SVG 이미지 완벽 필터링
+            if (/\.svg/i.test(url)) {
+                return null;
             }
             return url;
         }
@@ -386,7 +391,7 @@ async function fillCache() {
                     if (QUIZ_CACHE.length >= CACHE_SIZE) break;
 
                     // 노이즈 필터
-                    if (/\(.*\)|선수|음악|작가|과학|수학|장군|황제|왕조|기업|독립운동|미술|의사|간호사|영화/.test(cand.title))
+                    if (/\(.*\)|선수|음악|작가|수학|과학|천문|기업|독립운동|미술|의사|간호사|영화/.test(cand.title))
                         continue;
 
                     const detailRes = await axios.get(
