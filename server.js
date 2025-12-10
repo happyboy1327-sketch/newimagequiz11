@@ -117,8 +117,8 @@ function isHumanPhoto(filename, aliases) {
     if (!/\.(jpg|jpeg|png)$/i.test(n)) return false;
 
     // 기념비/상징류 제외
-    if (/(memorial|monument|statue|grave|tomb|plaque|museum)/i.test(n)) return false;
-    if (/(emblem|flag|symbol|coat|arms|seal|logo|icon|painting)/i.test(n)) return false;
+    if (/(memorial|statue|grave|tomb|plaque|museum)/i.test(n)) return false;
+    if (/(emblem|flag|symbol|seal|logo|icon|painting)/i.test(n)) return false;
     if (/signature/i.test(n)) return false;
 
     // 긍정 단서
@@ -213,7 +213,7 @@ async function getStableMainImage(title) {
     } catch (e) {}
 
     // 4) 우선순위 결론
-    return infoboxImage || bestFace || bestThumb || null;
+    return bestThumb || infoboxImage || bestFace || null;
 }
 
 
