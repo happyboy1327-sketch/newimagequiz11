@@ -114,7 +114,7 @@ function extractInfoboxImage(html) {
         }
         
         // 유효한 이미지 URL 확인
-        if (/\.(jpg|jpeg|png|webp|gif)/i.test(url)) {
+        if (/\.(jpg|jpeg|png)/i.test(url)) {
             return url;
         }
     }
@@ -256,7 +256,8 @@ async function getStableMainImage(title) {
     }
     
     console.log(`❌ 모든 이미지 획득 실패: ${title}`);
-    return null;
+    // 4) 우선순위 결론
+    return bestThumb || infoboxImage || bestFace || null;
 }
 
 // --- [핵심] 이미지 URL 안정성 체크 ---
