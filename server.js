@@ -97,26 +97,35 @@ function makeNameAliases(title) {
 // 2) infobox 이미지 추출 (SVG 완벽 제외)
 // ===============================
 function extractInfoboxImage(html) {
-    const patterns = [
-        /class="infobox[^"]*"[\s\S]*?<img[^>]+src="([^"]+)"/i,
-        /infobox[\s\S]*?<img[^>]+src="([^"]+)"/i,
-        /<td[^>]*class="infobox-image"[^>]*>[\s\S]*?<img[^>]+src="([^"]+)"/i
-    ];
-
-    for (const p of patterns) {
-        const m = html.match(p);
-        if (m) {
-            let url = m[1].startsWith("http") ? m[1] : "https:" + m[1];
-            // 🔥 SVG 이미지 완벽 필터링
-            if (/\.svg/i.test(url)) {
-                return null;
-            }
+    // infobox 영역 먼저 추출
+    const infoboxMatch = html.match(/class="infobox[^"]*"[\s\S]*?(?=<\/table>|<\/div>)/i);
+    const searchArea = infoboxMatch ? infoboxMatch[0] : html;
+    
+    // 모든 img 태그의 src 찾기
+    const imgRegex = /<img[^>]+src="([^"]+)"/gi;
+    let match;
+    
+    while ((match = imgRegex.exec(searchArea)) !== null) {
+        let url = match[1];
+        
+        // 프로토콜 추가
+        if (!url.startsWith("http")) {
+            url = "https:" + url;
+        }
+        
+        // 🔥 SVG는 완벽하게 제외 (쿼리 파라미터 포함)
+        if (/\.svg/i.test(url)) {
+            continue;
+        }
+        
+        // 유효한 이미지 URL 확인
+        if (/\.(jpg|jpeg|png|webp|gif)/i.test(url)) {
             return url;
         }
     }
+    
     return null;
 }
-
 // ===============================
 // 3) 사람이 나온 이미지 필터 (SVG 제외)
 // ===============================
