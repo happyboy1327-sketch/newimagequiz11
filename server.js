@@ -30,17 +30,17 @@ process.on('uncaughtException', (err) => {
 });
 
 // --- 설정 ---
-const CACHE_SIZE = 20;       
-const VALIDATION_TRY = 3;    
+const CACHE_SIZE = 20;       
+const VALIDATION_TRY = 3;    
 
 // --- 기존 퀴즈풀의 유명 인물 리스트 (검색 우선순위) ---
 const LEGACY_NAMES = [
-  "이순신", "세종대왕", "알베르트 아인슈타인", "에이브러햄 링컨", "마하트마 간디",
-  "유관순", "안중근", "김구", "윤동주", "레오나르도 다 빈치", "윤봉길", "아리스토텔레스", "갈릴레오 갈릴레이",
-  "미켈란젤로 부오나로티", "빈센트 반 고흐", "파블로 피카소", "아이작 뉴턴", "찰스 다윈",
-  "토머스 에디슨", "니콜라 테슬라", "스티브 잡스", "빌 게이츠", "마리 퀴리",
-  "루트비히 판 베토벤", "볼프강 아마데우스 모차르트", "윌리엄 셰익스피어", "나폴레옹 보나파르트",
-  "칭기즈 칸", "알렉산드로스 3세", "줄리어스 시저", "조지 워싱턴", "넬슨 만델라"
+  "이순신", "세종대왕", "알베르트 아인슈타인", "에이브러햄 링컨", "마하트마 간디",
+  "유관순", "안중근", "김구", "윤동주", "레오나르도 다 빈치", "윤봉길", "아리스토텔레스", "갈릴레오 갈릴레이",
+  "미켈란젤로 부오나로티", "빈센트 반 고흐", "파블로 피카소", "아이작 뉴턴", "찰스 다윈",
+  "토머스 에디슨", "니콜라 테슬라", "스티브 잡스", "빌 게이츠", "마리 퀴리",
+  "루트비히 판 베토벤", "볼프강 아마데우스 모차르트", "윌리엄 셰익스피어", "나폴레옹 보나파르트",
+  "칭기즈 칸", "알렉산드로스 3세", "줄리어스 시저", "조지 워싱턴", "넬슨 만델라"
 ];
 
 let QUIZ_CACHE = [];
@@ -50,8 +50,8 @@ let isCaching = false;
 let cachePromise = null; 
 
 const WIKI_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-  'Accept': 'application/json'
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+  'Accept': 'application/json'
 };
 
 // ===============================
@@ -109,10 +109,13 @@ function extractInfoboxImage(html) {
 }
 
 // ===============================
-// 3) 사람이 나온 이미지 필터
+// 3) 사람이 나온 이미지 필터 (SVG 제외)
 // ===============================
 function isHumanPhoto(filename, aliases) {
     const n = filename.toLowerCase();
+
+    // 🔥 [수정] SVG 파일은 무조건 제외
+    if (/\.svg$/i.test(n)) return false;
 
     if (!/\.(jpg|jpeg|png)$/i.test(n)) return false;
 
@@ -219,26 +222,26 @@ async function getStableMainImage(title) {
 
 // --- [핵심] 3회 연속 타격 검증 (이미지 안정성 체크) ---
 async function checkUrlStability(url) {
-  if (!url) return false;
-  
-  for (let i = 1; i <= VALIDATION_TRY; i++) {
-    try {
-      const res = await axios.get(url, {
+  if (!url) return false;
+  
+  for (let i = 1; i <= VALIDATION_TRY; i++) {
+    try {
+      const res = await axios.get(url, {
         headers: WIKI_HEADERS,
         timeout: 2000,
         responseType: "arraybuffer"
 });
-      
-      const contentType = res.headers['content-type'] || '';
-      if (res.status !== 200 || !contentType.includes('image')) {
-        return false;
-      }
-      await new Promise(r => setTimeout(r, 100));
-    } catch (e) {
-      return false; 
-    }
-  }
-  return true;
+      
+      const contentType = res.headers['content-type'] || '';
+      if (res.status !== 200 || !contentType.includes('image')) {
+        return false;
+      }
+      await new Promise(r => setTimeout(r, 100));
+    } catch (e) {
+      return false; 
+    }
+  }
+  return true;
 }
 
 // --- 공통 힌트 마스킹 함수 ---
@@ -323,13 +326,18 @@ async function fillCache() {
                     const pageData = Object.values(pages)[0];
                     if (!pageData || !pageData.extract || pageData.extract.length < 30) continue;
 
-                    // 대표 이미지 확보
+                    // 🔥 [수정] 대표 이미지 확보 후, 없으면 명확하게 스킵
                     const imgUrl = await getStableMainImage(pageData.title);
                     if (!imgUrl) {
-                        console.log(`❌ [유명인] ${pickName} 이미지 없음/불안정.`);
+                        console.log(`❌ [유명인] ${pickName} 이미지 없음/불안정 → 패스`);
                         continue;
                     }
+                    
                     const isStable = await checkUrlStability(imgUrl);
+                    if (!isStable) {
+                        console.log(`❌ [유명인] ${pickName} 이미지 연결 불안정 → 패스`);
+                        continue;
+                    }
 
                     // 저장
                     console.log(`✅ [유명인] ${pickName} 통과.`);
@@ -374,7 +382,7 @@ async function fillCache() {
                     if (QUIZ_CACHE.length >= CACHE_SIZE) break;
 
                     // 노이즈 필터
-                    if (/\(.*\)|선수|음악|작가|기업|독립운동|미술|의사|간호사|영화/.test(cand.title))
+                    if (/\(.*\)|선수|음악|작가|과학|수학|장군|황제|왕조|기업|독립운동|미술|의사|간호사|영화/.test(cand.title))
                         continue;
 
                     const detailRes = await axios.get(
@@ -399,13 +407,18 @@ async function fillCache() {
                     if (!pageData || !pageData.extract || pageData.extract.length < 300)
                         continue;
 
-                    // 여기 오타 있었음: pawait → await
+                    // 🔥 [수정] 이미지 없으면 명확하게 스킵
                     const imgUrl = await getStableMainImage(pageData.title);
                     if (!imgUrl) {
-                        console.log(`❌ [랜덤] ${pageData.title} 이미지 없음/불안정.`);
+                        console.log(`❌ [랜덤] ${pageData.title} 이미지 없음 → 패스`);
                         continue;
                     }
+                    
                     const isStable = await checkUrlStability(imgUrl);
+                    if (!isStable) {
+                        console.log(`❌ [랜덤] ${pageData.title} 이미지 연결 불안정 → 패스`);
+                        continue;
+                    }
 
                     console.log(`✅ [랜덤] ${pageData.title} 통과.`);
                     const maskedHint = createMaskedHint(pageData.title, pageData.extract);
@@ -437,7 +450,7 @@ fillCache();
 
 // --- API ---
 app.get("/api/quiz", async (req, res) => {
-  try {
+  try {
     // 🌟 [수정] 간단한 고유 요청 ID 생성
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`; 
     console.log(`[Request] New request: ${requestId}`);
@@ -446,33 +459,33 @@ app.get("/api/quiz", async (req, res) => {
     if (isCaching && cachePromise) {
         await cachePromise; 
     }
-  
+  
     // 캐시가 비어있으면 다시 채우고, 채워질 때까지 다시 대기 
-    if (QUIZ_CACHE.length === 0) {
+    if (QUIZ_CACHE.length === 0) {
         await fillCache(); 
         await cachePromise;
     }
-  
-    const item = QUIZ_CACHE.shift();
-  
-    if (!item) {
-        fillCache(); 
-        return res.status(503).json({ error: "데이터 준비 중입니다. 잠시만 기다려주세요.", requestId });
-    }
+  
+    const item = QUIZ_CACHE.shift();
+  
+    if (!item) {
+        fillCache(); 
+        return res.status(503).json({ error: "데이터 준비 중입니다. 잠시만 기다려주세요.", requestId });
+    }
 
-    if (QUIZ_CACHE.length < CACHE_SIZE / 2) fillCache();
+    if (QUIZ_CACHE.length < CACHE_SIZE / 2) fillCache();
 
-    res.json({ 
-      ...item, 
-      imageUrl: item.image,
-      requestId 
-    });
+    res.json({ 
+      ...item, 
+      imageUrl: item.image,
+      requestId 
+    });
 
-  } catch (error) {
-    console.error("API 퀴즈 처리 중 심각한 오류 발생:", error);
+  } catch (error) {
+    console.error("API 퀴즈 처리 중 심각한 오류 발생:", error);
     const errorId = `err_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`; 
-    res.status(500).json({ error: "서버 내부 오류로 퀴즈를 불러올 수 없습니다.", errorId });
-  }
+    res.status(500).json({ error: "서버 내부 오류로 퀴즈를 불러올 수 없습니다.", errorId });
+  }
 });
 
 // --- 정적 ---
