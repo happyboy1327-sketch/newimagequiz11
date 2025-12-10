@@ -102,6 +102,10 @@ function extractInfoboxImage(html) {
         const m = html.match(p);
         if (m) {
             const url = m[1].startsWith("http") ? m[1] : "https:" + m[1];
+            // 🔥 [수정] SVG 이미지는 제외
+            if (/\.svg$/i.test(url)) {
+                continue;
+            }
             return url;
         }
     }
