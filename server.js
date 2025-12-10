@@ -26,7 +26,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// 프로세스 수준 안전장치 (파일 상단에 한 번만 추가)
+// 프로세스 수준 안전장치
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason && reason.stack ? reason.stack : reason);
 });
@@ -50,8 +50,6 @@ const LEGACY_NAMES = [
 
 let QUIZ_CACHE = [];
 let isCaching = false;
-// 🌟 [수정] 세션 카운트 대신 요청 카운트만 유지
-// 🌟 [수정] 캐싱 작업의 Promise를 저장할 변수
 let cachePromise = null; 
 
 const WIKI_HEADERS = {
@@ -66,14 +64,11 @@ function makeNameAliases(title) {
     const cleanKo = title.replace(/\(.+?\)/g, "").trim();
     const lowerKo = cleanKo.toLowerCase();
 
-    // 기본 alias 세트
     let aliases = [
         lowerKo,
         lowerKo.replace(/\s+/g, "-")
     ];
 
-    // 영어 이름 추론 (ko → en 대체)
-    // 실제로 wiki redirect가 자동으로 영어표기와 연결되어 있어 성공률이 매우 높음
     if (/모차르트|mozart|아마데우스/.test(cleanKo)) {
         aliases.push("Wolfgang Amadeus Mozart".toLowerCase());
         aliases.push("mozart");
@@ -94,7 +89,7 @@ function makeNameAliases(title) {
 }
 
 // ===============================
-// 2) infobox 이미지 추출 (SVG 완벽 제외)
+// 2) infobox 이미지 추출 (모든 img 태그 스캔, SVG 완벽 제외)
 // ===============================
 function extractInfoboxImage(html) {
     // infobox 영역 먼저 추출
@@ -126,26 +121,27 @@ function extractInfoboxImage(html) {
     
     return null;
 }
+
 // ===============================
 // 3) 사람이 나온 이미지 필터 (SVG 제외)
 // ===============================
 function isHumanPhoto(filename, aliases) {
     const n = filename.toLowerCase();
 
-    // 🔥 [수정] SVG 파일은 무조건 제외
+    // 🔥 SVG 파일은 무조건 제외
     if (/\.svg$/i.test(n)) return false;
 
     if (!/\.(jpg|jpeg|png)$/i.test(n)) return false;
 
     // 기념비/상징류 제외
     if (/(memorial|statue|grave|coat|tomb|plaque|museum)/i.test(n)) return false;
-    if (/(emblem|flag|symbol|seal|arms|imperial|logo|icon)/i.test(n)) return false;
+    if (/(emblem|flag|symbol|seal|arms|imperial|logo|icon|painting)/i.test(n)) return false;
     if (/signature/i.test(n)) return false;
 
     // 긍정 단서
     if (/(portrait|photo|face)/i.test(n)) return true;
 
-    // alias 기반 이름 매칭 (KO/EN/하이픈 모두 포함)
+    // alias 기반 이름 매칭
     for (const a of aliases) {
         if (a && n.includes(a)) return true;
     }
@@ -154,39 +150,27 @@ function isHumanPhoto(filename, aliases) {
 }
 
 // ===============================
-// 4) 최종 — getStableMainImage(title)
+// 4) URL이 유효한 이미지인지 최종 검증
+// ===============================
+function isValidImageUrl(url) {
+    if (!url) return false;
+    // 유효한 이미지 포맷만 (SVG 제외)
+    return /\.(jpg|jpeg|png)(\?|$)/i.test(url);
+}
+
+// ===============================
+// 5) getStableMainImage - 개선된 버전
 // ===============================
 async function getStableMainImage(title) {
-
     const aliases = makeNameAliases(title);
-
     const baseParams = {
         action: "query",
         format: "json",
         origin: "*",
         titles: title
     };
-
-    // 1) 대표 thumbnail 우선 확보
-    let bestThumb = null;
-    try {
-        const thumbRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-            headers: WIKI_HEADERS,
-            params: {
-                ...baseParams,
-                prop: "pageimages",
-                piprop: "thumbnail|name",
-                pithumbsize: 800
-            }
-        });
-
-        const thumbPage = Object.values(thumbRes.data.query.pages)[0];
-        bestThumb = thumbPage.thumbnail?.source || null;
-    } catch (e) {
-        bestThumb = null;
-    }
-
-    // 2) 문서 HTML 가져오기 → infobox 추출 시도
+    
+    // 1) 문서 HTML 가져오기 → infobox 추출 (가장 신뢰할 수 있음)
     let infoboxImage = null;
     try {
         const htmlRes = await axios.get(
@@ -194,72 +178,109 @@ async function getStableMainImage(title) {
             { headers: WIKI_HEADERS }
         );
         infoboxImage = extractInfoboxImage(htmlRes.data);
-    } catch (e) {}
-
-    // 3) 이미지 리스트 전체 요청 → 사람이 나온 후보 필터링
-    let bestFace = null;
+        if (infoboxImage && isValidImageUrl(infoboxImage)) {
+            console.log(`✅ Infobox 이미지 획득: ${title}`);
+            return infoboxImage;
+        }
+    } catch (e) {
+        console.log(`❌ Infobox 추출 실패: ${title}`);
+    }
+    
+    // 2) 이미지 리스트 → 사람 사진 후보 필터링 (정확도 높음)
     try {
         const imgListRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
             headers: WIKI_HEADERS,
             params: {
                 ...baseParams,
                 prop: "images",
-                imlimit: 50
+                imlimit: 100
             }
         });
-
         const imgListPage = Object.values(imgListRes.data.query.pages)[0];
         const images = imgListPage.images || [];
-
-        const faceCandidates = images.filter(img => isHumanPhoto(img.title, aliases));
-
-        if (faceCandidates.length > 0) {
-            const first = faceCandidates[0].title;
-
-            const infoRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                headers: WIKI_HEADERS,
-                params: {
-                    action: "query",
-                    format: "json",
-                    titles: first,
-                    prop: "imageinfo",
-                    iiprop: "url",
-                    origin: "*"
+        
+        // 여러 후보를 시도 (최대 5개)
+        const faceCandidates = images.filter(img => isHumanPhoto(img.title, aliases)).slice(0, 5);
+        
+        for (const candidate of faceCandidates) {
+            try {
+                const infoRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+                    headers: WIKI_HEADERS,
+                    params: {
+                        action: "query",
+                        format: "json",
+                        titles: candidate.title,
+                        prop: "imageinfo",
+                        iiprop: "url",
+                        iiurlwidth: 600,
+                        iiurlheight: 600,
+                        origin: "*"
+                    }
+                });
+                const infoPage = Object.values(infoRes.data.query.pages)[0];
+                const url = infoPage.imageinfo?.[0]?.thumburl || infoPage.imageinfo?.[0]?.url || null;
+                
+                // 🔥 최종 검증: 유효한 이미지인가?
+                if (url && isValidImageUrl(url)) {
+                    console.log(`✅ 이미지 리스트 획득: ${title} (${candidate.title})`);
+                    return url;
                 }
-            });
-
-            const infoPage = Object.values(infoRes.data.query.pages)[0];
-            bestFace = infoPage.imageinfo?.[0]?.url || null;
+            } catch (e) {
+                continue;
+            }
         }
-    } catch (e) {}
-
-    // 4) 우선순위 결론
-    return infoboxImage || bestThumb || bestFace || null;
+    } catch (e) {
+        console.log(`❌ 이미지 리스트 조회 실패: ${title}`);
+    }
+    
+    // 3) pageimages thumbnail (마지막 수단)
+    try {
+        const thumbRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+            headers: WIKI_HEADERS,
+            params: {
+                ...baseParams,
+                prop: "pageimages",
+                piprop: "thumbnail",
+                pithumbsize: 800
+            }
+        });
+        const thumbPage = Object.values(thumbRes.data.query.pages)[0];
+        const thumbUrl = thumbPage.thumbnail?.source || null;
+        
+        if (thumbUrl && isValidImageUrl(thumbUrl)) {
+            console.log(`✅ Thumbnail 획득: ${title}`);
+            return thumbUrl;
+        }
+    } catch (e) {
+        console.log(`❌ Thumbnail 조회 실패: ${title}`);
+    }
+    
+    console.log(`❌ 모든 이미지 획득 실패: ${title}`);
+    return null;
 }
 
-
-// --- [핵심] 3회 연속 타격 검증 (이미지 안정성 체크) ---
+// --- [핵심] 이미지 URL 안정성 체크 ---
 async function checkUrlStability(url) {
-  if (!url) return false;
-  
-  for (let i = 1; i <= VALIDATION_TRY; i++) {
-    try {
-      const res = await axios.get(url, {
-        headers: WIKI_HEADERS,
-        timeout: 2000,
-        responseType: "arraybuffer"
-});
-      
-      const contentType = res.headers['content-type'] || '';
-      if (res.status !== 200 || !contentType.includes('image')) {
-        return false;
-      }
-      await new Promise(r => setTimeout(r, 100));
-    } catch (e) {
-      return false; 
+    if (!url) return false;
+    
+    for (let i = 1; i <= VALIDATION_TRY; i++) {
+        try {
+            const res = await axios.get(url, {
+                headers: WIKI_HEADERS,
+                timeout: 2000,
+                responseType: "arraybuffer"
+            });
+            
+            const contentType = res.headers['content-type'] || '';
+            if (res.status !== 200 || !contentType.includes('image')) {
+                return false;
+            }
+            await new Promise(r => setTimeout(r, 100));
+        } catch (e) {
+            return false; 
+        }
     }
-  }
-  return true;
+    return true;
 }
 
 // --- 공통 힌트 마스킹 함수 ---
@@ -300,7 +321,6 @@ function createMaskedHint(title, extract) {
     return hintText.substring(0, 120) + "...";
 }
 
-
 // --- 데이터 채굴 로직 ---
 async function fillCache() {
     if (isCaching || QUIZ_CACHE.length >= CACHE_SIZE) return;
@@ -330,7 +350,7 @@ async function fillCache() {
                             params: {
                                 action: "query",
                                 titles: pickName,
-                                prop: "extracts",      // 사진은 getStableMainImage가 처리
+                                prop: "extracts",
                                 exintro: true,
                                 explaintext: true,
                                 format: "json",
@@ -344,7 +364,7 @@ async function fillCache() {
                     const pageData = Object.values(pages)[0];
                     if (!pageData || !pageData.extract || pageData.extract.length < 30) continue;
 
-                    // 🔥 [수정] 대표 이미지 확보 후, 없으면 명확하게 스킵
+                    // 🔥 대표 이미지 확보 후, 없으면 명확하게 스킵
                     const imgUrl = await getStableMainImage(pageData.title);
                     if (!imgUrl) {
                         console.log(`❌ [유명인] ${pickName} 이미지 없음/불안정 → 패스`);
@@ -357,7 +377,6 @@ async function fillCache() {
                         continue;
                     }
 
-                    // 저장
                     console.log(`✅ [유명인] ${pickName} 통과.`);
                     const maskedHint = createMaskedHint(pageData.title, pageData.extract);
                     QUIZ_CACHE.push({
@@ -400,7 +419,7 @@ async function fillCache() {
                     if (QUIZ_CACHE.length >= CACHE_SIZE) break;
 
                     // 노이즈 필터
-                    if (/\(.*\)|선수|음악|작가|수학|과학|천문|기업|독립운동|미술|의사|간호사|영화/.test(cand.title))
+                    if (/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title))
                         continue;
 
                     const detailRes = await axios.get(
@@ -425,7 +444,7 @@ async function fillCache() {
                     if (!pageData || !pageData.extract || pageData.extract.length < 300)
                         continue;
 
-                    // 🔥 [수정] 이미지 없으면 명확하게 스킵
+                    // 🔥 이미지 없으면 명확하게 스킵
                     const imgUrl = await getStableMainImage(pageData.title);
                     if (!imgUrl) {
                         console.log(`❌ [랜덤] ${pageData.title} 이미지 없음 → 패스`);
@@ -465,20 +484,16 @@ async function fillCache() {
 
 fillCache();
 
-
 // --- API ---
 app.get("/api/quiz", async (req, res) => {
   try {
-    // 🌟 [수정] 간단한 고유 요청 ID 생성
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`; 
     console.log(`[Request] New request: ${requestId}`);
 
-    // 🌟 [수정] 캐싱 작업 중이라면 완료될 때까지 대기 (503 방지)
     if (isCaching && cachePromise) {
         await cachePromise; 
     }
   
-    // 캐시가 비어있으면 다시 채우고, 채워질 때까지 다시 대기 
     if (QUIZ_CACHE.length === 0) {
         await fillCache(); 
         await cachePromise;
