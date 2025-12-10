@@ -130,7 +130,7 @@ function isHumanPhoto(filename, aliases) {
 
     // 기념비/상징류 제외
     if (/(memorial|statue|grave|coat|tomb|plaque|museum)/i.test(n)) return false;
-    if (/(emblem|flag|symbol|seal|arms|imperial|logo|icon|painting)/i.test(n)) return false;
+    if (/(emblem|flag|symbol|seal|arms|imperial|logo|icon)/i.test(n)) return false;
     if (/signature/i.test(n)) return false;
 
     // 긍정 단서
