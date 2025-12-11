@@ -5,10 +5,10 @@ import dotenv from "dotenv";
 
 dotenv.config();
 const app = express();
-const PORT = process.env.PORT || 3000; 
+const PORT = process.env.PORT || 3000;
 
 // 🔥 [보안/성능 개선] Express 관련 헤더 설정
-app.disable('x-powered-by'); 
+app.disable('x-powered-by');
 
 app.use((req, res, next) => {
     // 보안 헤더
@@ -35,7 +35,7 @@ process.on('uncaughtException', (err) => {
 });
 
 // --- 설정 ---
-const CACHE_SIZE = 20;       
+const CACHE_SIZE = 20;        
 const VALIDATION_TRY = 3;    
 
 // --- 기존 퀴즈풀의 유명 인물 리스트 (검색 우선순위) ---
@@ -66,243 +66,222 @@ function makeNameAliases(title) {
 
     let aliases = [
         lowerKo,
+        lowerKo.replace(/\s+/g, "_"),
         lowerKo.replace(/\s+/g, "-")
     ];
 
-    if (/모차르트/.test(cleanKo)) {
-        aliases.push("Wolfgang Amadeus Mozart".toLowerCase());
-        aliases.push("mozart");
-    }
-    if (/베토벤/.test(cleanKo)) {
-        aliases.push("Ludwig van Beethoven");
-    }
-    if (/피카소/.test(cleanKo)) {
-        aliases.push("Pablo Picasso");
-        aliases.push("picasso");
-    }
-    if (/간디/.test(cleanKo)) {
-        aliases.push("Mahatma Gandhi");
-        aliases.push("gandhi");
-    }
+    if (/모차르트/.test(cleanKo)) aliases.push("mozart");
+    if (/베토벤/.test(cleanKo)) aliases.push("beethoven");
+    if (/피카소/.test(cleanKo)) aliases.push("picasso");
+    if (/간디/.test(cleanKo)) aliases.push("gandhi");
+    if (/고흐/.test(cleanKo)) aliases.push("gogh");
+    if (/나폴레옹/.test(cleanKo)) aliases.push("napoleon");
 
     return [...new Set(aliases)];
 }
 
 // ===============================
-// 2) infobox 이미지 추출 (모든 img 태그 스캔, SVG 완벽 제외)
+// 2) OG 이미지 추출 (HTML 파싱용)
 // ===============================
-function extractInfoboxImage(html) {
-    // infobox table/div 강제 추출
-    const infoboxMatch = html.match(/<table[^>]*class="[^"]*infobox[^"]*"[^>]*>[\s\S]*?<\/table>/i)
-                        || html.match(/<div[^>]*class="[^"]*infobox[^"]*"[^>]*>[\s\S]*?<\/div>/i);
-
-    if (!infoboxMatch) return null;
-    const area = infoboxMatch[0];
-
-    // img 태그의 src / data-src / srcset 등 모두 검사
-    const srcRegex = /<img[^>]*(?:src|data-src|data-srcset|srcset)\s*=\s*"(.*?)"/gi;
-    let m;
-    while ((m = srcRegex.exec(area)) !== null) {
-        let src = m[1].trim();
-        if (!src) continue;
-        // 프로토콜 보정
-        if (!/^https?:\/\//i.test(src)) {
-            if (src.startsWith("//")) src = "https:" + src;
-            else src = "https:" + src;
-        }
-
-        // --- SVG 관련 모든 형태 배제 ---
-        // - 직접 .svg
-        // - .svg 뒤에 슬래시로 크기/변환 경로가 붙는 경우 (예: ...file.svg/300px-...)
-        // - 경로에 '/svg/' 또는 파일명에 'svg' 키워드가 섞인 경우(안전하게 배제)
-        if (/\.svg(\?.*)?$/i.test(src)) continue;
-        if (/\/[^\/]*\.svg\//i.test(src)) continue;
-        if (/\/svg\//i.test(src)) continue;
-        if (/(\?|&)format=svg/i.test(src)) continue;
-        if (/(\.svg)[^a-z0-9]/i.test(src)) continue;
-
-        // 유효 확장자만 허용
-        if (/\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(src)) return src;
+function extractOgImage(html) {
+    // <meta property="og:image" content="..."> 추출
+    const match = html.match(/<meta\s+property="og:image"\s+content="(.*?)"/i);
+    if (match && match[1]) {
+        return match[1].replace(/&amp;/g, '&'); // URL 인코딩 보정
     }
-
     return null;
 }
 
-// --- 2) 이미지 URL 유효성 검사: SVG 계열 완전 거부, 확장자+파라미터 허용
+// ===============================
+// 3) 이미지 URL 유효성 검사 (SVG 및 키워드 차단)
+// ===============================
 function isValidImageUrl(url) {
     if (!url || typeof url !== "string") return false;
-    // 1) 어떤 형태의 svg가 섞여있으면 무조건 거부
-    if (/\.svg(\?.*)?$|\/[^\/]*\.svg\/|\/svg\//i.test(url)) return false;
-
-    // 2) 실제 이미지 확장자 허용 (파라미터 허용)
+    
+    // 1. 파일 확장자/형식 검사 (SVG 절대 금지)
+    if (/\.svg(\?.*)?$/i.test(url)) return false;
+    if (/\/svg\//i.test(url)) return false;
+    
+    // 2. URL 자체에 금지 키워드가 포함되어 있는지 검사 (휘장, 깃발 방지)
+    const lowerUrl = url.toLowerCase();
+    if (lowerUrl.includes("coat_of_arms")) return false;
+    if (lowerUrl.includes("emblem")) return false;
+    if (lowerUrl.includes("flag")) return false;
+    if (lowerUrl.includes("icon")) return false;
+    
+    // 3. 유효 확장자 확인
     return /\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(url);
 }
 
-// --- 3) 사람 사진 후보 필터: title/filename에 svg 포함시 확실히 제외
+// ===============================
+// 4) [강력 필터] 사람 사진 판별기 (휘장/심볼 완벽 차단)
+// ===============================
 function isHumanPhoto(filename, aliases) {
     if (!filename || typeof filename !== "string") return false;
     const n = filename.toLowerCase();
 
-    // SVG 파일명/경로 포함시 무조건 제외
-    if (/\.svg$/i.test(n)) return false;
-    if (/\bsvg\b/i.test(n)) return false;
+    // ====================================================
+    // 🔥 [핵심] 나폴레옹 등 역사 인물 휘장/심볼 칼차단 목록
+    // ====================================================
+    const BLACKLIST = [
+        "svg", "gif",                   // 포맷
+        "coat of arms", "coat_of_arms", // 문장 (가장 많음)
+        "coa",                          // 문장 약어
+        "arms",                         // Arms
+        "emblem",                       // 엠블럼
+        "insignia",                     // 휘장
+        "flag", "standard", "banner",   // 깃발류
+        "seal", "stamp",                // 도장/우표
+        "icon", "logo", "symbol",       // 심볼
+        "map", "chart", "diagram",      // 지도/도표
+        "signature", "sign",            // 서명
+        "grave", "tomb", "monument",    // 무덤/기념비
+        "book", "cover",                // 책 표지
+        "coin", "currency",             // 동전/지폐
+        "statue", "sculpture",          // 동상 (가능하면 실제 얼굴 선호)
+        "memorial", "plaque"            // 기념판
+    ];
 
-    // 이미지 확장자 확인
-    if (!/\.(jpg|jpeg|png|webp)$/i.test(n)) return true;
-
-    // 기념비/상징류 제외
-    if (/(memorial|statue|grave|coat|tomb|plaque|museum)/i.test(n)) return false;
-    if (/(emblem|flag|symbol|seal|arms|imperial|logo|icon|painting|group photo)/i.test(n)) return false;
-    if (/signature/i.test(n)) return false;
-
-    // 긍정 단서
-    if (/(portrait|photo|face)/i.test(n)) return true;
-
-    // alias 기반 이름 매칭 (파일명에 이름 포함 여부)
-    for (const a of aliases) {
-        if (!a) continue;
-        const clean = a.toLowerCase().replace(/\s+/g, "_");
-        if (n.includes(clean) || n.includes(a.toLowerCase())) return true;
+    // 파일명에 블랙리스트 키워드가 하나라도 있으면 즉시 탈락
+    for (const badWord of BLACKLIST) {
+        if (n.includes(badWord)) return false;
     }
 
-    return false;
+    // ====================================================
+    // ✅ [통과 조건]
+    // ====================================================
+    
+    // 1. 긍정 키워드가 있으면 무조건 통과 (우선순위 높음)
+    if (/(portrait|photo|face|profile|bust|painting|oil|canvas)/i.test(n)) return true;
+
+    // 2. 파일명에 이름(alias)이 포함되어 있으면 통과
+    for (const a of aliases) {
+        if (!a) continue;
+        const cleanName = a.replace(/[\s\-\_]/g, "");
+        const cleanFile = n.replace(/[\s\-\_]/g, "");
+        if (cleanFile.includes(cleanName)) return true;
+    }
+
+    // 3. 블랙리스트에 걸리지 않았고, jpg/png라면 일단 후보로 인정
+    // (이름이 파일명에 없어도 "Napoleon_in_his_study.jpg" 같은 경우를 잡기 위함)
+    return true;
 }
+
 // ===============================
 // 5) getStableMainImage - 개선된 버전
 // ===============================
 async function getStableMainImage(title) {
     const aliases = makeNameAliases(title);
-    const baseParams = {
-        action: "query",
-        format: "json",
-        origin: "*",
-        titles: title
-    };
+    
+    // ---------------------------------------------------------
+    // 전략 1: PageImages API (썸네일) - 가장 정확함 (1순위)
+    // ---------------------------------------------------------
+    try {
+        const thumbRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+            headers: WIKI_HEADERS,
+            params: {
+                action: "query",
+                titles: title,
+                prop: "pageimages",
+                pithumbsize: 600,
+                format: "json",
+                origin: "*"
+            }
+        });
+        const page = Object.values(thumbRes.data.query.pages)[0];
+        const thumbUrl = page?.thumbnail?.source;
+        const thumbName = page?.pageimage || ""; // 파일명 확인용
 
-    // =============================================
-    // 1) HTML 크롤링 → infobox 이미지 강제 우선
-    // =============================================
+        // URL 유효성 + 파일명 필터까지 이중 체크
+        if (thumbUrl && isValidImageUrl(thumbUrl) && isHumanPhoto(thumbName, aliases)) {
+            // console.log(`✔ [API] 썸네일 확정: ${title}`);
+            return thumbUrl;
+        }
+    } catch (e) {}
+
+    // ---------------------------------------------------------
+    // 전략 2: HTML 파싱 (Open Graph Image -> Infobox)
+    // ---------------------------------------------------------
     try {
         const htmlRes = await axios.get(
             `https://ko.wikipedia.org/wiki/${encodeURIComponent(title)}`,
             { headers: WIKI_HEADERS }
         );
+        const html = htmlRes.data;
 
-        const infobox = extractInfoboxImage(htmlRes.data);
+        // 2-1. og:image (카톡 공유시 뜨는 그 이미지)
+        const ogImage = extractOgImage(html);
+        // og:image URL에도 'svg'나 'coat_of_arms'가 들어가는지 체크
+        if (ogImage && isValidImageUrl(ogImage)) {
+            // console.log(`✔ [Meta] OG 이미지 사용: ${title}`);
+            return ogImage;
+        }
 
-        if (infobox && isValidImageUrl(infobox)) {
-            console.log(`✔ Infobox 이미지 확정: ${title}`);
-            return infobox;
+        // 2-2. Infobox 내부 이미지 (보조)
+        const infoboxMatch = html.match(/<table[^>]*class="[^"]*infobox[^"]*"[^>]*>[\s\S]*?<\/table>/i);
+        if (infoboxMatch) {
+            const srcMatch = infoboxMatch[0].match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i);
+            if (srcMatch && srcMatch[1]) {
+                let src = srcMatch[1];
+                if (src.startsWith("//")) src = "https:" + src;
+                
+                if (isValidImageUrl(src) && !/pixel\.gif|blank\.gif/i.test(src)) {
+                     // console.log(`✔ [Infobox] 이미지 발견: ${title}`);
+                     return src;
+                }
+            }
         }
     } catch (e) {
-        console.log(`✖ infobox 크롤링 실패: ${title}`);
+        // HTML 파싱 실패
     }
 
-    // =============================================
-    // 2) 이미지 목록 API → 사람 사진만 필터링
-    // =============================================
+    // ---------------------------------------------------------
+    // 전략 3: 전체 이미지 목록 검색 (최후의 보루)
+    // ---------------------------------------------------------
     try {
         const imgListRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
             headers: WIKI_HEADERS,
             params: {
-                ...baseParams,
+                action: "query",
+                titles: title,
                 prop: "images",
-                imlimit: 500
+                imlimit: 50,
+                format: "json",
+                origin: "*"
             }
         });
 
         const page = Object.values(imgListRes.data.query.pages)[0];
         const imgs = page.images || [];
 
-        const candidates = imgs
-            .filter(i => isHumanPhoto(i.title, aliases))
-            .slice(0, 5);
+        // 여기서 강력 필터링 (isHumanPhoto) 수행
+        const candidates = imgs.filter(i => isHumanPhoto(i.title, aliases));
 
         for (const c of candidates) {
-            try {
-                const infoRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                    headers: WIKI_HEADERS,
-                    params: {
-                        action: "query",
-                        format: "json",
-                        titles: c.title,
-                        prop: "imageinfo",
-                        iiprop: "url",
-                        iiurlwidth: 700,
-                        origin: "*"
-                    }
-                });
-                const info = Object.values(infoRes.data.query.pages)[0];
-                const url = info.imageinfo?.[0]?.thumburl || info.imageinfo?.[0]?.url;
-
-                if (isValidImageUrl(url)) {
-                    console.log(`✔ 이미지 리스트에서 대체 이미지 획득: ${title}`);
-                    return url;
+            const infoRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+                headers: WIKI_HEADERS,
+                params: {
+                    action: "query",
+                    titles: c.title,
+                    prop: "imageinfo",
+                    iiprop: "url",
+                    format: "json",
+                    origin: "*"
                 }
-            } catch {}
-        }
-    } catch (e) {
-        console.log(`✖ 이미지 리스트 실패: ${title}`);
-    }
+            });
+            const info = Object.values(infoRes.data.query.pages)[0];
+            const url = info.imageinfo?.[0]?.url;
 
-    // =============================================
-    // 3) Thumbnail (최후의 수단)
-    // =============================================
-    try {
-        const thumbRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-            headers: WIKI_HEADERS,
-            params: {
-                ...baseParams,
-                prop: "pageimages",
-                piprop: "thumbnail",
-                pithumbsize: 1000
+            if (isValidImageUrl(url)) {
+                // console.log(`✔ [List] 리스트 대체 이미지: ${title}`);
+                return url;
             }
-        });
-
-        const page = Object.values(thumbRes.data.query.pages)[0];
-        const thumb = page.thumbnail?.source;
-
-        if (thumb && isValidImageUrl(thumb)) {
-            console.log(`✔ Thumbnail fallback: ${title}`);
-            return thumb;
         }
-    } catch (e) {
-        console.log(`✖ Thumbnail 실패: ${title}`);
-    } function isHumanTitle(title) {
-    // 완벽할 필요 없음 — 인명만 걸러도 충분
-    return /^[A-Za-z가-힣·\s]+$/.test(title);
-}
-    console.log(`✖ 최종 실패: ${title}`);
-    
-if (!infoboxImage && !bestFace && !bestThumb && page) {
-    const rawOriginal = page?.originalimage?.source || null;
-    const rawThumb = page?.thumbnail?.source || null;
+    } catch (e) {}
 
-    const fixed = [rawOriginal, rawThumb].find(u =>
-        typeof u === "string" &&
-        /^https?:\/\//i.test(u) &&                    // URL 형식 보정
-        /\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(u)      // 확장자 뒤 파라미터 허용
-    );
-
-    if (fixed) return fixed;
-}
-    
-
-// 그다음 infobox
-if (infoboxImage) return infoboxImage;
-if (!infoboxImage) return bestThumb;
-    
-// 사람 문서일 경우 — infobox/thumbnail 둘 다 실패하면 여기서 중단
-if (isHumanTitle(title)) {
+    console.log(`❌ 최종 이미지 실패: ${title}`);
     return null;
 }
-
-// 사람이 아닌 경우에만 fallback 허용
-if (bestFace) return bestFace;
-
-return null;
-}
-
 
 // --- [핵심] 이미지 URL 안정성 체크 ---
 async function checkUrlStability(url) {
@@ -379,7 +358,7 @@ async function fillCache() {
             // 1. LEGACY 유명인 우선 시도
             // -------------------------------------------------------
             if (QUIZ_CACHE.length < CACHE_SIZE) {
-                process.stdout.write(`[유명인] 검색 시도... `);
+                // process.stdout.write(`[유명인] 검색 시도... `);
 
                 const famousCandidates = LEGACY_NAMES
                     .sort(() => Math.random() - 0.5)
@@ -395,8 +374,7 @@ async function fillCache() {
                             params: {
                                 action: "query",
                                 titles: pickName,
-                                prop: "pageimages|extracts",
-                                pithumbsize: 500,
+                                prop: "extracts", // 이미지는 따로 구함
                                 exintro: true,
                                 explaintext: true,
                                 format: "json",
@@ -410,7 +388,7 @@ async function fillCache() {
                     const pageData = Object.values(pages)[0];
                     if (!pageData || !pageData.extract || pageData.extract.length < 30) continue;
 
-                    // 🔥 대표 이미지 확보 후, 없으면 명확하게 스킵
+                    // 🔥 이미지 확보 (개선된 함수 사용)
                     const imgUrl = await getStableMainImage(pageData.title);
                     if (!imgUrl) {
                         console.log(`❌ [유명인] ${pickName} 이미지 없음/불안정 → 패스`);
@@ -441,7 +419,7 @@ async function fillCache() {
 
             while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 3) {
                 const year = Math.floor(Math.random() * (1940 - 500 + 1)) + 500;
-                process.stdout.write(`[랜덤] ${year}년도 탐색... `);
+                // process.stdout.write(`[랜덤] ${year}년도 탐색... `);
 
                 const listRes = await axios.get(
                     "https://ko.wikipedia.org/w/api.php",
@@ -490,7 +468,7 @@ async function fillCache() {
                     if (!pageData || !pageData.extract || pageData.extract.length < 300)
                         continue;
 
-                    // 🔥 이미지 없으면 명확하게 스킵
+                    // 🔥 이미지 확보
                     const imgUrl = await getStableMainImage(pageData.title);
                     if (!imgUrl) {
                         console.log(`❌ [랜덤] ${pageData.title} 이미지 없음 → 패스`);
