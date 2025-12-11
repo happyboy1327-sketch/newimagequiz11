@@ -207,7 +207,7 @@ async function getStableMainImage(title) {
             params: {
                 ...baseParams,
                 prop: "images",
-                imlimit: 100
+                imlimit: 500
             }
         });
 
@@ -255,7 +255,7 @@ async function getStableMainImage(title) {
                 ...baseParams,
                 prop: "pageimages",
                 piprop: "thumbnail",
-                pithumbsize: 800
+                pithumbsize: 1000
             }
         });
 
