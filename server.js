@@ -69,7 +69,7 @@ function makeNameAliases(title) {
         lowerKo.replace(/\s+/g, "-")
     ];
 
-    if (/모차르트|mozart|아마데우스/.test(cleanKo)) {
+    if (/모차르트/.test(cleanKo)) {
         aliases.push("Wolfgang Amadeus Mozart".toLowerCase());
         aliases.push("mozart");
     }
