@@ -288,17 +288,19 @@ if (!infoboxImage && !bestFace && !bestThumb && page) {
     if (fixed) return fixed;
 }
     
-// ★ 함수 맨 마지막 return 부분을 아래로 완전히 교체
+// ★ thumbnail 최우선
+if (bestThumb) return bestThumb;
+
+// 그다음 infobox
 if (infoboxImage) return infoboxImage;
 
-// 사람 문서일 경우, infobox 실패 시 절대 이미지 리스트 기반 얼굴을 쓰지 않음
+// 사람 문서일 경우 — infobox/thumbnail 둘 다 실패하면 여기서 중단
 if (isHumanTitle(title)) {
     return null;
 }
 
 // 사람이 아닌 경우에만 fallback 허용
 if (bestFace) return bestFace;
-if (bestThumb) return bestThumb;
 
 return null;
 }
