@@ -92,33 +92,24 @@ function makeNameAliases(title) {
 // 2) infobox 이미지 추출 (모든 img 태그 스캔, SVG 완벽 제외)
 // ===============================
 function extractInfoboxImage(html) {
-    // infobox 영역 먼저 추출
-    const infoboxMatch = html.match(/class="infobox[^"]*"[\s\S]*?(?=<\/table>|<\/div>)/i);
-    const searchArea = infoboxMatch ? infoboxMatch[0] : html;
-    
-    // 모든 img 태그의 src 찾기
+    // 1) infobox table/div 강제 추출
+    const infoboxMatch = html.match(/<table[^>]*class="[^"]*infobox[^"]*"[^>]*>[\s\S]*?<\/table>/i)
+                        || html.match(/<div[^>]*class="[^"]*infobox[^"]*"[^>]*>[\s\S]*?<\/div>/i);
+
+    if (!infoboxMatch) return null;
+    const area = infoboxMatch[0];
+
+    // 2) infobox 내부 img 태그만 스캔
     const imgRegex = /<img[^>]+src="([^"]+)"/gi;
-    let match;
-    
-    while ((match = imgRegex.exec(searchArea)) !== null) {
-        let url = match[1];
-        
-        // 프로토콜 추가
-        if (!url.startsWith("http")) {
-            url = "https:" + url;
-        }
-        
-        // 🔥 SVG는 완벽하게 제외 (쿼리 파라미터 포함)
-        if (/\.svg/i.test(url)) {
-            continue;
-        }
-        
-        // 유효한 이미지 URL 확인
-        if (/\.(jpg|jpeg|png)/i.test(url)) {
-            return url;
-        }
+    let m;
+    while ((m = imgRegex.exec(area)) !== null) {
+        let src = m[1];
+
+        if (!src.startsWith("http")) src = "https:" + src;
+        if (/\.svg/i.test(src)) continue;                 // svg 무조건 제외
+        if (!/\.(jpg|jpeg|png)(\?|$)/i.test(src)) continue; // 정식 이미지만
+        return src;
     }
-    
     return null;
 }
 
@@ -169,24 +160,29 @@ async function getStableMainImage(title) {
         origin: "*",
         titles: title
     };
-    
-    // 1) 문서 HTML 가져오기 → infobox 추출 (가장 신뢰할 수 있음)
-    let infoboxImage = null;
+
+    // =============================================
+    // 1) HTML 크롤링 → infobox 이미지 강제 우선
+    // =============================================
     try {
         const htmlRes = await axios.get(
             `https://ko.wikipedia.org/wiki/${encodeURIComponent(title)}`,
             { headers: WIKI_HEADERS }
         );
-        infoboxImage = extractInfoboxImage(htmlRes.data);
-        if (infoboxImage && isValidImageUrl(infoboxImage)) {
-            console.log(`✅ Infobox 이미지 획득: ${title}`);
-            return infoboxImage;
+
+        const infobox = extractInfoboxImage(htmlRes.data);
+
+        if (infobox && isValidImageUrl(infobox)) {
+            console.log(`✔ Infobox 이미지 확정: ${title}`);
+            return infobox;
         }
     } catch (e) {
-        console.log(`❌ Infobox 추출 실패: ${title}`);
+        console.log(`✖ infobox 크롤링 실패: ${title}`);
     }
-    
-    // 2) 이미지 리스트 → 사람 사진 후보 필터링 (정확도 높음)
+
+    // =============================================
+    // 2) 이미지 목록 API → 사람 사진만 필터링
+    // =============================================
     try {
         const imgListRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
             headers: WIKI_HEADERS,
@@ -196,44 +192,44 @@ async function getStableMainImage(title) {
                 imlimit: 100
             }
         });
-        const imgListPage = Object.values(imgListRes.data.query.pages)[0];
-        const images = imgListPage.images || [];
-        
-        // 여러 후보를 시도 (최대 5개)
-        const faceCandidates = images.filter(img => isHumanPhoto(img.title, aliases)).slice(0, 5);
-        
-        for (const candidate of faceCandidates) {
+
+        const page = Object.values(imgListRes.data.query.pages)[0];
+        const imgs = page.images || [];
+
+        const candidates = imgs
+            .filter(i => isHumanPhoto(i.title, aliases))
+            .slice(0, 5);
+
+        for (const c of candidates) {
             try {
                 const infoRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
                     headers: WIKI_HEADERS,
                     params: {
                         action: "query",
                         format: "json",
-                        titles: candidate.title,
+                        titles: c.title,
                         prop: "imageinfo",
                         iiprop: "url",
-                        iiurlwidth: 600,
-                        iiurlheight: 600,
+                        iiurlwidth: 700,
                         origin: "*"
                     }
                 });
-                const infoPage = Object.values(infoRes.data.query.pages)[0];
-                const url = infoPage.imageinfo?.[0]?.thumburl || infoPage.imageinfo?.[0]?.url || null;
-                
-                // 🔥 최종 검증: 유효한 이미지인가?
-                if (url && isValidImageUrl(url)) {
-                    console.log(`✅ 이미지 리스트 획득: ${title} (${candidate.title})`);
+                const info = Object.values(infoRes.data.query.pages)[0];
+                const url = info.imageinfo?.[0]?.thumburl || info.imageinfo?.[0]?.url;
+
+                if (isValidImageUrl(url)) {
+                    console.log(`✔ 이미지 리스트에서 대체 이미지 획득: ${title}`);
                     return url;
                 }
-            } catch (e) {
-                continue;
-            }
+            } catch {}
         }
     } catch (e) {
-        console.log(`❌ 이미지 리스트 조회 실패: ${title}`);
+        console.log(`✖ 이미지 리스트 실패: ${title}`);
     }
-    
-    // 3) pageimages thumbnail (마지막 수단)
+
+    // =============================================
+    // 3) Thumbnail (최후의 수단)
+    // =============================================
     try {
         const thumbRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
             headers: WIKI_HEADERS,
@@ -244,21 +240,26 @@ async function getStableMainImage(title) {
                 pithumbsize: 800
             }
         });
-        const thumbPage = Object.values(thumbRes.data.query.pages)[0];
-        const thumbUrl = thumbPage.thumbnail?.source || null;
-        
-        if (thumbUrl && isValidImageUrl(thumbUrl)) {
-            console.log(`✅ Thumbnail 획득: ${title}`);
-            return thumbUrl;
+
+        const page = Object.values(thumbRes.data.query.pages)[0];
+        const thumb = page.thumbnail?.source;
+
+        if (thumb && isValidImageUrl(thumb)) {
+            console.log(`✔ Thumbnail fallback: ${title}`);
+            return thumb;
         }
     } catch (e) {
-        console.log(`❌ Thumbnail 조회 실패: ${title}`);
+        console.log(`✖ Thumbnail 실패: ${title}`);
     }
+
+    console.log(`✖ 최종 실패: ${title}`);
     
-    console.log(`❌ 모든 이미지 획득 실패: ${title}`);
-    // 4) 우선순위 결론
-    return bestThumb || infoboxImage || bestFace || null;
+    if (infoboxImage) return infoboxImage;
+    if (bestFace) return bestFace;
+    if (bestThumb) return bestThumb;
+    return null;
 }
+
 
 // --- [핵심] 이미지 URL 안정성 체크 ---
 async function checkUrlStability(url) {
