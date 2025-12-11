@@ -250,14 +250,25 @@ async function getStableMainImage(title) {
         }
     } catch (e) {
         console.log(`✖ Thumbnail 실패: ${title}`);
-    }
-
+    } function isHumanTitle(title) {
+    // 완벽할 필요 없음 — 인명만 걸러도 충분
+    return /^[A-Za-z가-힣·\s]+$/.test(title);
+}
     console.log(`✖ 최종 실패: ${title}`);
     
-    if (infoboxImage) return infoboxImage;
-    if (bestFace) return bestFace;
-    if (bestThumb) return bestThumb;
+// ★ 함수 맨 마지막 return 부분을 아래로 완전히 교체
+if (infoboxImage) return infoboxImage;
+
+// 사람 문서일 경우, infobox 실패 시 절대 이미지 리스트 기반 얼굴을 쓰지 않음
+if (isHumanTitle(title)) {
     return null;
+}
+
+// 사람이 아닌 경우에만 fallback 허용
+if (bestFace) return bestFace;
+if (bestThumb) return bestThumb;
+
+return null;
 }
 
 
