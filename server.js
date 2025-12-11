@@ -92,37 +92,64 @@ function makeNameAliases(title) {
 // 2) infobox 이미지 추출 (모든 img 태그 스캔, SVG 완벽 제외)
 // ===============================
 function extractInfoboxImage(html) {
-    // 1) infobox table/div 강제 추출
+    // infobox table/div 강제 추출
     const infoboxMatch = html.match(/<table[^>]*class="[^"]*infobox[^"]*"[^>]*>[\s\S]*?<\/table>/i)
                         || html.match(/<div[^>]*class="[^"]*infobox[^"]*"[^>]*>[\s\S]*?<\/div>/i);
 
     if (!infoboxMatch) return null;
     const area = infoboxMatch[0];
 
-    // 2) infobox 내부 img 태그만 스캔
-    const imgRegex = /<img[^>]+src="([^"]+)"/gi;
+    // img 태그의 src / data-src / srcset 등 모두 검사
+    const srcRegex = /<img[^>]*(?:src|data-src|data-srcset|srcset)\s*=\s*"(.*?)"/gi;
     let m;
-    while ((m = imgRegex.exec(area)) !== null) {
-        let src = m[1];
+    while ((m = srcRegex.exec(area)) !== null) {
+        let src = m[1].trim();
+        if (!src) continue;
+        // 프로토콜 보정
+        if (!/^https?:\/\//i.test(src)) {
+            if (src.startsWith("//")) src = "https:" + src;
+            else src = "https:" + src;
+        }
 
-        if (!src.startsWith("http")) src = "https:" + src;
-        if (/\.svg/i.test(src)) continue;                 // svg 무조건 제외
-        if (!/\.(jpg|jpeg|png)(\?|$)/i.test(src)) continue; // 정식 이미지만
-        return src;
+        // --- SVG 관련 모든 형태 배제 ---
+        // - 직접 .svg
+        // - .svg 뒤에 슬래시로 크기/변환 경로가 붙는 경우 (예: ...file.svg/300px-...)
+        // - 경로에 '/svg/' 또는 파일명에 'svg' 키워드가 섞인 경우(안전하게 배제)
+        if (/\.svg(\?.*)?$/i.test(src)) continue;
+        if (/\/[^\/]*\.svg\//i.test(src)) continue;
+        if (/\/svg\//i.test(src)) continue;
+        if (/(\?|&)format=svg/i.test(src)) continue;
+        if (/(\.svg)[^a-z0-9]/i.test(src)) continue;
+
+        // 유효 확장자만 허용
+        if (/\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(src)) return src;
     }
+
     return null;
 }
 
-// ===============================
-// 3) 사람이 나온 이미지 필터 (SVG 제외)
-// ===============================
+// --- 2) 이미지 URL 유효성 검사: SVG 계열 완전 거부, 확장자+파라미터 허용
+function isValidImageUrl(url) {
+    if (!url || typeof url !== "string") return false;
+    // 1) 어떤 형태의 svg가 섞여있으면 무조건 거부
+    if (/\.svg(\?.*)?$|\/[^\/]*\.svg\/|\/svg\//i.test(url)) return false;
+
+    // 2) 실제 이미지 확장자 허용 (파라미터 허용)
+    return /\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(url);
+}
+
+// --- 3) 사람 사진 후보 필터: title/filename에 svg 포함시 확실히 제외
 function isHumanPhoto(filename, aliases) {
+    if (!filename || typeof filename !== "string") return false;
     const n = filename.toLowerCase();
 
-    // 🔥 SVG 파일은 무조건 제외
+    // SVG 파일명/경로 포함시 무조건 제외
     if (/\.svg$/i.test(n)) return false;
+    if (/\bsvg\b/i.test(n)) return false;
+    if (/\/svg\//i.test(n)) return false;
 
-    if (!/\.(jpg|jpeg|png)$/i.test(n)) return false;
+    // 이미지 확장자 확인
+    if (!/\.(jpg|jpeg|png|webp)$/i.test(n)) return false;
 
     // 기념비/상징류 제외
     if (/(memorial|statue|grave|coat|tomb|plaque|museum)/i.test(n)) return false;
@@ -130,25 +157,17 @@ function isHumanPhoto(filename, aliases) {
     if (/signature/i.test(n)) return false;
 
     // 긍정 단서
-    if (/(portrait|photo|face)/i.test(n)) return true;
+    if (/(portrait|photo|face|headshot)/i.test(n)) return true;
 
-    // alias 기반 이름 매칭
+    // alias 기반 이름 매칭 (파일명에 이름 포함 여부)
     for (const a of aliases) {
-        if (a && n.includes(a)) return true;
+        if (!a) continue;
+        const clean = a.toLowerCase().replace(/\s+/g, "_");
+        if (n.includes(clean) || n.includes(a.toLowerCase())) return true;
     }
 
     return false;
 }
-
-// ===============================
-// 4) URL이 유효한 이미지인지 최종 검증
-// ===============================
-function isValidImageUrl(url) {
-    if (!url) return false;
-    // 유효한 이미지 포맷만 (SVG 제외)
-    return /\.(jpg|jpeg|png)(\?|$)/i.test(url);
-}
-
 // ===============================
 // 5) getStableMainImage - 개선된 버전
 // ===============================
