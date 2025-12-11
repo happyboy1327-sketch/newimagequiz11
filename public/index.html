@@ -56,6 +56,9 @@
 </div>
 
 <script>
+let retryCount = 0;
+const MAX_RETRY = 3;
+
 let sessionId = localStorage.getItem('sessionId') || `session_${Date.now()}`;
 localStorage.setItem('sessionId', sessionId);
 
@@ -73,6 +76,21 @@ async function loadQuiz(){
   
   const img = document.getElementById('person-img');
   img.src = LOADING_IMG;
+
+  // 이미지 패스 처리
+  img.onerror = () => {
+    console.warn("이미지 로드 실패 → 패스");
+
+    retryCount++;
+    if (retryCount > MAX_RETRY) {
+        document.getElementById('hint').textContent = "이미지 불안정으로 로드 실패. 다시 시도해주세요.";
+        return;
+    }
+
+    // 자동 재요청
+    loadQuiz();
+};
+
   
   document.getElementById('hint').textContent = "최적의 이미지를 선별하고 있습니다...";
   timeLeft = 15;
@@ -91,6 +109,10 @@ async function loadQuiz(){
 
     currentData = data;
     img.src = data.image;
+    img.onload = () => {
+    retryCount = 0; // 정상 이미지 → 카운터 초기화
+};
+
     document.getElementById('hint').textContent = data.hint;
     
     document.getElementById('checkBtn').disabled = false;
