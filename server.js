@@ -146,10 +146,9 @@ function isHumanPhoto(filename, aliases) {
     // SVG 파일명/경로 포함시 무조건 제외
     if (/\.svg$/i.test(n)) return false;
     if (/\bsvg\b/i.test(n)) return false;
-    if (/\/svg\//i.test(n)) return false;
 
     // 이미지 확장자 확인
-    if (!/\.(jpg|jpeg|png|webp)$/i.test(n)) return false;
+    if (!/\.(jpg|jpeg|png|webp)$/i.test(n)) return true;
 
     // 기념비/상징류 제외
     if (/(memorial|statue|grave|coat|tomb|plaque|museum)/i.test(n)) return false;
