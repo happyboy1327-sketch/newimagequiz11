@@ -395,7 +395,8 @@ async function fillCache() {
                             params: {
                                 action: "query",
                                 titles: pickName,
-                                prop: "extracts",
+                                prop: "pageimages|extracts",
+                                pithumbsize: 500,
                                 exintro: true,
                                 explaintext: true,
                                 format: "json",
