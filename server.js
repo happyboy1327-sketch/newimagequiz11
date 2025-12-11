@@ -256,6 +256,19 @@ async function getStableMainImage(title) {
 }
     console.log(`✖ 최종 실패: ${title}`);
     
+if (!infoboxImage && !bestFace && !bestThumb && page) {
+    const rawOriginal = page?.originalimage?.source || null;
+    const rawThumb = page?.thumbnail?.source || null;
+
+    const fixed = [rawOriginal, rawThumb].find(u =>
+        typeof u === "string" &&
+        /^https?:\/\//i.test(u) &&                    // URL 형식 보정
+        /\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(u)      // 확장자 뒤 파라미터 허용
+    );
+
+    if (fixed) return fixed;
+}
+    
 // ★ 함수 맨 마지막 return 부분을 아래로 완전히 교체
 if (infoboxImage) return infoboxImage;
 
