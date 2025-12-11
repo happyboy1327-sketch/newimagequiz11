@@ -152,11 +152,11 @@ function isHumanPhoto(filename, aliases) {
 
     // 기념비/상징류 제외
     if (/(memorial|statue|grave|coat|tomb|plaque|museum)/i.test(n)) return false;
-    if (/(emblem|flag|symbol|seal|arms|imperial|logo|icon|painting)/i.test(n)) return false;
+    if (/(emblem|flag|symbol|seal|arms|imperial|logo|icon|painting|group photo)/i.test(n)) return false;
     if (/signature/i.test(n)) return false;
 
     // 긍정 단서
-    if (/(portrait|photo|face|headshot)/i.test(n)) return true;
+    if (/(portrait|photo|face)/i.test(n)) return true;
 
     // alias 기반 이름 매칭 (파일명에 이름 포함 여부)
     for (const a of aliases) {
@@ -290,7 +290,8 @@ if (!infoboxImage && !bestFace && !bestThumb && page) {
 
 // 그다음 infobox
 if (infoboxImage) return infoboxImage;
-
+if (!infoboxImage) return bestThumb;
+    
 // 사람 문서일 경우 — infobox/thumbnail 둘 다 실패하면 여기서 중단
 if (isHumanTitle(title)) {
     return null;
