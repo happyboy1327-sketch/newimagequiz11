@@ -288,6 +288,8 @@ if (!infoboxImage && !bestFace && !bestThumb && page) {
     if (fixed) return fixed;
 }
     
+// ★ thumbnail 최우선
+if (bestThumb) return bestThumb;
 
 // 그다음 infobox
 if (infoboxImage) return infoboxImage;
