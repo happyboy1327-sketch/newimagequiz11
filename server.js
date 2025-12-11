@@ -139,7 +139,8 @@ function isHumanPhoto(filename, aliases) {
         "book", "cover",                // 책 표지
         "coin", "currency",             // 동전/지폐
         "statue", "sculpture",          // 동상 (가능하면 실제 얼굴 선호)
-        "memorial", "plaque"            // 기념판
+        "memorial", "plaque",
+        "landscape", "architectures" // 기념판
     ];
 
     // 파일명에 블랙리스트 키워드가 하나라도 있으면 즉시 탈락
