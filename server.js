@@ -139,7 +139,7 @@ function isHumanPhoto(filename, aliases) {
         "book", "cover",                // 책 표지
         "coin", "currency",             // 동전/지폐
         "statue", "sculpture",          // 동상 (가능하면 실제 얼굴 선호)
-        "memorial", "plaque",
+        "memorial", "plaque", "doctrinae",
         "landscape", "architectures" // 기념판
     ];
 
