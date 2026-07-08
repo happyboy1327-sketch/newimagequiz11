@@ -446,121 +446,39 @@ async function fillCache() {
 fillCache();
 
 // --- API ---
-// 예시: 기존의 /api/quiz 처리 라우터 부분을 아래 흐름으로 보완하세요
-app.get('/api/quiz', async (req, res) => {
-    try {
-        let quizItem = null;
-        let attempts = 0;
+app.get("/api/quiz", async (req, res) => {
+  try {
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`; 
+    console.log(`[Request] New request: ${requestId}`);
 
-        // [최적화] 30% 확률로 유명인 풀(LEGACY_NAMES)에서 즉시 추출 (서버리스 속도 극대화 & 타임아웃 방지)
-        if (Math.random() < 0.3 && typeof LEGACY_NAMES !== 'undefined' && LEGACY_NAMES.length > 0) {
-            const famousName = LEGACY_NAMES[Math.floor(Math.random() * LEGACY_NAMES.length)];
-            
-            const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                headers: WIKI_HEADERS,
-                params: {
-                    action: "query",
-                    titles: famousName,
-                    prop: "extracts",
-                    exintro: true,
-                    explaintext: true,
-                    format: "json",
-                    origin: "*"
-                }
-            });
-
-            const pages = detailRes.data.query?.pages || {};
-            const pageId = Object.keys(pages)[0];
-            const pageData = pages[pageId];
-
-            if (pageData && pageData.extract && pageData.extract.length > 30) {
-                const imgUrl = await getStableMainImage(pageData.title);
-                if (imgUrl && await checkUrlStability(imgUrl)) {
-                    quizItem = {
-                        name: pageData.title,
-                        image: imgUrl,
-                        hint: createMaskedHint(pageData.title, pageData.extract),
-                        description: pageData.extract
-                    };
-                }
-            }
-        }
-
-        // 유명인 룰렛에 안 걸렸거나 유명인 이미지 뽑기에 실패했다면 랜덤 연도 실시간 채굴 시작
-        while (!quizItem && attempts < 4) {
-            const year = Math.floor(Math.random() * (1940 - 500 + 1)) + 500;
-
-            const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                headers: WIKI_HEADERS,
-                params: {
-                    action: "query",
-                    list: "categorymembers",
-                    cmtitle: `분류:${year}년_출생`,
-                    cmlimit: 30, // 서버리스 기동을 위해 가볍게 30개만 조회
-                    cmtype: "page",
-                    format: "json",
-                    origin: "*"
-                }
-            });
-
-            const candidates = listRes.data.query?.categorymembers || [];
-            
-            // 사용자 문서(:) 필터 및 노이즈 필터링 후 셔플
-            const filteredCandidates = candidates
-                .filter(cand => {
-                    if (cand.title.includes(":")) return false;
-                    return !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title);
-                })
-                .sort(() => Math.random() - 0.5);
-
-            // 후보들 중 조건에 맞는 첫 번째 인물 서칭
-            for (const cand of filteredCandidates) {
-                const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                    headers: WIKI_HEADERS,
-                    params: {
-                        action: "query",
-                        titles: cand.title,
-                        prop: "extracts",
-                        exintro: true,
-                        explaintext: true,
-                        format: "json",
-                        origin: "*"
-                    }
-                });
-
-                const pages = detailRes.data.query?.pages || {};
-                const pageId = Object.keys(pages)[0];
-                const pageData = pages[pageId];
-
-                if (!pageData || !pageData.extract || pageData.extract.length < 250) continue;
-
-                const imgUrl = await getStableMainImage(pageData.title);
-                if (!imgUrl || !(await checkUrlStability(imgUrl))) continue;
-
-                // 조건 완벽 부합 시 퀴즈 확정 및 루프 완전 탈출
-                quizItem = {
-                    name: pageData.title,
-                    image: imgUrl,
-                    hint: createMaskedHint(pageData.title, pageData.extract),
-                    description: pageData.extract
-                };
-                break; 
-            }
-            attempts++;
-        }
-
-        // 끝까지 실패했을 경우 안전장치 예외 처리 (다시 시도 유도)
-        if (!quizItem) {
-            return res.status(503).json({ error: "시간 초과 방지를 위해 중단되었습니다. 다음 문제를 다시 눌러주세요!" });
-        }
-
-        // 정상 응답 JSON 반환
-        res.json(quizItem);
-
-    } catch (error) {
-        console.error("서버리스 퀴즈 라우터 터짐:", error.message);
-        res.status(500).json({ error: "서버 내부 오류가 발생했습니다." });
+    // ★ 수정: 캐시가 진짜 아예 없을 때만 채워질 때까지 기다립니다.
+    if (QUIZ_CACHE.length === 0) {
+        if (!isCaching) fillCache(); 
+        if (cachePromise) await cachePromise;
     }
+  
+    const item = QUIZ_CACHE.shift();
+  
+    if (!item) {
+        return res.status(503).json({ error: "데이터 준비 중입니다.", requestId });
+    }
+
+    // ★ 수정: 남은 개수가 비어갈 때 백그라운드에서 조용히 채우되, 사용자를 붙잡지 않습니다.
+    if (QUIZ_CACHE.length < CACHE_SIZE / 2 && !isCaching) {
+        fillCache(); // await를 빼서 백그라운드로 돌림
+    }
+
+    res.json({ 
+      ...item, 
+      imageUrl: item.image,
+      requestId 
+    });
+
+  } catch (error) {
+    console.error("API 퀴즈 처리 중 심각한 오류 발생:", error);
+    const errorId = `err_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`; 
+    res.status(500).json({ error: "서버 내부 오류로 퀴즈를 불러올 수 없습니다.", errorId });
+  }
 });
 
 // --- 정적 ---
