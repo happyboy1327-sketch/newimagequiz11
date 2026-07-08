@@ -446,39 +446,36 @@ async function fillCache() {
 fillCache();
 
 // --- API ---
-app.get("/api/quiz", async (req, res) => {
-  try {
-    const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`; 
-    console.log(`[Request] New request: ${requestId}`);
+// 예시: 기존의 /api/quiz 처리 라우터 부분을 아래 흐름으로 보완하세요
+app.get('/api/quiz', async (req, res) => {
+    try {
+        // 1. 만약 캐시가 비어있다면 즉시 채굴 함수를 실행시키고 대기 메시지 반환
+        if (!QUIZ_CACHE || QUIZ_CACHE.length === 0) {
+            fillCache(); // 백그라운드에서 채굴 시작
+            return res.status(202).json({ 
+                success: false, 
+                message: "서버에서 퀴즈를 채굴 중입니다. 잠시 후 다시 시도해주세요." 
+            });
+        }
 
-    // ★ 수정: 캐시가 진짜 아예 없을 때만 채워질 때까지 기다립니다.
-    if (QUIZ_CACHE.length === 0) {
-        if (!isCaching) fillCache(); 
-        if (cachePromise) await cachePromise;
+        // 2. 캐시가 있으면 안전하게 꺼내기
+        const quizItem = QUIZ_CACHE.shift();
+        
+        // 꺼낸 후 캐시가 부족해지면 미리 채워두기
+        if (QUIZ_CACHE.length < 3) {
+            fillCache();
+        }
+
+        // 정상 반환
+        res.json({
+            success: true,
+            quiz: quizItem
+        });
+
+    } catch (error) {
+        console.error("API 라우터 에러:", error);
+        res.status(500).json({ success: false, error: "서버 내부 오류 발생" });
     }
-  
-    const item = QUIZ_CACHE.shift();
-  
-    if (!item) {
-        return res.status(503).json({ error: "데이터 준비 중입니다.", requestId });
-    }
-
-    // ★ 수정: 남은 개수가 비어갈 때 백그라운드에서 조용히 채우되, 사용자를 붙잡지 않습니다.
-    if (QUIZ_CACHE.length < CACHE_SIZE / 2 && !isCaching) {
-        fillCache(); // await를 빼서 백그라운드로 돌림
-    }
-
-    res.json({ 
-      ...item, 
-      imageUrl: item.image,
-      requestId 
-    });
-
-  } catch (error) {
-    console.error("API 퀴즈 처리 중 심각한 오류 발생:", error);
-    const errorId = `err_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`; 
-    res.status(500).json({ error: "서버 내부 오류로 퀴즈를 불러올 수 없습니다.", errorId });
-  }
 });
 
 // --- 정적 ---
