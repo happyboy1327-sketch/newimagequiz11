@@ -354,6 +354,19 @@ async function fillCache() {
 
     cachePromise = new Promise(async (resolve) => {
         console.log("⛏️ 데이터 채굴 시작...");
+        try {                                          // try 추가
+        let randomSearchAttempts = 0;
+        while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 3) {
+            ...
+        }
+    } catch (e) {
+        console.error("채굴 중 오류:", e.message);
+    } finally {
+        isCaching = false;
+        if (QUIZ_CACHE.length < 5) setTimeout(fillCache, 3000);
+        resolve();
+    }
+});
 
         // -------------------------------------------------------
             // 2. 랜덤 연도 탐색 (출생 연도 기반 - 최적화 통합 버전)
