@@ -515,23 +515,22 @@ app.get("/api/quiz", async (req, res) => {
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`; 
     console.log(`[Request] New request: ${requestId}`);
 
-    if (isCaching && cachePromise) {
-        await cachePromise; 
-    }
-  
+    // ★ 수정: 캐시가 진짜 아예 없을 때만 채워질 때까지 기다립니다.
     if (QUIZ_CACHE.length === 0) {
-        await fillCache(); 
-        await cachePromise;
+        if (!isCaching) fillCache(); 
+        if (cachePromise) await cachePromise;
     }
   
     const item = QUIZ_CACHE.shift();
   
     if (!item) {
-        fillCache(); 
-        return res.status(503).json({ error: "데이터 준비 중입니다. 잠시만 기다려주세요.", requestId });
+        return res.status(503).json({ error: "데이터 준비 중입니다.", requestId });
     }
 
-    if (QUIZ_CACHE.length < CACHE_SIZE / 2) fillCache();
+    // ★ 수정: 남은 개수가 비어갈 때 백그라운드에서 조용히 채우되, 사용자를 붙잡지 않습니다.
+    if (QUIZ_CACHE.length < CACHE_SIZE / 2 && !isCaching) {
+        fillCache(); // await를 빼서 백그라운드로 돌림
+    }
 
     res.json({ 
       ...item, 
