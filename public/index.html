@@ -75,6 +75,7 @@ async function loadQuiz(){
   document.getElementById('checkBtn').disabled = true;
   
   const img = document.getElementById('person-img');
+  img.onload = null;
   img.src = LOADING_IMG;
 
   // 이미지 패스 처리
@@ -128,6 +129,8 @@ async function loadQuiz(){
 }
 
 function startTimer(){
+  clearInterval(timer); // ★ 핵심: 겹쳐있는 유령 타이머들 완벽 제거
+  
   timer = setInterval(()=>{
     timeLeft--;
     document.getElementById('timer').textContent = `${timeLeft}s`;
