@@ -339,10 +339,10 @@ async function fillCache() {
             // -------------------------------------------------------
             // 1. LEGACY 유명인 우선 시도 (5명 묶어서 한 번에 병렬 처리)
             // -------------------------------------------------------
-            if (QUIZ_CACHE.length < CACHE_SIZE && Math.random() < 0.70) { 
-               const famousCandidates = LEGACY_NAMES
-              .sort(() => Math.random() - 0.5)
-              .slice(0, 3);
+            if (QUIZ_CACHE.length < CACHE_SIZE && Math.random() < 0.85) { 
+                const famousCandidates = LEGACY_NAMES
+                .sort(() => Math.random() - 0.5)
+                .slice(0, 5); // 3에서 5로 변경
 
                 const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
                     headers: WIKI_HEADERS,
