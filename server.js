@@ -440,6 +440,12 @@ async function fillCache() {
                     const validationPromises = pages.map(async (pageData) => {
                         try {
                             if (!pageData || !pageData.extract || pageData.extract.length < 300) return null;
+                            
+                            const extract = pageData.extract;
+
+                            if (/(대학교수|명예교수|석좌교수|교수|교육자)/.test(extract)) {
+                            return null;
+                            }
 
                             const imgUrl = await getStableMainImage(pageData.title);
                             if (!imgUrl) return null;
