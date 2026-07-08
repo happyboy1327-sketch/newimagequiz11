@@ -344,7 +344,7 @@ function createMaskedHint(title, extract) {
         return match; 
     });
 
-    return hintText.substring(0, 120) + "...";
+    return hintText.substring(0, 130) + "...";
 }
 
 // --- 데이터 채굴 로직 ---
