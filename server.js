@@ -35,8 +35,8 @@ process.on('uncaughtException', (err) => {
 });
 
 // --- 설정 ---
-const CACHE_SIZE = 20;        
-const VALIDATION_TRY = 3;    
+const CACHE_SIZE = 25;        
+const VALIDATION_TRY = 2;    
 
 // --- 기존 퀴즈풀의 유명 인물 리스트 (검색 우선순위) ---
 const LEGACY_NAMES = [
@@ -212,7 +212,7 @@ async function getStableMainImage(title) {
                 action: "query",
                 titles: title,
                 prop: "images",
-                imlimit: 50,
+                imlimit: 55,
                 format: "json",
                 origin: "*"
             }
