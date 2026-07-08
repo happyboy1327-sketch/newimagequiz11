@@ -427,9 +427,15 @@ async function fillCache() {
 
                 // 노이즈 필터를 먼저 거르고 알짜배기 상위 10명만 추출
                 const filteredCandidates = candidates
-                    .filter(cand => !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title))
-                    .sort(() => Math.random() - 0.5)
-                    .slice(0, 10);
+                .filter(cand => {
+                // 제목에 콜론(:)이 들어가면 무조건 탈락
+                if (cand.title.includes(":")) return false; 
+        
+                // 특정 직업군 노이즈 필터링
+                return !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title);
+                })
+                .sort(() => Math.random() - 0.5) // 랜덤 셔플
+                .slice(0, 10);
 
                 if (filteredCandidates.length > 0) {
                     // 필터링된 10명의 본문을 한 번에 요청 (API 요청 10번 -> 1번으로 단축)
