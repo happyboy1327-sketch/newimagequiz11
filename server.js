@@ -384,6 +384,7 @@ async function fillCache() {
                 const legacyResults = await Promise.all(legacyPromises);
                 for (const item of legacyResults) {
                     if (item && QUIZ_CACHE.length < CACHE_SIZE) {
+                        if (QUIZ_CACHE.some(cached => cached.name === item.name)) continue;
                         QUIZ_CACHE.push(item);
                     }
                 }
@@ -469,6 +470,7 @@ async function fillCache() {
                     // 성공적으로 통과한 인물들만 골라서 캐시 저장소에 push
                     for (const item of results) {
                         if (item && QUIZ_CACHE.length < CACHE_SIZE) {
+                            if (QUIZ_CACHE.some(cached => cached.name === item.name)) continue;
                             QUIZ_CACHE.push(item);
                         }
                     }
