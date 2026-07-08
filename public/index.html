@@ -96,25 +96,35 @@ async function loadQuiz(){
   timeLeft = 15;
   document.getElementById('timer').textContent = `${timeLeft}s`;
 
-  try{
+ try{
     const res = await fetch(`/api/quiz?sessionId=${sessionId}`);
-    if(res.status === 503) {
-        document.getElementById('hint').textContent = "서버가 좋은 이미지를 찾고 있습니다. 잠시 후 '다음 문제'를 눌러주세요.";
-        document.getElementById('reloadBtn').disabled = false;
+    
+    // ★ 추가: 서버가 500 에러 등을 보냈을 때 JSON 파싱 전에 먼저 낚아챕니다.
+    if (!res.ok) {
+        const errorText = await res.text(); // 서버가 보낸 진짜 에러 문장 읽기
+        console.error("🚨 [서버 에러 상세정보]:", errorText);
+        
+        if(res.status === 503) {
+            document.getElementById('hint').textContent = "서버가 좋은 이미지를 찾고 있습니다. 잠시 후 '다음 문제'를 눌러주세요.";
+            document.getElementById('reloadBtn').disabled = false;
+        } else {
+            // 화면의 힌트 자리에 서버가 왜 터졌는지 에러 메시지를 바로 보여줍니다.
+            document.getElementById('hint').textContent = `서버 오류 (${res.status}): ${errorText}`;
+        }
         return;
     }
     
+    // 정상적(200 OK)일 때만 JSON으로 변환하므로 이제 Unexpected token 에러가 나지 않습니다.
     const data = await res.json();
     if(data.error) throw new Error(data.error);
 
     currentData = data;
     img.src = data.image;
     img.onload = () => {
-    retryCount = 0; // 정상 이미지 → 카운터 초기화
-};
+        retryCount = 0; // 정상 이미지 → 카운터 초기화
+    };
 
     document.getElementById('hint').textContent = data.hint;
-    
     document.getElementById('checkBtn').disabled = false;
     startTimer();
 
@@ -122,7 +132,6 @@ async function loadQuiz(){
     console.error(e);
     document.getElementById('hint').textContent = "오류가 발생했습니다.";
   }
-}
 
 function startTimer(){
   timer = setInterval(()=>{
