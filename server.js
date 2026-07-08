@@ -408,7 +408,7 @@ async function fillCache() {
             let randomSearchAttempts = 0;
 
             while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 3) {
-                const year = Math.floor(Math.random() * (1940 - 500 + 1)) + 500;
+                const year = Math.floor(Math.random() * (2000 - 500 + 1)) + 500;
 
                 const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
                     headers: WIKI_HEADERS,
