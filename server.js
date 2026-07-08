@@ -287,26 +287,25 @@ async function getStableMainImage(title) {
 // --- [핵심] 이미지 URL 안정성 체크 ---
 async function checkUrlStability(url) {
     if (!url) return false;
-    try {
-        // HEAD 요청으로 이미지 존재 여부만 0.1초만에 스캔
-        const res = await axios.head(url, {
-            headers: WIKI_HEADERS,
-            timeout: 1000
-        });
-        return res.status === 200;
-    } catch (e) {
-        // HEAD 요청을 거부하는 서버 대비용 GET 백업 (스트림으로 가볍게 수신)
+    
+    for (let i = 1; i <= VALIDATION_TRY; i++) {
         try {
-            const res = await axios.get(url, { 
-                headers: WIKI_HEADERS, 
-                timeout: 1000, 
-                responseType: "stream" 
+            const res = await axios.get(url, {
+                headers: WIKI_HEADERS,
+                timeout: 2000,
+                responseType: "arraybuffer"
             });
-            return res.status === 200;
-        } catch(err) {
+            
+            const contentType = res.headers['content-type'] || '';
+            if (res.status !== 200 || !contentType.includes('image')) {
+                return false;
+            }
+            await new Promise(r => setTimeout(r, 100));
+        } catch (e) {
             return false; 
         }
     }
+    return true;
 }
 
 // --- 공통 힌트 마스킹 함수 ---
@@ -354,92 +353,144 @@ async function fillCache() {
 
     cachePromise = new Promise(async (resolve) => {
         console.log("⛏️ 데이터 채굴 시작...");
-        try {                                          // try 추가
-        let randomSearchAttempts = 0;
-        while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 3) {
-            ...
-        }
-    } catch (e) {
-        console.error("채굴 중 오류:", e.message);
-    } finally {
-        isCaching = false;
-        if (QUIZ_CACHE.length < 5) setTimeout(fillCache, 3000);
-        resolve();
-    }
-});
 
-        // -------------------------------------------------------
-            // 2. 랜덤 연도 탐색 (출생 연도 기반 - 최적화 통합 버전)
+        try {
+            // -------------------------------------------------------
+            // 1. LEGACY 유명인 우선 시도
+            // -------------------------------------------------------
+            if (QUIZ_CACHE.length < CACHE_SIZE) {
+                // process.stdout.write(`[유명인] 검색 시도... `);
+
+                const famousCandidates = LEGACY_NAMES
+                    .sort(() => Math.random() - 0.5)
+                    .slice(0, 5);
+
+                for (const pickName of famousCandidates) {
+                    if (QUIZ_CACHE.length >= CACHE_SIZE) break;
+
+                    const detailRes = await axios.get(
+                        "https://ko.wikipedia.org/w/api.php",
+                        {
+                            headers: WIKI_HEADERS,
+                            params: {
+                                action: "query",
+                                titles: pickName,
+                                prop: "extracts", // 이미지는 따로 구함
+                                exintro: true,
+                                explaintext: true,
+                                format: "json",
+                                origin: "*"
+                            }
+                        }
+                    );
+
+                    const pages = detailRes.data.query?.pages;
+                    if (!pages) continue;
+                    const pageData = Object.values(pages)[0];
+                    if (!pageData || !pageData.extract || pageData.extract.length < 30) continue;
+
+                    // 🔥 이미지 확보 (개선된 함수 사용)
+                    const imgUrl = await getStableMainImage(pageData.title);
+                    if (!imgUrl) {
+                        console.log(`❌ [유명인] ${pickName} 이미지 없음/불안정 → 패스`);
+                        continue;
+                    }
+                    
+                    const isStable = await checkUrlStability(imgUrl);
+                    if (!isStable) {
+                        console.log(`❌ [유명인] ${pickName} 이미지 연결 불안정 → 패스`);
+                        continue;
+                    }
+
+                    console.log(`✅ [유명인] ${pickName} 통과.`);
+                    const maskedHint = createMaskedHint(pageData.title, pageData.extract);
+                    QUIZ_CACHE.push({
+                        name: pageData.title,
+                        image: imgUrl,
+                        hint: maskedHint,
+                        description: pageData.extract
+                    });
+                }
+            }
+
+            // -------------------------------------------------------
+            // 2. 랜덤 연도 탐색 (출생 연도 기반)
             // -------------------------------------------------------
             let randomSearchAttempts = 0;
 
             while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 3) {
                 const year = Math.floor(Math.random() * (1940 - 500 + 1)) + 500;
+                // process.stdout.write(`[랜덤] ${year}년도 탐색... `);
 
-                const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                    headers: WIKI_HEADERS,
-                    params: {
-                        action: "query",
-                        list: "categorymembers",
-                        cmtitle: `분류:${year}년_출생`,
-                        cmlimit: 50,
-                        cmtype: "page",
-                        format: "json",
-                        origin: "*"
-                    }
-                });
-
-                const candidates = listRes.data.query?.categorymembers || [];
-
-                // ★ 필터 통합: 사용자 문서(:) 차단 + 노이즈 제거 + 랜덤 셔플 후 10명 추출
-                const filteredCandidates = candidates
-                    .filter(cand => {
-                        // 1. 사용자 연습장/초안 페이지 원천 차단 (제목에 콜론 들어간 것 탈락)
-                        if (cand.title.includes(":")) return false; 
-                        
-                        // 2. 기존 직업 및 노이즈 필터
-                        return !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title);
-                    })
-                    .sort(() => Math.random() - 0.5) // 3. 중복 방지용 무작위 섞기
-                    .slice(0, 10);
-
-                if (filteredCandidates.length > 0) {
-                    // 10명의 본문을 파이프(|)로 묶어 API 요청 1번으로 단축 (속도 개선 핵심)
-                    const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+                const listRes = await axios.get(
+                    "https://ko.wikipedia.org/w/api.php",
+                    {
                         headers: WIKI_HEADERS,
                         params: {
                             action: "query",
-                            titles: filteredCandidates.map(c => c.title).join('|'),
-                            prop: "extracts",
-                            exintro: true,
-                            explaintext: true,
+                            list: "categorymembers",
+                            cmtitle: `분류:${year}년_출생`,
+                            cmlimit: 50,
+                            cmtype: "page",
                             format: "json",
                             origin: "*"
                         }
-                    });
-
-                    const pages = detailRes.data.query?.pages || {};
-                    for (const pageId in pages) {
-                        if (QUIZ_CACHE.length >= CACHE_SIZE) break;
-
-                        const pageData = pages[pageId];
-                        if (!pageData || !pageData.extract || pageData.extract.length < 300) continue;
-
-                        // 이미지 확보 및 안정성 체크
-                        const imgUrl = await getStableMainImage(pageData.title);
-                        if (!imgUrl) continue;
-                        
-                        const isStable = await checkUrlStability(imgUrl);
-                        if (!isStable) continue;
-
-                        const maskedHint = createMaskedHint(pageData.title, pageData.extract);
-                        QUIZ_CACHE.push({
-                            name: pageData.title,
-                            image: imgUrl,
-                            hint: maskedHint,
-                            description: pageData.extract
-                        });
                     }
+                );
+
+                const candidates = listRes.data.query?.categorymembers || [];
+
+                for (const cand of candidates.slice(0, 10)) {
+                    if (QUIZ_CACHE.length >= CACHE_SIZE) break;
+
+                    // 노이즈 필터
+                    if (/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title))
+                        continue;
+
+                    const detailRes = await axios.get(
+                        "https://ko.wikipedia.org/w/api.php",
+                        {
+                            headers: WIKI_HEADERS,
+                            params: {
+                                action: "query",
+                                titles: cand.title,
+                                prop: "extracts",
+                                exintro: true,
+                                explaintext: true,
+                                format: "json",
+                                origin: "*"
+                            }
+                        }
+                    );
+
+                    const pages = detailRes.data.query?.pages;
+                    if (!pages) continue;
+                    const pageData = Object.values(pages)[0];
+                    if (!pageData || !pageData.extract || pageData.extract.length < 300)
+                        continue;
+
+                    // 🔥 이미지 확보
+                    const imgUrl = await getStableMainImage(pageData.title);
+                    if (!imgUrl) {
+                        console.log(`❌ [랜덤] ${pageData.title} 이미지 없음 → 패스`);
+                        continue;
+                    }
+                    
+                    const isStable = await checkUrlStability(imgUrl);
+                    if (!isStable) {
+                        console.log(`❌ [랜덤] ${pageData.title} 이미지 연결 불안정 → 패스`);
+                        continue;
+                    }
+
+                    console.log(`✅ [랜덤] ${pageData.title} 통과.`);
+                    const maskedHint = createMaskedHint(pageData.title, pageData.extract);
+
+                    QUIZ_CACHE.push({
+                        name: pageData.title,
+                        image: imgUrl,
+                        hint: maskedHint,
+                        description: pageData.extract
+                    });
                 }
 
                 randomSearchAttempts++;
@@ -464,22 +515,23 @@ app.get("/api/quiz", async (req, res) => {
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`; 
     console.log(`[Request] New request: ${requestId}`);
 
-    // ★ 수정: 캐시가 진짜 아예 없을 때만 채워질 때까지 기다립니다.
+    if (isCaching && cachePromise) {
+        await cachePromise; 
+    }
+  
     if (QUIZ_CACHE.length === 0) {
-        if (!isCaching) fillCache(); 
-        if (cachePromise) await cachePromise;
+        await fillCache(); 
+        await cachePromise;
     }
   
     const item = QUIZ_CACHE.shift();
   
     if (!item) {
-        return res.status(503).json({ error: "데이터 준비 중입니다.", requestId });
+        fillCache(); 
+        return res.status(503).json({ error: "데이터 준비 중입니다. 잠시만 기다려주세요.", requestId });
     }
 
-    // ★ 수정: 남은 개수가 비어갈 때 백그라운드에서 조용히 채우되, 사용자를 붙잡지 않습니다.
-    if (QUIZ_CACHE.length < CACHE_SIZE / 2 && !isCaching) {
-        fillCache(); // await를 빼서 백그라운드로 돌림
-    }
+    if (QUIZ_CACHE.length < CACHE_SIZE / 2) fillCache();
 
     res.json({ 
       ...item, 
