@@ -352,7 +352,7 @@ async function fillCache() {
     if (isCaching || QUIZ_CACHE.length >= CACHE_SIZE) return;
     isCaching = true;
 
-    cachePromise = new Promise(async (resolve) => {
+    cachePromise = new Promise(async (resolve)) => {
         console.log("⛏️ 데이터 채굴 시작...");
 
         // -------------------------------------------------------
