@@ -355,55 +355,8 @@ async function fillCache() {
     cachePromise = new Promise(async (resolve) => {
         console.log("⛏️ 데이터 채굴 시작...");
 
-        try {
-            // -------------------------------------------------------
-            // 1. LEGACY 유명인 우선 시도 (5명 묶어서 한 번에 요청)
-            // -------------------------------------------------------
-            if (QUIZ_CACHE.length < CACHE_SIZE) {
-                const famousCandidates = LEGACY_NAMES
-                    .sort(() => Math.random() - 0.5)
-                    .slice(0, 5);
-
-                // 5명의 본문을 파이프(|)로 묶어 API 요청 1번으로 단축
-                const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                    headers: WIKI_HEADERS,
-                    params: {
-                        action: "query",
-                        titles: famousCandidates.join('|'),
-                        prop: "extracts",
-                        exintro: true,
-                        explaintext: true,
-                        format: "json",
-                        origin: "*"
-                    }
-                });
-
-                const pages = detailRes.data.query?.pages || {};
-                for (const pageId in pages) {
-                    if (QUIZ_CACHE.length >= CACHE_SIZE) break;
-
-                    const pageData = pages[pageId];
-                    if (!pageData || !pageData.extract || pageData.extract.length < 30) continue;
-
-                    // 이미지 확보 및 안정성 체크
-                    const imgUrl = await getStableMainImage(pageData.title);
-                    if (!imgUrl) continue;
-                    
-                    const isStable = await checkUrlStability(imgUrl);
-                    if (!isStable) continue;
-
-                    const maskedHint = createMaskedHint(pageData.title, pageData.extract);
-                    QUIZ_CACHE.push({
-                        name: pageData.title,
-                        image: imgUrl,
-                        hint: maskedHint,
-                        description: pageData.extract
-                    });
-                }
-            }
-
-            // -------------------------------------------------------
-            // 2. 랜덤 연도 탐색 (출생 연도 기반 + 10명 묶어서 한 번에 요청)
+        // -------------------------------------------------------
+            // 2. 랜덤 연도 탐색 (출생 연도 기반 - 최적화 통합 버전)
             // -------------------------------------------------------
             let randomSearchAttempts = 0;
 
@@ -425,13 +378,20 @@ async function fillCache() {
 
                 const candidates = listRes.data.query?.categorymembers || [];
 
-                // 노이즈 필터를 먼저 거르고 알짜배기 상위 10명만 추출
+                // ★ 필터 통합: 사용자 문서(:) 차단 + 노이즈 제거 + 랜덤 셔플 후 10명 추출
                 const filteredCandidates = candidates
-                    .filter(cand => !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title))
+                    .filter(cand => {
+                        // 1. 사용자 연습장/초안 페이지 원천 차단 (제목에 콜론 들어간 것 탈락)
+                        if (cand.title.includes(":")) return false; 
+                        
+                        // 2. 기존 직업 및 노이즈 필터
+                        return !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title);
+                    })
+                    .sort(() => Math.random() - 0.5) // 3. 중복 방지용 무작위 섞기
                     .slice(0, 10);
 
                 if (filteredCandidates.length > 0) {
-                    // 필터링된 10명의 본문을 한 번에 요청 (API 요청 10번 -> 1번으로 단축)
+                    // 10명의 본문을 파이프(|)로 묶어 API 요청 1번으로 단축 (속도 개선 핵심)
                     const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
                         headers: WIKI_HEADERS,
                         params: {
