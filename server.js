@@ -287,25 +287,26 @@ async function getStableMainImage(title) {
 // --- [핵심] 이미지 URL 안정성 체크 ---
 async function checkUrlStability(url) {
     if (!url) return false;
-    
-    for (let i = 1; i <= VALIDATION_TRY; i++) {
+    try {
+        // HEAD 요청으로 이미지 존재 여부만 0.1초만에 스캔
+        const res = await axios.head(url, {
+            headers: WIKI_HEADERS,
+            timeout: 1000
+        });
+        return res.status === 200;
+    } catch (e) {
+        // HEAD 요청을 거부하는 서버 대비용 GET 백업 (스트림으로 가볍게 수신)
         try {
-            const res = await axios.get(url, {
-                headers: WIKI_HEADERS,
-                timeout: 2000,
-                responseType: "arraybuffer"
+            const res = await axios.get(url, { 
+                headers: WIKI_HEADERS, 
+                timeout: 1000, 
+                responseType: "stream" 
             });
-            
-            const contentType = res.headers['content-type'] || '';
-            if (res.status !== 200 || !contentType.includes('image')) {
-                return false;
-            }
-            await new Promise(r => setTimeout(r, 100));
-        } catch (e) {
+            return res.status === 200;
+        } catch(err) {
             return false; 
         }
     }
-    return true;
 }
 
 // --- 공통 힌트 마스킹 함수 ---
