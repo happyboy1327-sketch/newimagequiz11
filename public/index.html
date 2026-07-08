@@ -95,5 +95,72 @@ async function loadQuiz(){
   document.getElementById('hint').textContent = "최적의 이미지를 선별하고 있습니다...";
   timeLeft = 15;
   document.getElementById('timer').textContent = `${timeLeft}s`;
+
+  try{
+    const res = await fetch(`/api/quiz?sessionId=${sessionId}`);
+    if(res.status === 503) {
+        document.getElementById('hint').textContent = "서버가 좋은 이미지를 찾고 있습니다. 잠시 후 '다음 문제'를 눌러주세요.";
+        document.getElementById('reloadBtn').disabled = false;
+        return;
+    }
+    
+    const data = await res.json();
+    if(data.error) throw new Error(data.error);
+
+    currentData = data;
+    img.src = data.image;
+    img.onload = () => {
+    retryCount = 0; // 정상 이미지 → 카운터 초기화
+};
+
+    document.getElementById('hint').textContent = data.hint;
+    
+    document.getElementById('checkBtn').disabled = false;
+    startTimer();
+
+  }catch(e){
+    console.error(e);
+    document.getElementById('hint').textContent = "오류가 발생했습니다.";
+  }
+}
+
+function startTimer(){
+  timer = setInterval(()=>{
+    timeLeft--;
+    document.getElementById('timer').textContent = `${timeLeft}s`;
+    if(timeLeft <= 0){
+      clearInterval(timer);
+      showResult(false, true);
+    }
+  }, 1000);
+}
+
+function showResult(isCorrect, isTimeout=false){
+  clearInterval(timer);
+  document.getElementById('checkBtn').disabled = true;
+  
+  const color = isCorrect ? "#40c057" : "#fa5252";
+  const title = isTimeout ? "⏰ 시간 초과" : (isCorrect ? "🎉 정답!" : "❌ 땡!");
+  
+  document.getElementById('result').innerHTML = `
+    <div class="res-header" style="color:${color}">${title}</div>
+    <div class="res-header">${currentData.name}</div>
+    <div class="desc-box">${currentData.description}</div>
+  `;
+}
+
+document.getElementById('checkBtn').addEventListener('click', ()=>{
+  if(!currentData) return;
+  const user = document.getElementById('answer').value.replace(/\s+/g,'').trim();
+  const correct = currentData.name.replace(/\s+/g,'').trim();
+  if(!user) return alert("답을 입력하세요");
+  showResult(user === correct);
+});
+
+document.getElementById('reloadBtn').addEventListener('click', loadQuiz);
+document.getElementById('answer').addEventListener('keydown', e=>{ if(e.key==="Enter") document.getElementById('checkBtn').click(); });
+
+window.addEventListener('load', loadQuiz);
+</script>
 </body>
 </html>
