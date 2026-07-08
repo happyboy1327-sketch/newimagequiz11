@@ -119,7 +119,9 @@ function isHumanPhoto(filename, aliases) {
     const BLACKLIST = [
         "svg", "gif",                   
         "coat of arms", "coat_of_arms", 
-        "coa",                          
+        "coa", 
+        "stone",
+        "tomb", "_tomb",
         "arms",                         
         "emblem",                       
         "insignia",                     
