@@ -108,15 +108,18 @@ async function loadQuiz(){
     if(data.error) throw new Error(data.error);
 
     currentData = data;
-    img.src = data.image;
+    img.src = data.image; // 이미지 다운로드 시작
+    
+    // ★ 수정: 이미지가 화면에 완전히 로딩 완료된 "그 순간"부터 게임을 시작합니다.
     img.onload = () => {
-    retryCount = 0; // 정상 이미지 → 카운터 초기화
-};
+        retryCount = 0; // 정상 이미지 → 카운터 초기화
+        document.getElementById('checkBtn').disabled = false; // 정답 버튼 활성화
+        startTimer(); // 타이머 시작!
+    };
 
     document.getElementById('hint').textContent = data.hint;
     
-    document.getElementById('checkBtn').disabled = false;
-    startTimer();
+    // [주의] 기존에 여기에 있던 checkBtn.disabled = false 와 startTimer()는 지워졌습니다!
 
   }catch(e){
     console.error(e);
