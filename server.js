@@ -422,12 +422,16 @@ async function fillCache() {
                 const candidates = listRes.data.query?.categorymembers || [];
 
                 const filteredCandidates = candidates
-                    .filter(cand => {
-                        if (cand.title.includes(":")) return false; 
-                        return !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title);
-                    })
-                    .sort(() => Math.random() - 0.5)
-                    .slice(0, 15); // ★ 랜덤 인물 추출 한도를 15명으로 전격 상향!
+                      .filter(cand => {
+                           if (cand.title.includes(":")) return false; 
+        
+                           // ⚡ [속도 최적화 1] 무의미하게 API 쏘기 전에 이미 캐시에 있거나 나온 사람은 미리 탈락시킵니다.
+                           if (QUIZ_CACHE.some(c => c.name === cand.title) || LAST_PLAYED.includes(cand.title)) return false;
+
+                           return !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title);
+                         })
+                        .sort(() => Math.random() - 0.5)
+                        .slice(0, 6); // ⚡ [속도 최적화 2] 15명 -> 6명으로
 
                 if (filteredCandidates.length > 0) {
                     const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
