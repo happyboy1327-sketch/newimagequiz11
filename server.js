@@ -45,7 +45,15 @@ const LEGACY_NAMES = [
   "미켈란젤로 부오나로티", "빈센트 반 고흐", "파블로 피카소", "아이작 뉴턴", "찰스 다윈",
   "토머스 에디슨", "니콜라 테슬라", "스티브 잡스", "빌 게이츠", "마리 퀴리",
   "루트비히 판 베토벤", "볼프강 아마데우스 모차르트", "윌리엄 셰익스피어", "나폴레옹 보나파르트",
-  "칭기즈 칸", "알렉산드로스 3세", "줄리어스 시저", "조지 워싱턴", "넬슨 만델라"
+  "칭기즈 칸", "알렉산드로스 3세", "줄리어스 시저", "조지 워싱턴",
+  "넬슨 만델라",
+  "존 F. 케네디", "마틴 루터 킹", "윈스턴 처칠", "마더 테레사", "헬렌 켈러",
+  "소크라테스", "플라톤", "공자", "맹자", "진시황", "정약용", "이황", "이이", 
+  "신사임당", "방정환", "지석영", "김정호", "장영실", "허준", "문익점", "왕건",
+  "대조영", "광개토대왕", "장수왕", "을지문덕", "김유신", "계백", "이사부", "보고",
+  "최무선", "정도전", "황희", "신숙주", "곽재우"
+];
+
 ];
 
 let QUIZ_CACHE = [];
@@ -342,9 +350,9 @@ async function fillCache() {
             // -------------------------------------------------------
             if (QUIZ_CACHE.length < CACHE_SIZE && Math.random() < 0.85) { 
                 const famousCandidates = LEGACY_NAMES
-               .filter(name => !QUIZ_CACHE.some(cached => cached.name === name) && !LAST_PLAYED.includes(name)) // 🌟 LAST_PLAYED 제외 조건 추가
-               .sort(() => Math.random() - 0.5)
-               .slice(0, 5); 
+                     .filter(name => !QUIZ_CACHE.some(c => c.name === name) && !LAST_PLAYED.includes(name)) // 👈 이 필터로 교체
+                     .sort(() => Math.random() - 0.5)
+                     .slice(0, 5); 
 
                 const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
                     headers: WIKI_HEADERS,
@@ -521,7 +529,7 @@ app.get("/api/quiz", async (req, res) => {
     
     // 유저가 한 문제씩 풀기 때문에, 최근 나온 '5명'까지만 기억하고 옛날 사람은 지웁니다.
     // 이렇게 해야 유명인 후보군(32명)이 마르지 않고 로딩 속도가 유지됩니다.
-    if (LAST_PLAYED.length > 5) {
+    if (LAST_PLAYED.length > 12) {
         LAST_PLAYED.shift(); 
     }
 
