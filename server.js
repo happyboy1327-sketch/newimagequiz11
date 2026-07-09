@@ -393,7 +393,7 @@ async function fillCache() {
             // 2. 랜덤 연도 탐색 (★예전 청크/병렬 검증 방식으로 롤백 완료)
             // -------------------------------------------------------
             if (QUIZ_CACHE.length < CACHE_SIZE) {
-                const year = Math.floor(Math.random() * (2000 - 500 + 1)) + 500;
+                const year = Math.floor(Math.random() * (2000 - 800 + 1)) + 800;
 
                 const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
                     headers: WIKI_HEADERS,
