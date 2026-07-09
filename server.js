@@ -54,8 +54,6 @@ const LEGACY_NAMES = [
   "최무선", "정도전", "황희", "신숙주", "곽재우"
 ];
 
-];
-
 let QUIZ_CACHE = [];
 let LAST_PLAYED = [];
 let isCaching = false;
