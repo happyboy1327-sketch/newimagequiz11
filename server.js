@@ -142,7 +142,7 @@ function isHumanPhoto(filename, aliases) {
         "coin", "currency",             
         "statue", "sculpture",          
         "memorial", "plaque", "doctrinae",
-        "landscape", "architectures" 
+        "landscape", "architectures", "penny", "coin"
     ];
 
     for (const badWord of BLACKLIST) {
