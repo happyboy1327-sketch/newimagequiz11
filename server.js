@@ -35,7 +35,7 @@ process.on('uncaughtException', (err) => {
 });
 
 // --- 설정 ---
-const CACHE_SIZE = 20;        
+const CACHE_SIZE = 25;        
 const VALIDATION_TRY = 2;    
 
 // --- 기존 퀴즈풀의 유명 인물 리스트 (검색 우선순위) ---
@@ -48,17 +48,14 @@ const LEGACY_NAMES = [
   "칭기즈 칸", "알렉산드로스 3세", "줄리어스 시저", "조지 워싱턴",
   "넬슨 만델라",
   "존 F. 케네디", "마틴 루터 킹", "윈스턴 처칠", "마더 테레사", "헬렌 켈러",
-  "소크라테스", "플라톤", "공자", "맹자", "진시황", "정약용", "이황", "이이", 
+  "소크라테스", "플라톤", "공자", "맹자", "진시황", "정약용", "이황", 
   "신사임당", "방정환", "지석영", "김정호", "장영실", "허준", "문익점", "왕건",
   "대조영", "광개토대왕", "장수왕", "을지문덕", "김유신", "계백", "이사부", "보고",
   "최무선", "정도전", "황희", "신숙주", "곽재우"
 ];
 
-// ⚡ [수정] 기존에 중복되어 문법 에러를 내던 ]; 오타 제거 완료
-
 let QUIZ_CACHE = [];
 let LAST_PLAYED = [];
-let LAST_ACTIVE = 0;   // ⚡ [추정] 유저 활동 감지용 타임스탬프
 let isCaching = false;
 let cachePromise = null; 
 
@@ -287,10 +284,13 @@ async function validateImage(url) {
         if (await checkUrlStability(url)) {
             return true;
         }
+
+        // 마지막 시도가 아니면 잠시 대기
         if (i < VALIDATION_TRY - 1) {
             await new Promise(resolve => setTimeout(resolve, 300));
         }
     }
+
     return false;
 }
 
@@ -333,67 +333,78 @@ function createMaskedHint(title, extract) {
 }
 
 // =======================================================
-// 🔥 [개선] 에코 모드 + 예전 청크형 탐색 백그라운드 스케줄러
+// 🔥 [핵심 수정] 데이터 채굴 로직 - 15명 대량 병렬 처리 버전
 // =======================================================
 async function fillCache() {
     if (isCaching || QUIZ_CACHE.length >= CACHE_SIZE) return;
     isCaching = true;
 
     cachePromise = new Promise(async (resolve) => {
-        console.log(`⛏️ 백그라운드 활성 채굴 중... (현재 캐시: ${QUIZ_CACHE.length}/${CACHE_SIZE})`);
+        console.log("⛏️ 데이터 채굴 시작...");
 
         try {
             // -------------------------------------------------------
-            // 1. LEGACY 유명인 우선 시도 (가볍게 2명씩 매칭)
+            // 1. LEGACY 유명인 우선 시도 (5명 묶어서 한 번에 병렬 처리)
             // -------------------------------------------------------
-            if (QUIZ_CACHE.length < CACHE_SIZE && Math.random() < 0.3) { 
+            if (QUIZ_CACHE.length < CACHE_SIZE && Math.random() < 0.85) { 
                 const famousCandidates = LEGACY_NAMES
-                     .filter(name => !QUIZ_CACHE.some(c => c.name === name) && !LAST_PLAYED.includes(name))
+                     .filter(name => !QUIZ_CACHE.some(c => c.name === name) && !LAST_PLAYED.includes(name)) // 👈 이 필터로 교체
                      .sort(() => Math.random() - 0.5)
-                     .slice(0, 2); 
+                     .slice(0, 5); 
 
-                if (famousCandidates.length > 0) {
-                    const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                        headers: WIKI_HEADERS,
-                        params: {
-                            action: "query",
-                            titles: famousCandidates.join('|'),
-                            prop: "extracts",
-                            exintro: true,
-                            explaintext: true,
-                            format: "json",
-                            origin: "*"
-                        }
-                    });
+                const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+                    headers: WIKI_HEADERS,
+                    params: {
+                        action: "query",
+                        titles: famousCandidates.join('|'),
+                        prop: "extracts",
+                        exintro: true,
+                        explaintext: true,
+                        format: "json",
+                        origin: "*"
+                    }
+                });
 
-                    const pages = Object.values(detailRes.data.query?.pages || {});
-                    const legacyPromises = pages.map(async (pageData) => {
+                const pages = Object.values(detailRes.data.query?.pages || {});
+                
+                // 유명인 5명 병렬 검증
+                const legacyPromises = pages.map(async (pageData) => {
+                    try {
                         if (!pageData || !pageData.extract || pageData.extract.length < 30) return null;
+
                         const imgUrl = await getStableMainImage(pageData.title);
-                        if (!imgUrl || !(await validateImage(imgUrl))) return null;
+                        if (!imgUrl) return null;
+                        
+                        const isStable = await validateImage(imgUrl);
+                        if (!isStable) return null;
+
                         return {
                             name: pageData.title,
                             image: imgUrl,
                             hint: createMaskedHint(pageData.title, pageData.extract),
                             description: pageData.extract
                         };
-                    });
+                    } catch (e) {
+                        return null;
+                    }
+                });
 
-                    const legacyResults = await Promise.all(legacyPromises);
-                    for (const item of legacyResults) {
-                        if (item && QUIZ_CACHE.length < CACHE_SIZE) {
-                            if (QUIZ_CACHE.some(cached => cached.name === item.name)) continue;
-                            QUIZ_CACHE.push(item);
-                        }
+                const legacyResults = await Promise.all(legacyPromises);
+                for (const item of legacyResults) {
+                    if (item && QUIZ_CACHE.length < CACHE_SIZE) {
+                        if (QUIZ_CACHE.some(cached => cached.name === item.name)) continue;
+                        QUIZ_CACHE.push(item);
                     }
                 }
             }
 
             // -------------------------------------------------------
-            // 2. 랜덤 연도 탐색 (★예전 청크/병렬 검증 방식으로 롤백 완료)
+            // 2. 랜덤 연도 탐색 (★ 15명 풀확보 + Promise.all 일괄 병렬 스캔)
             // -------------------------------------------------------
-            if (QUIZ_CACHE.length < CACHE_SIZE) {
-                const year = Math.floor(Math.random() * (2000 - 800 + 1)) + 800;
+            let randomSearchAttempts = 0;
+
+            while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 3) {
+                const year = Math.floor(Math.random() * (2000 - 500 + 1)) + 500;
 
                 const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
                     headers: WIKI_HEADERS,
@@ -401,7 +412,7 @@ async function fillCache() {
                         action: "query",
                         list: "categorymembers",
                         cmtitle: `분류:${year}년_출생`,
-                        cmlimit: 50,
+                        cmlimit: 80, // 15명을 안정적으로 필터링하기 위해 80명 로드
                         cmtype: "page",
                         format: "json",
                         origin: "*"
@@ -409,14 +420,18 @@ async function fillCache() {
                 });
 
                 const candidates = listRes.data.query?.categorymembers || [];
+
                 const filteredCandidates = candidates
-                    .filter(cand => {
-                        if (cand.title.includes(":")) return false; 
-                        if (QUIZ_CACHE.some(c => c.name === cand.title) || LAST_PLAYED.includes(cand.title)) return false;
-                        return !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title);
-                    })
-                    .sort(() => Math.random() - 0.5)
-                    .slice(0, 4); // ⚡ 예전처럼 묶음으로 처리하되 서버 마비를 막기 위해 4명 최적화
+                      .filter(cand => {
+                           if (cand.title.includes(":")) return false; 
+        
+                           // ⚡ [속도 최적화 1] 무의미하게 API 쏘기 전에 이미 캐시에 있거나 나온 사람은 미리 탈락시킵니다.
+                           if (QUIZ_CACHE.some(c => c.name === cand.title) || LAST_PLAYED.includes(cand.title)) return false;
+
+                           return !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title);
+                         })
+                        .sort(() => Math.random() - 0.5)
+                        .slice(0, 5); // ⚡ [속도 최적화 2] 15명 -> 6명으로
 
                 if (filteredCandidates.length > 0) {
                     const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
@@ -434,14 +449,22 @@ async function fillCache() {
 
                     const pages = Object.values(detailRes.data.query?.pages || {});
                     
-                    // 예전처럼 동시(Parallel) 검증 수행
+                    // ★ 핵심: 15명의 본문 길이 및 이미지 존재 여부를 한 명씩 기다리지 않고 동시에(In Parallel) 검증
                     const validationPromises = pages.map(async (pageData) => {
                         try {
                             if (!pageData || !pageData.extract || pageData.extract.length < 300) return null;
-                            if (/(대학교수|명예교수|석좌교수|교수|교육자)/.test(pageData.extract)) return null;
+                            
+                            const extract = pageData.extract;
+
+                            if (/(대학교수|명예교수|석좌교수|교수|교육자)/.test(extract)) {
+                            return null;
+                            }
 
                             const imgUrl = await getStableMainImage(pageData.title);
-                            if (!imgUrl || !(await validateImage(imgUrl))) return null;
+                            if (!imgUrl) return null;
+                            
+                            const isStable = await validateImage(imgUrl);
+                            if (!isStable) return null;
 
                             return {
                                 name: pageData.title,
@@ -455,6 +478,8 @@ async function fillCache() {
                     });
 
                     const results = await Promise.all(validationPromises);
+                    
+                    // 성공적으로 통과한 인물들만 골라서 캐시 저장소에 push
                     for (const item of results) {
                         if (item && QUIZ_CACHE.length < CACHE_SIZE) {
                             if (QUIZ_CACHE.some(cached => cached.name === item.name)) continue;
@@ -462,18 +487,14 @@ async function fillCache() {
                         }
                     }
                 }
+
+                randomSearchAttempts++;
             }
         } catch (e) {
             console.error("채굴 중 오류:", e.message);
         } finally {
             isCaching = false;
-
-            // ⚡ [에코 모드 설정] 최근 30초 이내에 유저가 요청을 보냈을 때만 백그라운드 타이머 작동
-            const isPageActive = Date.now() - LAST_ACTIVE < 30000;
-
-            if (QUIZ_CACHE.length < CACHE_SIZE && isPageActive) {
-                setTimeout(fillCache, 1500); // 1.5초 간격으로 백그라운드 짤짤이 보충
-            }
+            if (QUIZ_CACHE.length < 5) setTimeout(fillCache, 3000);
             resolve();
         }
     });
@@ -481,11 +502,11 @@ async function fillCache() {
     return cachePromise;
 }
 
+fillCache();
+
 // --- API ---
 app.get("/api/quiz", async (req, res) => {
   try {
-    LAST_ACTIVE = Date.now(); // ⚡ 유저가 들어와서 문제를 푸는 활성화 신호 기록
-    
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`; 
     console.log(`[Request] New request: ${requestId}`);
 
@@ -494,6 +515,7 @@ app.get("/api/quiz", async (req, res) => {
         if (cachePromise) await cachePromise;
     }
   
+    // 1개의 문제를 큐에서 꺼냅니다.
     const item = QUIZ_CACHE.shift();
   
     if (!item) {
@@ -504,12 +526,16 @@ app.get("/api/quiz", async (req, res) => {
         fillCache(); 
     }
 
+    // 🛑 [수정 1] 방금 뽑힌 인물의 이름을 LAST_PLAYED 배열에 넣습니다.
     LAST_PLAYED.push(item.name);
     
-    if (LAST_PLAYED.length > 12) {
+    // 유저가 한 문제씩 풀기 때문에, 최근 나온 '5명'까지만 기억하고 옛날 사람은 지웁니다.
+    // 이렇게 해야 유명인 후보군(32명)이 마르지 않고 로딩 속도가 유지됩니다.
+    if (LAST_PLAYED.length > 10) {
         LAST_PLAYED.shift(); 
     }
 
+    // 🛑 [수정 2] 중복되던 res.json(sendQuiz)를 지우고 최종 응답 딱 하나만 안전하게 보냅니다.
     res.json({ 
       ...item, 
       imageUrl: item.image,
@@ -523,7 +549,8 @@ app.get("/api/quiz", async (req, res) => {
   }
 });
 
-// --- 정적 파일 서비스 ---
+
+// --- 정적 ---
 app.use(express.static(path.join(process.cwd(), "public")));
 app.get("/", (req, res) => res.sendFile(path.join(process.cwd(), "public", "index.html")));
 
