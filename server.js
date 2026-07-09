@@ -431,7 +431,7 @@ async function fillCache() {
                            return !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title);
                          })
                         .sort(() => Math.random() - 0.5)
-                        .slice(0, 6); // ⚡ [속도 최적화 2] 15명 -> 6명으로
+                        .slice(0, 5); // ⚡ [속도 최적화 2] 15명 -> 6명으로
 
                 if (filteredCandidates.length > 0) {
                     const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
@@ -531,7 +531,7 @@ app.get("/api/quiz", async (req, res) => {
     
     // 유저가 한 문제씩 풀기 때문에, 최근 나온 '5명'까지만 기억하고 옛날 사람은 지웁니다.
     // 이렇게 해야 유명인 후보군(32명)이 마르지 않고 로딩 속도가 유지됩니다.
-    if (LAST_PLAYED.length > 12) {
+    if (LAST_PLAYED.length > 10) {
         LAST_PLAYED.shift(); 
     }
 
