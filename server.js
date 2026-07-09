@@ -49,6 +49,7 @@ const LEGACY_NAMES = [
 ];
 
 let QUIZ_CACHE = [];
+let LAST_PLAYED = [];
 let isCaching = false;
 let cachePromise = null; 
 
@@ -341,8 +342,9 @@ async function fillCache() {
             // -------------------------------------------------------
             if (QUIZ_CACHE.length < CACHE_SIZE && Math.random() < 0.85) { 
                 const famousCandidates = LEGACY_NAMES
-                .sort(() => Math.random() - 0.5)
-                .slice(0, 5); // 3에서 5로 변경
+               .filter(name => !QUIZ_CACHE.some(cached => cached.name === name) && !LAST_PLAYED.includes(name)) // 🌟 LAST_PLAYED 제외 조건 추가
+               .sort(() => Math.random() - 0.5)
+               .slice(0, 5); 
 
                 const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
                     headers: WIKI_HEADERS,
@@ -503,6 +505,7 @@ app.get("/api/quiz", async (req, res) => {
         if (cachePromise) await cachePromise;
     }
   
+    // 1개의 문제를 큐에서 꺼냅니다.
     const item = QUIZ_CACHE.shift();
   
     if (!item) {
@@ -513,6 +516,16 @@ app.get("/api/quiz", async (req, res) => {
         fillCache(); 
     }
 
+    // 🛑 [수정 1] 방금 뽑힌 인물의 이름을 LAST_PLAYED 배열에 넣습니다.
+    LAST_PLAYED.push(item.name);
+    
+    // 유저가 한 문제씩 풀기 때문에, 최근 나온 '5명'까지만 기억하고 옛날 사람은 지웁니다.
+    // 이렇게 해야 유명인 후보군(32명)이 마르지 않고 로딩 속도가 유지됩니다.
+    if (LAST_PLAYED.length > 5) {
+        LAST_PLAYED.shift(); 
+    }
+
+    // 🛑 [수정 2] 중복되던 res.json(sendQuiz)를 지우고 최종 응답 딱 하나만 안전하게 보냅니다.
     res.json({ 
       ...item, 
       imageUrl: item.image,
@@ -525,6 +538,7 @@ app.get("/api/quiz", async (req, res) => {
     res.status(500).json({ error: "서버 내부 오류로 퀴즈를 불러올 수 없습니다.", errorId });
   }
 });
+
 
 // --- 정적 ---
 app.use(express.static(path.join(process.cwd(), "public")));
