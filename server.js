@@ -150,13 +150,14 @@ function isHumanPhoto(filename, aliases) {
     return true; 
 }
 
+                
 // ===============================
-// 5) getStableMainImage (infobox-image 전용 칸 정밀 타격 버전)
+// 5) getStableMainImage (초고속 배치 요청 버전)
 // ===============================
 async function getStableMainImage(title) {
     const aliases = makeNameAliases(title);
     
-    // 1) 위키 API 메인 썸네일
+    // 1) 위키 API 메인 썸네일 (가장 빠름)
     try {
         const thumbRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
             headers: WIKI_HEADERS,
@@ -178,7 +179,7 @@ async function getStableMainImage(title) {
         }
     } catch (e) {}
 
-    // 2) HTML 내부 이미지 분석
+    // 2) HTML 내부 이미지 분석 (정밀 타격)
     try {
         const htmlRes = await axios.get(
             `https://ko.wikipedia.org/wiki/${encodeURIComponent(title)}`,
@@ -186,24 +187,16 @@ async function getStableMainImage(title) {
         );
         const html = htmlRes.data;
 
-        // OG 이미지 우선 처리
         const ogImage = extractOgImage(html);
         if (ogImage && isValidImageUrl(ogImage)) {
             const ogFileName = decodeURIComponent(ogImage.split('/').pop());
-            if (isHumanPhoto(ogFileName, aliases)) {
-                return ogImage;
-            }
+            if (isHumanPhoto(ogFileName, aliases)) return ogImage;
         }
 
-        // ★ [인포박스 정밀 타격 수정]
-        // 깃털 아이콘이 있는 제목 칸(infobox-above)은 거들떠보지도 않고,
-        // 진짜 초상화 사진이 들어가는 고유 클래스인 'infobox-image' 칸만 콕 집어서 매칭함!
+        // 인포박스 이미지 전용 칸 정밀 매칭
         const infoboxImageMatch = html.match(/<td[^>]+class="[^"]*infobox-image[^"]*"[^>]*>([\s\S]*?)<\/td>/i);
-        
         if (infoboxImageMatch) {
-            const tdContent = infoboxImageMatch[1];
-            const imgMatch = tdContent.match(/<img[^>]+>/i); // 이 칸 안에서의 첫 번째 이미지는 무조건 진짜 초상화임
-            
+            const imgMatch = infoboxImageMatch[1].match(/<img[^>]+>/i);
             if (imgMatch) {
                 let src = "";
                 const dataSrcMatch = imgMatch[0].match(/data-src\s*=\s*["']([^"']+)["']/i);
@@ -214,37 +207,6 @@ async function getStableMainImage(title) {
 
                 if (src && !/pixel\.gif|blank\.gif|data:image/i.test(src)) {
                     if (src.startsWith("//")) src = "https:" + src;
-                    
-                    if (isValidImageUrl(src)) {
-                        const infoFileName = decodeURIComponent(src.split('/').pop());
-                        if (isHumanPhoto(infoFileName, aliases)) {
-                            return src; // 깃털 제끼고 드디어 진짜 초상화 반환 성공
-                        }
-                    }
-                }
-            }
-        }
-
-        // 백업용 구형 인포박스 처리 (infobox-image 클래스가 없는 노후화된 문서용)
-        const infoboxMatch = html.match(/<table[^>]*class="[^"]*infobox[^"]*"[^>]*>[\s\S]*?<\/table>/i);
-        if (infoboxMatch) {
-            const imgTags = infoboxMatch[0].match(/<img[^>]+>/gi) || [];
-            for (const tag of imgTags) {
-                if (/pixel\.gif|blank\.gif/i.test(tag)) continue;
-                
-                // 크기가 100px 미만인 자잘한 데코 아이콘들은 패스
-                const widthMatch = tag.match(/width=["'](\d+)["']/i);
-                if (widthMatch && parseInt(widthMatch[1], 10) < 100) continue;
-
-                let src = "";
-                const dataSrcMatch = tag.match(/data-src\s*=\s*["']([^"']+)["']/i);
-                const srcMatch = tag.match(/src\s*=\s*["']([^"']+)["']/i);
-
-                if (dataSrcMatch && dataSrcMatch[1]) src = dataSrcMatch[1];
-                else if (srcMatch && srcMatch[1]) src = srcMatch[1];
-
-                if (src) {
-                    if (src.startsWith("//")) src = "https:" + src;
                     if (isValidImageUrl(src)) {
                         const infoFileName = decodeURIComponent(src.split('/').pop());
                         if (isHumanPhoto(infoFileName, aliases)) return src;
@@ -254,7 +216,7 @@ async function getStableMainImage(title) {
         }
     } catch (e) {}
 
-    // 3) 문서 전체 이미지 목록 뒤지기
+    // 3) 문서 전체 이미지 목록 뒤지기 (★병목 해결: 배치 요청 처리)
     try {
         const imgListRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
             headers: WIKI_HEADERS,
@@ -262,7 +224,7 @@ async function getStableMainImage(title) {
                 action: "query",
                 titles: title,
                 prop: "images",
-                imlimit: 55,
+                imlimit: 50, // 최대 50개까지만 조사
                 format: "json",
                 origin: "*"
             }
@@ -272,30 +234,39 @@ async function getStableMainImage(title) {
         const imgs = page.images || [];
         const candidates = imgs.filter(i => isHumanPhoto(i.title, aliases));
 
-        for (const c of candidates) {
+        // 💡 [핵심 최적화] loop 돌면서 await 하지 말고, 한 번에 묶어서 보냅니다.
+        if (candidates.length > 0) {
+            // 위키백과 API 스펙상 최대 50개까지 파이프(|)로 묶어서 한 번에 요청 가능
+            const batchTitles = candidates.slice(0, 50).map(c => c.title).join('|');
+
             const infoRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
                 headers: WIKI_HEADERS,
                 params: {
                     action: "query",
-                    titles: c.title,
+                    titles: batchTitles, // ◀ 예: "File:A.jpg|File:B.jpg|File:C.jpg"
                     prop: "imageinfo",
                     iiprop: "url",
                     format: "json",
                     origin: "*"
                 }
             });
-            const info = Object.values(infoRes.data.query.pages)[0];
-            const url = info.imageinfo?.[0]?.url;
 
-            if (isValidImageUrl(url)) return url;
+            const pages = Object.values(infoRes.data.query.pages || {});
+            
+            // 결과 배열을 돌면서 유효한 첫 번째 이미지 주소를 즉시 반환
+            for (const p of pages) {
+                const url = p.imageinfo?.[0]?.url;
+                if (url && isValidImageUrl(url)) {
+                    return url; 
+                }
+            }
         }
     } catch (e) {}
 
     console.log(`❌ 최종 이미지 실패: ${title}`);
     return null;
 }
-    
-    
+                    
 
 
 // --- 이미지 URL 안정성 체크 ---
