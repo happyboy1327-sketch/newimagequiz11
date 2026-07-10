@@ -100,7 +100,7 @@ async function loadQuiz(){
   try{
     const res = await fetch(`/api/quiz?sessionId=${sessionId}`);
     if(res.status === 503) {
-        document.getElementById('hint').textContent = "서버가 좋은 이미지를 찾고 있습니다. 잠시 후 '다음 문제'를 눌러주세요.";
+        document.getElementById('hint').textContent = "적절한 이미지 찾는 중... 약 20초 후 '다음 문제'를 눌러주세요.";
         document.getElementById('reloadBtn').disabled = false;
         return;
     }
