@@ -88,18 +88,7 @@ function makeNameAliases(title) {
 }
 
 // ===============================
-// 2) OG 이미지 추출 (HTML 파싱용)
-// ===============================
-function extractOgImage(html) {
-    const match = html.match(/<meta\s+property="og:image"\s+content="(.*?)"/i);
-    if (match && match[1]) {
-        return match[1].replace(/&amp;/g, '&');
-    }
-    return null;
-}
-
-// ===============================
-// 3) 이미지 URL 유효성 검사 (SVG 및 키워드 차단)
+// 2) 이미지 URL 유효성 검사 (SVG 및 키워드 차단)
 // ===============================
 function isValidImageUrl(url) {
     if (!url || typeof url !== "string") return false;
@@ -117,7 +106,7 @@ function isValidImageUrl(url) {
 }
 
 // ===============================
-// 4) [강력 필터] 사람 사진 판별기 (깃털 아이콘 완벽 저격)
+// 3) [강력 필터] 사람 사진 판별기
 // ===============================
 function isHumanPhoto(filename, aliases) {
     if (!filename || typeof filename !== "string") return false;
@@ -222,7 +211,7 @@ function createMaskedHint(title, extract) {
 }
 
 // =======================================================
-// 퀴즈 캐시 충전 함수 (괄호 및 비동기 상태 제어 완벽 수정 버전)
+// 퀴즈 캐시 충전 함수 (토막글 짜바리 아이콘 철저히 배제 버전)
 // =======================================================
 function fillCache() {
     if (isCaching) return cachePromise;
@@ -254,7 +243,6 @@ function fillCache() {
 
                 const candidates = listRes.data.query?.categorymembers || [];
 
-                // 딱 형이 요구한 30명 단위 필터링
                 const filteredCandidates = candidates
                     .filter(cand => {
                         if (cand.title.includes(":")) return false; 
@@ -270,20 +258,16 @@ function fillCache() {
                         params: {
                             action: "query",
                             titles: filteredCandidates.map(c => c.title).join('|'),
-                            prop: "extracts|pageimages|images",
+                            prop: "extracts|pageimages", // 🔥 'images' 제거! 문서 내부 쩌리 이미지들을 아예 요청조차 안 함
                             exintro: true,
                             explaintext: true,
                             pithumbsize: 600,
-                            imlimit: 20,
                             format: "json",
                             origin: "*"
                         }
                     });
 
                     const pages = Object.values(detailRes.data.query?.pages || {});
-                    
-                    let imageToCandidateMap = {};
-                    let imageTitlesToFetch = [];
                     let tempCandidateData = {};
 
                     for (const pageData of pages) {
@@ -292,6 +276,8 @@ function fillCache() {
 
                         const aliases = makeNameAliases(pageData.title);
 
+                        // 🔥 위키백과가 보장하는 우측 인포박스 전용 '메인 대표 썸네일'이 있을 때만 수집
+                        // 이렇게 하면 본문 하단 토막글 템플릿의 엉뚱한 아이콘들을 완벽히 무시함
                         if (pageData.thumbnail?.source && isValidImageUrl(pageData.thumbnail.source) && isHumanPhoto(pageData.pageimage || "", aliases)) {
                             tempCandidateData[pageData.title] = {
                                 name: pageData.title,
@@ -299,47 +285,6 @@ function fillCache() {
                                 hint: createMaskedHint(pageData.title, pageData.extract),
                                 description: pageData.extract
                             };
-                            continue;
-                        }
-
-                        const imgs = pageData.images || [];
-                        const validImgs = imgs.filter(i => isHumanPhoto(i.title, aliases));
-
-                        if (validImgs.length > 0) {
-                            const targetImgTitle = validImgs[0].title;
-                            imageTitlesToFetch.push(targetImgTitle);
-                            imageToCandidateMap[targetImgTitle] = {
-                                title: pageData.title,
-                                extract: pageData.extract
-                            };
-                        }
-                    }
-
-                    if (imageTitlesToFetch.length > 0) {
-                        const infoRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                            headers: WIKI_HEADERS,
-                            params: {
-                                action: "query",
-                                titles: imageTitlesToFetch.slice(0, 30).join('|'), 
-                                prop: "imageinfo",
-                                iiprop: "url",
-                                format: "json",
-                                origin: "*"
-                            }
-                        });
-
-                        const infoPages = Object.values(infoRes.data.query?.pages || {});
-                        for (const ip of infoPages) {
-                            const url = ip.imageinfo?.[0]?.url;
-                            const mapItem = imageToCandidateMap[ip.title];
-                            if (url && isValidImageUrl(url) && mapItem) {
-                                tempCandidateData[mapItem.title] = {
-                                    name: mapItem.title,
-                                    image: url,
-                                    hint: createMaskedHint(mapItem.title, mapItem.extract),
-                                    description: mapItem.extract
-                                };
-                            }
                         }
                     }
 
