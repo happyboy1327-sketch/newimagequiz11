@@ -117,29 +117,27 @@ function isValidImageUrl(url) {
 }
 
 // ===============================
-// 4) [강력 필터] 사람 사진 판별기 (최종 보루 수정 버전)
+// 4) [강력 필터] 사람 사진 판별기 (깃털 아이콘 완벽 저격)
 // ===============================
 function isHumanPhoto(filename, aliases) {
     if (!filename || typeof filename !== "string") return false;
     const n = filename.toLowerCase();
 
-    // 1차 거름망: 역사 인물 퀴즈에 절대 나오면 안 되는 노이즈 단어
     const BLACKLIST = [
         "svg", "gif", "coat of arms", "coat_of_arms", "coa", "stone", "tomb", "_tomb",
         "arms", "emblem", "insignia", "flag", "standard", "banner", "seal", "stamp",
         "icon", "logo", "symbol", "map", "chart", "diagram", "signature", "sign",
         "grave", "tomb", "monument", "book", "cover", "coin", "currency", "statue",
-        "sculpture", "memorial", "plaque", "doctrinae", "landscape", "architectures", "penny"
+        "sculpture", "memorial", "plaque", "doctrinae", "landscape", "architectures", "penny",
+        "picto", "auteur", "button", "arrow", "quill" // 🔥 'picto'(픽토그램), 'auteur'(저자) 추가해서 깃털 아이콘 원천 차단
     ];
 
     for (const badWord of BLACKLIST) {
         if (n.includes(badWord)) return false;
     }
     
-    // 조건 1) 초상화, 사진 등 인물 관련 명확한 키워드가 파일명에 있으면 통과
-    if (/(portrait|photo|face|profile|bust|painting|oil|canvas|headshot|crop|standing|sitting)/i.test(n)) return true;
+    if (/(portrait|photo|face|profile|bust|painting|oil|canvas|illustration|hyakunin)/i.test(n)) return true;
 
-    // 조건 2) 한국어 이름(alias)이 파일명에 매칭되면 통과
     for (const a of aliases) {
         if (!a) continue;
         const cleanName = a.replace(/[\s\-\_]/g, "");
@@ -147,16 +145,13 @@ function isHumanPhoto(filename, aliases) {
         if (cleanFile.includes(cleanName)) return true;
     }
 
-    // 조건 3) 위키 특성상 외국인은 영문 이름(예: Albert_Einstein.jpg)이 많으므로,
-    // 블랙리스트를 피하고 단어 사이에 언더바(_)나 하이픈(-)이 들어간 정상적인 영문 파일명은 허용
-    if (/[a-z]{2,}[_\-][a-z]{2,}/i.test(n)) return true;
-
-    // 🔥 [핵심 수정] 마지막 보루 변경: 위 조건에 하나도 안 걸리는 정체불명의 파일은 국물도 없이 차단
-    return false; 
+    // 예외적인 옛날 인물화 파일명(예: Hyakuninisshu_060.jpg)을 살리기 위해 true 유지
+    // 대신 아래 HTML 구조 파싱에서 쩌리 아이콘들을 완벽하게 걸러냄
+    return true; 
 }
 
 // ===============================
-// 5) getStableMainImage (인포박스 전수 조사 및 크기 필터 적용 버전)
+// 5) getStableMainImage (infobox-image 전용 칸 정밀 타격 버전)
 // ===============================
 async function getStableMainImage(title) {
     const aliases = makeNameAliases(title);
@@ -183,7 +178,7 @@ async function getStableMainImage(title) {
         }
     } catch (e) {}
 
-    // 2) HTML 내부 이미지 분석 (★깃털 아이콘 우회 저격 수정)
+    // 2) HTML 내부 이미지 분석
     try {
         const htmlRes = await axios.get(
             `https://ko.wikipedia.org/wiki/${encodeURIComponent(title)}`,
@@ -200,36 +195,59 @@ async function getStableMainImage(title) {
             }
         }
 
-        // 인포박스 처리 고도화
-        const infoboxMatch = html.match(/<table[^>]*class="[^"]*infobox[^"]*"[^>]*>[\s\S]*?<\/table>/i);
-        if (infoboxMatch) {
-            // 🔥 [수정] 딱 하나만 찾던 매칭 대신, 인포박스 안의 모든 img 태그를 배열로 추출합니다.
-            const imgTags = infoboxMatch[0].match(/<img[^>]+>/gi) || [];
+        // ★ [인포박스 정밀 타격 수정]
+        // 깃털 아이콘이 있는 제목 칸(infobox-above)은 거들떠보지도 않고,
+        // 진짜 초상화 사진이 들어가는 고유 클래스인 'infobox-image' 칸만 콕 집어서 매칭함!
+        const infoboxImageMatch = html.match(/<td[^>]+class="[^"]*infobox-image[^"]*"[^>]*>([\s\S]*?)<\/td>/i);
+        
+        if (infoboxImageMatch) {
+            const tdContent = infoboxImageMatch[1];
+            const imgMatch = tdContent.match(/<img[^>]+>/i); // 이 칸 안에서의 첫 번째 이미지는 무조건 진짜 초상화임
             
-            for (const tag of imgTags) {
-                // 무의미한 투명 픽셀 패스
-                if (/pixel\.gif|blank\.gif/i.test(tag)) continue;
+            if (imgMatch) {
+                let src = "";
+                const dataSrcMatch = imgMatch[0].match(/data-src\s*=\s*["']([^"']+)["']/i);
+                const srcMatch = imgMatch[0].match(/src\s*=\s*["']([^"']+)["']/i);
 
-                // 🛠️ [핵심] 가로 크기(width) 검사 추가
-                // 위키피디아의 데코용 아이콘(깃털, 수정 아이콘 등)은 보통 가로가 15~25px 내외입니다.
-                // 진짜 인물 초상화/사진은 최소 180~300px 이므로, 100px 미만의 자잘한 소형 이미지는 무조건 패스합니다.
-                const widthMatch = tag.match(/width=["'](\d+)["']/i);
-                if (widthMatch) {
-                    const width = parseInt(widthMatch[1], 10);
-                    if (width < 100) continue; // ◀ 깃털 아이콘은 여기서 걸러져서 다음 이미지로 넘어감!
-                }
+                if (dataSrcMatch && dataSrcMatch[1]) src = dataSrcMatch[1];
+                else if (srcMatch && srcMatch[1]) src = srcMatch[1];
 
-                // 크기 필터를 통과한 정상 크기 이미지의 src 추출
-                const srcMatch = tag.match(/src\s*=\s*["']([^"']+)["']/i);
-                if (srcMatch && srcMatch[1]) {
-                    let src = srcMatch[1];
+                if (src && !/pixel\.gif|blank\.gif|data:image/i.test(src)) {
                     if (src.startsWith("//")) src = "https:" + src;
                     
                     if (isValidImageUrl(src)) {
                         const infoFileName = decodeURIComponent(src.split('/').pop());
                         if (isHumanPhoto(infoFileName, aliases)) {
-                            return src; // 드디어 진짜 하단의 인물 초상화가 정상 반환됩니다!
+                            return src; // 깃털 제끼고 드디어 진짜 초상화 반환 성공
                         }
+                    }
+                }
+            }
+        }
+
+        // 백업용 구형 인포박스 처리 (infobox-image 클래스가 없는 노후화된 문서용)
+        const infoboxMatch = html.match(/<table[^>]*class="[^"]*infobox[^"]*"[^>]*>[\s\S]*?<\/table>/i);
+        if (infoboxMatch) {
+            const imgTags = infoboxMatch[0].match(/<img[^>]+>/gi) || [];
+            for (const tag of imgTags) {
+                if (/pixel\.gif|blank\.gif/i.test(tag)) continue;
+                
+                // 크기가 100px 미만인 자잘한 데코 아이콘들은 패스
+                const widthMatch = tag.match(/width=["'](\d+)["']/i);
+                if (widthMatch && parseInt(widthMatch[1], 10) < 100) continue;
+
+                let src = "";
+                const dataSrcMatch = tag.match(/data-src\s*=\s*["']([^"']+)["']/i);
+                const srcMatch = tag.match(/src\s*=\s*["']([^"']+)["']/i);
+
+                if (dataSrcMatch && dataSrcMatch[1]) src = dataSrcMatch[1];
+                else if (srcMatch && srcMatch[1]) src = srcMatch[1];
+
+                if (src) {
+                    if (src.startsWith("//")) src = "https:" + src;
+                    if (isValidImageUrl(src)) {
+                        const infoFileName = decodeURIComponent(src.split('/').pop());
+                        if (isHumanPhoto(infoFileName, aliases)) return src;
                     }
                 }
             }
@@ -269,16 +287,15 @@ async function getStableMainImage(title) {
             const info = Object.values(infoRes.data.query.pages)[0];
             const url = info.imageinfo?.[0]?.url;
 
-            if (isValidImageUrl(url)) {
-                return url;
-            }
+            if (isValidImageUrl(url)) return url;
         }
     } catch (e) {}
 
     console.log(`❌ 최종 이미지 실패: ${title}`);
     return null;
 }
-
+    
+    
 
 
 // --- 이미지 URL 안정성 체크 ---
