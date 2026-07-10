@@ -106,13 +106,12 @@ function isValidImageUrl(url) {
 }
 
 // ===============================
-// 3) [강력 필터] 사람 사진 판별기 (필적/문서 철저 차단)
+// 3) [강력 필터] 사람 사진 판별기
 // ===============================
 function isHumanPhoto(filename, aliases) {
     if (!filename || typeof filename !== "string") return false;
     const n = filename.toLowerCase();
 
-    // 🔥 양사언 필적 같은 예외 케이스 저격을 위해 글씨, 탁본, 문서 관련 키워드 대거 추가
     const BLACKLIST = [
         "svg", "gif", "coat of arms", "coat_of_arms", "coa", "stone", "tomb", "_tomb",
         "arms", "emblem", "insignia", "flag", "standard", "banner", "seal", "stamp",
@@ -214,7 +213,7 @@ function createMaskedHint(title, extract) {
 }
 
 // =======================================================
-// 퀴즈 캐시 충전 함수 (토막글 짜바리 아이콘 철저히 배제 버전)
+// 퀴즈 캐시 충전 함수
 // =======================================================
 function fillCache() {
     if (isCaching) return cachePromise;
@@ -261,8 +260,8 @@ function fillCache() {
                         params: {
                             action: "query",
                             titles: filteredCandidates.map(c => c.title).join('|'),
-                            prop: "extracts|pageimages", // 🔥 'images' 제거! 문서 내부 쩌리 이미지들을 아예 요청조차 안 함
-                            exintro: true,
+                            prop: "extracts|pageimages", 
+                            // 🔥 exintro: true 제거! 개요뿐만 아니라 생애 섹션까지 전체 다 긁어옴
                             explaintext: true,
                             pithumbsize: 600,
                             format: "json",
@@ -279,14 +278,25 @@ function fillCache() {
 
                         const aliases = makeNameAliases(pageData.title);
 
-                        // 🔥 위키백과가 보장하는 우측 인포박스 전용 '메인 대표 썸네일'이 있을 때만 수집
-                        // 이렇게 하면 본문 하단 토막글 템플릿의 엉뚱한 아이콘들을 완벽히 무시함
                         if (pageData.thumbnail?.source && isValidImageUrl(pageData.thumbnail.source) && isHumanPhoto(pageData.pageimage || "", aliases)) {
+                            
+                            // 📝 [정답 해설 최적화 필터] 
+                            // 전체 본문을 가져왔으므로 해설에 불필요한 '각주', '같이 보기' 등의 하단 쩌리 텍스트는 잘라냄
+                            let cleanDescription = pageData.extract;
+                            const cutIndex = cleanDescription.search(/==\s*(각주|같이 보기|참고 문헌|외부 링크)\s*==/i);
+                            if (cutIndex !== -1) {
+                                cleanDescription = cleanDescription.substring(0, cutIndex).trim();
+                            }
+                            // 너무 무식하게 길어지는 것을 방지하기 위해 최대 1000자로 리미트
+                            if (cleanDescription.length > 1000) {
+                                cleanDescription = cleanDescription.substring(0, 1000) + "...";
+                            }
+
                             tempCandidateData[pageData.title] = {
                                 name: pageData.title,
                                 image: pageData.thumbnail.source,
-                                hint: createMaskedHint(pageData.title, pageData.extract),
-                                description: pageData.extract
+                                hint: createMaskedHint(pageData.title, pageData.extract), // 힌트는 기존처럼 앞단 위주로 마스킹 생성
+                                description: cleanDescription // 생애를 포함한 알짜배기 해설 정보 수록 완료
                             };
                         }
                     }
