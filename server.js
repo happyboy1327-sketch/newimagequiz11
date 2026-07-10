@@ -156,7 +156,7 @@ function isHumanPhoto(filename, aliases) {
 }
 
 // ===============================
-// 5) getStableMainImage (우회 구멍 차단 버전)
+// 5) getStableMainImage (인포박스 전수 조사 및 크기 필터 적용 버전)
 // ===============================
 async function getStableMainImage(title) {
     const aliases = makeNameAliases(title);
@@ -183,7 +183,7 @@ async function getStableMainImage(title) {
         }
     } catch (e) {}
 
-    // 2) HTML 내부 OG 이미지 및 인포박스 상단 이미지 (★필터 적용 완료)
+    // 2) HTML 내부 이미지 분석 (★깃털 아이콘 우회 저격 수정)
     try {
         const htmlRes = await axios.get(
             `https://ko.wikipedia.org/wiki/${encodeURIComponent(title)}`,
@@ -191,27 +191,45 @@ async function getStableMainImage(title) {
         );
         const html = htmlRes.data;
 
-        // OG 이미지 추출 후 필터링
+        // OG 이미지 우선 처리
         const ogImage = extractOgImage(html);
         if (ogImage && isValidImageUrl(ogImage)) {
             const ogFileName = decodeURIComponent(ogImage.split('/').pop());
-            if (isHumanPhoto(ogFileName, aliases)) { // ◀ 여기에 필터 추가해서 하이패스 차단
+            if (isHumanPhoto(ogFileName, aliases)) {
                 return ogImage;
             }
         }
 
-        // 인포박스 이미지 추출 후 필터링
+        // 인포박스 처리 고도화
         const infoboxMatch = html.match(/<table[^>]*class="[^"]*infobox[^"]*"[^>]*>[\s\S]*?<\/table>/i);
         if (infoboxMatch) {
-            const srcMatch = infoboxMatch[0].match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i);
-            if (srcMatch && srcMatch[1]) {
-                let src = srcMatch[1];
-                if (src.startsWith("//")) src = "https:" + src;
-                
-                if (isValidImageUrl(src) && !/pixel\.gif|blank\.gif/i.test(src)) {
-                    const infoFileName = decodeURIComponent(src.split('/').pop());
-                    if (isHumanPhoto(infoFileName, aliases)) { // ◀ 여기에 필터 추가해서 하이패스 차단
-                        return src;
+            // 🔥 [수정] 딱 하나만 찾던 매칭 대신, 인포박스 안의 모든 img 태그를 배열로 추출합니다.
+            const imgTags = infoboxMatch[0].match(/<img[^>]+>/gi) || [];
+            
+            for (const tag of imgTags) {
+                // 무의미한 투명 픽셀 패스
+                if (/pixel\.gif|blank\.gif/i.test(tag)) continue;
+
+                // 🛠️ [핵심] 가로 크기(width) 검사 추가
+                // 위키피디아의 데코용 아이콘(깃털, 수정 아이콘 등)은 보통 가로가 15~25px 내외입니다.
+                // 진짜 인물 초상화/사진은 최소 180~300px 이므로, 100px 미만의 자잘한 소형 이미지는 무조건 패스합니다.
+                const widthMatch = tag.match(/width=["'](\d+)["']/i);
+                if (widthMatch) {
+                    const width = parseInt(widthMatch[1], 10);
+                    if (width < 100) continue; // ◀ 깃털 아이콘은 여기서 걸러져서 다음 이미지로 넘어감!
+                }
+
+                // 크기 필터를 통과한 정상 크기 이미지의 src 추출
+                const srcMatch = tag.match(/src\s*=\s*["']([^"']+)["']/i);
+                if (srcMatch && srcMatch[1]) {
+                    let src = srcMatch[1];
+                    if (src.startsWith("//")) src = "https:" + src;
+                    
+                    if (isValidImageUrl(src)) {
+                        const infoFileName = decodeURIComponent(src.split('/').pop());
+                        if (isHumanPhoto(infoFileName, aliases)) {
+                            return src; // 드디어 진짜 하단의 인물 초상화가 정상 반환됩니다!
+                        }
                     }
                 }
             }
