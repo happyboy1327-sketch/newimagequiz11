@@ -82,7 +82,7 @@ function isValidImageUrl(url) {
 }
 
 // ===============================
-// 3) [강력 필터] 사람 사진 판별기
+// 3) 사람 사진 판별기
 // ===============================
 function isHumanPhoto(filename, aliases) {
     if (!filename || typeof filename !== "string") return false;
@@ -119,11 +119,11 @@ function isHumanPhoto(filename, aliases) {
 async function checkUrlStability(url) {
     if (!url) return false;
     try {
-        const res = await axios.head(url, { headers: WIKI_HEADERS, timeout: 1000 });
+        const res = await axios.head(url, { headers: WIKI_HEADERS, timeout: 800 });
         return res.status === 200;
     } catch (e) {
         try {
-            const res = await axios.get(url, { headers: WIKI_HEADERS, timeout: 1000, responseType: "stream" });
+            const res = await axios.get(url, { headers: WIKI_HEADERS, timeout: 800, responseType: "stream" });
             return res.status === 200;
         } catch(err) {
             return false; 
@@ -134,16 +134,15 @@ async function checkUrlStability(url) {
 async function validateImage(url) {
     for (let i = 0; i < VALIDATION_TRY; i++) {
         if (await checkUrlStability(url)) return true;
-        if (i < VALIDATION_TRY - 1) await new Promise(resolve => setTimeout(resolve, 300));
+        if (i < VALIDATION_TRY - 1) await new Promise(resolve => setTimeout(resolve, 200));
     }
     return false;
 }
 
 // =======================================================
-// 4) 힌트 마스킹 함수 (앞부분만 잘라서 처리하도록 대폭 최적화)
+// 4) 힌트 마스킹 함수
 // =======================================================
 function createMaskedHint(title, extract) {
-    // 🔥 [성능 최적화] 어차피 130자만 쓸 거니까 앞단 350자만 떼어내서 무거운 정규식 돌림 (속도 대폭 향상)
     let hintText = extract.substring(0, 350);
     const cleanTitle = title.trim();
     
@@ -186,7 +185,7 @@ function createMaskedHint(title, extract) {
 }
 
 // =======================================================
-// 5) 퀴즈 캐시 충전 함수
+// 5) 퀴즈 캐시 충전 함수 (대폭 최적화 버전)
 // =======================================================
 function fillCache() {
     if (isCaching) return cachePromise;
@@ -209,7 +208,7 @@ function fillCache() {
                         action: "query",
                         list: "categorymembers",
                         cmtitle: `분류:${year}년_출생`,
-                        cmlimit: 100, 
+                        cmlimit: 80, 
                         cmtype: "page",
                         format: "json",
                         origin: "*"
@@ -225,7 +224,7 @@ function fillCache() {
                         return !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title);
                     })
                     .sort(() => Math.random() - 0.5)
-                    .slice(0, 30); 
+                    .slice(0, 25); 
 
                 if (filteredCandidates.length > 0) {
                     const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
@@ -242,7 +241,7 @@ function fillCache() {
                     });
 
                     const pages = Object.values(detailRes.data.query?.pages || {});
-                    let tempCandidateData = {};
+                    let tempCandidateList = [];
 
                     for (const pageData of pages) {
                         if (!pageData || !pageData.extract || pageData.extract.length < 100) continue;
@@ -254,42 +253,49 @@ function fillCache() {
                             
                             let rawText = pageData.extract;
                             
-                            // ① 하단 불필요 섹션(각주, 같이 보기 등) 기점 자르기
+                            // 1단계: 필요 없는 하위 섹션 자르기
                             const cutIndex = rawText.search(/==\s*(각주|같이 보기|참고 문헌|외부 링크)\s*==/i);
                             if (cutIndex !== -1) {
                                 rawText = rawText.substring(0, cutIndex);
                             }
                             
-                            // ② 🔥 [문장 가공] '== 생애 ==', '== 업적 ==' 같은 중제목 완전 제거 및 자연스럽게 문장 연결
-                            // 🔥 [버그 수정] = 기호가 2개든 3개든(H2~H4) 통째로 긁어내서 매끄럽게 연결하도록 정규식 변경
+                            // 🔥 [초강력 속도 최적화] 수만 자짜리 전체 텍스트를 들고 정규식을 돌리면 대폭 느려짐.
+                            // 어차피 해설은 최대 1000자만 쓸 거니 미리 1500자로 싹둑 자른 후 정규식을 돌려 연산량 차단!
+                            rawText = rawText.substring(0, 1500);
+                            
+                            // 2단계: 모든 중제목/소제목 기호를 박멸하고 자연스럽게 문장 연결
                             rawText = rawText.replace(/=+\s*.*?\s*=+/g, " ").replace(/\s+/g, " ").trim();
 
                             if (rawText.length < 100) continue;
 
-                            // ③ 정답 해설용 텍스트 리미트 (최대 1000자)
                             let cleanDescription = rawText;
                             if (cleanDescription.length > 1000) {
                                 cleanDescription = cleanDescription.substring(0, 1000) + "...";
                             }
 
-                            tempCandidateData[pageData.title] = {
+                            tempCandidateList.push({
                                 name: pageData.title,
                                 image: pageData.thumbnail.source,
                                 hint: createMaskedHint(pageData.title, rawText), 
                                 description: cleanDescription 
-                            };
+                            });
                         }
                     }
 
-                    for (const item of Object.values(tempCandidateData)) {
-                        if (QUIZ_CACHE.length < CACHE_SIZE) {
-                            if (QUIZ_CACHE.some(cached => cached.name === item.name)) continue;
-                            
+                    // 🔥 [지옥의 동기루프 해결] 한 명씩 대기타며 검사하던 루프를 Promise.all 병렬 멀티태스킹으로 교체
+                    const validatedResults = await Promise.all(
+                        tempCandidateList.map(async (item) => {
                             const isStable = await validateImage(item.image);
-                            if (isStable) {
-                                QUIZ_CACHE.push(item);
-                                console.log(`   [캐시 추가 성공] 👤 ${item.name}`);
-                            }
+                            return isStable ? item : null;
+                        })
+                    );
+
+                    // 유효성 통과한 아이템만 최종 캐시에 순식간에 푸시
+                    for (const item of validatedResults) {
+                        if (item && QUIZ_CACHE.length < CACHE_SIZE) {
+                            if (QUIZ_CACHE.some(cached => cached.name === item.name)) continue;
+                            QUIZ_CACHE.push(item);
+                            console.log(`   [캐시 추가 성공] 👤 ${item.name}`);
                         }
                     }
                 }
@@ -347,9 +353,6 @@ app.get("/api/quiz", async (req, res) => {
     res.status(500).json({ error: "서버 내부 오류로 퀴즈를 불러올 수 없습니다.", errorId });
   }
 });
-
-// 이미지 파이프라인 (기존 프록시 라우트가 있다면 이 아래에 그대로 유지하면 돼!)
-// app.get("/api/proxy-image", ...)
 
 app.use(express.static(path.join(process.cwd(), "public")));
 app.get("/", (req, res) => res.sendFile(path.join(process.cwd(), "public", "index.html")));
