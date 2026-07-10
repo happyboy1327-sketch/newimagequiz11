@@ -261,8 +261,8 @@ function fillCache() {
                             }
                             
                             // ② 🔥 [문장 가공] '== 생애 ==', '== 업적 ==' 같은 중제목 완전 제거 및 자연스럽게 문장 연결
-                            // 기호 자체를 제거하고 연이은 공백을 단일 공백으로 치환해 매끄럽게 흐르도록 만듦
-                            rawText = rawText.replace(/==\s*.*?\s*==/g, " ").replace(/\s+/g, " ").trim();
+                            // 🔥 [버그 수정] = 기호가 2개든 3개든(H2~H4) 통째로 긁어내서 매끄럽게 연결하도록 정규식 변경
+                            rawText = rawText.replace(/=+\s*.*?\s*=+/g, " ").replace(/\s+/g, " ").trim();
 
                             if (rawText.length < 100) continue;
 
