@@ -7,22 +7,19 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 🔥 [보안/성능 개선] Express 관련 헤더 설정
+// [보안/성능 개선] Express 관련 헤더 설정
 app.disable('x-powered-by');
 
 app.use((req, res, next) => {
-    // 보안 헤더
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '1; mode=block');
     
-    // 캐시 제어
     if (req.path === '/api/quiz') {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     } else {
         res.setHeader('Cache-Control', 'public, max-age=3600, immutable');
     }
-    
     next();
 });
 
@@ -37,22 +34,6 @@ process.on('uncaughtException', (err) => {
 // --- 설정 ---
 const CACHE_SIZE = 25;        
 const VALIDATION_TRY = 2;    
-
-// --- 기존 퀴즈풀의 유명 인물 리스트 (검색 우선순위) ---
-const LEGACY_NAMES = [
-  "이순신", "세종대왕", "알베르트 아인슈타인", "에이브러햄 링컨", "마하트마 간디",
-  "유관순", "안중근", "김구", "윤동주", "레오나르도 다 빈치", "윤봉길", "아리스토텔레스", "갈릴레오 갈릴레이",
-  "미켈란젤로 부오나로티", "빈센트 반 고흐", "파블로 피카소", "아이작 뉴턴", "찰스 다윈",
-  "토머스 에디슨", "니콜라 테슬라", "스티브 잡스", "빌 게이츠", "마리 퀴리",
-  "루트비히 판 베토벤", "볼프강 아마데우스 모차르트", "윌리엄 셰익스피어", "나폴레옹 보나파르트",
-  "칭기즈 칸", "알렉산드로스 3세", "줄리어스 시저", "조지 워싱턴",
-  "넬슨 만델라",
-  "존 F. 케네디", "마틴 루터 킹", "윈스턴 처칠", "마더 테레사", "헬렌 켈러",
-  "소크라테스", "플라톤", "공자", "맹자", "진시황", "정약용", "이황", 
-  "신사임당", "방정환", "지석영", "김정호", "장영실", "허준", "왕건",
-  "대조영", "광개토대왕", "장수왕", "을지문덕", "김유신", "계백", "이사부", "보고",
-  "최무선", "정도전", "황희", "신숙주", "곽재우", "주시경"
-];
 
 let QUIZ_CACHE = [];
 let LAST_PLAYED = [];
@@ -88,19 +69,14 @@ function makeNameAliases(title) {
 }
 
 // ===============================
-// 2) 이미지 URL 유효성 검사 (SVG 및 키워드 차단)
+// 2) 이미지 URL 유효성 검사
 // ===============================
 function isValidImageUrl(url) {
     if (!url || typeof url !== "string") return false;
-    
-    if (/\.svg(\?.*)?$/i.test(url)) return false;
-    if (/\/svg\//i.test(url)) return false;
+    if (/\.svg(\?.*)?$/i.test(url) || /\/svg\//i.test(url)) return false;
     
     const lowerUrl = url.toLowerCase();
-    if (lowerUrl.includes("coat_of_arms")) return false;
-    if (lowerUrl.includes("emblem")) return false;
-    if (lowerUrl.includes("flag")) return false;
-    if (lowerUrl.includes("icon")) return false;
+    if (lowerUrl.includes("coat_of_arms") || lowerUrl.includes("emblem") || lowerUrl.includes("flag") || lowerUrl.includes("icon")) return false;
     
     return /\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(url);
 }
@@ -143,18 +119,11 @@ function isHumanPhoto(filename, aliases) {
 async function checkUrlStability(url) {
     if (!url) return false;
     try {
-        const res = await axios.head(url, {
-            headers: WIKI_HEADERS,
-            timeout: 1000
-        });
+        const res = await axios.head(url, { headers: WIKI_HEADERS, timeout: 1000 });
         return res.status === 200;
     } catch (e) {
         try {
-            const res = await axios.get(url, { 
-                headers: WIKI_HEADERS, 
-                timeout: 1000, 
-                responseType: "stream" 
-            });
+            const res = await axios.get(url, { headers: WIKI_HEADERS, timeout: 1000, responseType: "stream" });
             return res.status === 200;
         } catch(err) {
             return false; 
@@ -164,20 +133,20 @@ async function checkUrlStability(url) {
 
 async function validateImage(url) {
     for (let i = 0; i < VALIDATION_TRY; i++) {
-        if (await checkUrlStability(url)) {
-            return true;
-        }
-        if (i < VALIDATION_TRY - 1) {
-            await new Promise(resolve => setTimeout(resolve, 300));
-        }
+        if (await checkUrlStability(url)) return true;
+        if (i < VALIDATION_TRY - 1) await new Promise(resolve => setTimeout(resolve, 300));
     }
     return false;
 }
 
-// --- 공통 힌트 마스킹 함수 ---
+// =======================================================
+// 4) 힌트 마스킹 함수 (앞부분만 잘라서 처리하도록 대폭 최적화)
+// =======================================================
 function createMaskedHint(title, extract) {
-    let hintText = extract;
+    // 🔥 [성능 최적화] 어차피 130자만 쓸 거니까 앞단 350자만 떼어내서 무거운 정규식 돌림 (속도 대폭 향상)
+    let hintText = extract.substring(0, 350);
     const cleanTitle = title.trim();
+    
     const parenMatch = cleanTitle.match(/\((.*?)\)/);
     if (parenMatch) {
         const parenContent = parenMatch[1]; 
@@ -188,19 +157,23 @@ function createMaskedHint(title, extract) {
             }
         });
     }
+
     const baseName = cleanTitle.replace(/\s*\(.*?\)\s*/g, ''); 
     const nameParts = baseName.split(' ');
     nameParts.forEach(word => {
         if (word.length >= 2) {
-            hintText = hintText.replace(new RegExp(word, 'gi'), "OOO");
+            const safeWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            hintText = hintText.replace(new RegExp(safeWord, 'gi'), "OOO");
             if (word.length >= 3 && !/\s/.test(word)) { 
                 for(let i = 0; i <= word.length - 2; i++) {
                     const chunk = word.substring(i, i + 2);
-                    hintText = hintText.replace(new RegExp(chunk, 'gi'), "OOO");
+                    const safeChunk = chunk.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    hintText = hintText.replace(new RegExp(safeChunk, 'gi'), "OOO");
                 }
             }
         }
     });
+
     hintText = hintText.replace(/([a-zA-Z\d\.\,\:\-\s'\[\]\/\(\)ˌˈɛɔ]+)/g, (match, p1) => {
         const cleanedMatch = p1.trim();
         if (cleanedMatch.length > 1 && /[a-zA-Z]/.test(cleanedMatch)) {
@@ -209,11 +182,11 @@ function createMaskedHint(title, extract) {
         return match; 
     });
 
-    return hintText.substring(0, 130) + "...";
+    return hintText.substring(0, 130).trim() + "...";
 }
 
 // =======================================================
-// 퀴즈 캐시 충전 함수
+// 5) 퀴즈 캐시 충전 함수
 // =======================================================
 function fillCache() {
     if (isCaching) return cachePromise;
@@ -261,7 +234,6 @@ function fillCache() {
                             action: "query",
                             titles: filteredCandidates.map(c => c.title).join('|'),
                             prop: "extracts|pageimages", 
-                            // 🔥 exintro: true 제거! 개요뿐만 아니라 생애 섹션까지 전체 다 긁어옴
                             explaintext: true,
                             pithumbsize: 600,
                             format: "json",
@@ -280,14 +252,22 @@ function fillCache() {
 
                         if (pageData.thumbnail?.source && isValidImageUrl(pageData.thumbnail.source) && isHumanPhoto(pageData.pageimage || "", aliases)) {
                             
-                            // 📝 [정답 해설 최적화 필터] 
-                            // 전체 본문을 가져왔으므로 해설에 불필요한 '각주', '같이 보기' 등의 하단 쩌리 텍스트는 잘라냄
-                            let cleanDescription = pageData.extract;
-                            const cutIndex = cleanDescription.search(/==\s*(각주|같이 보기|참고 문헌|외부 링크)\s*==/i);
+                            let rawText = pageData.extract;
+                            
+                            // ① 하단 불필요 섹션(각주, 같이 보기 등) 기점 자르기
+                            const cutIndex = rawText.search(/==\s*(각주|같이 보기|참고 문헌|외부 링크)\s*==/i);
                             if (cutIndex !== -1) {
-                                cleanDescription = cleanDescription.substring(0, cutIndex).trim();
+                                rawText = rawText.substring(0, cutIndex);
                             }
-                            // 너무 무식하게 길어지는 것을 방지하기 위해 최대 1000자로 리미트
+                            
+                            // ② 🔥 [문장 가공] '== 생애 ==', '== 업적 ==' 같은 중제목 완전 제거 및 자연스럽게 문장 연결
+                            // 기호 자체를 제거하고 연이은 공백을 단일 공백으로 치환해 매끄럽게 흐르도록 만듦
+                            rawText = rawText.replace(/==\s*.*?\s*==/g, " ").replace(/\s+/g, " ").trim();
+
+                            if (rawText.length < 100) continue;
+
+                            // ③ 정답 해설용 텍스트 리미트 (최대 1000자)
+                            let cleanDescription = rawText;
                             if (cleanDescription.length > 1000) {
                                 cleanDescription = cleanDescription.substring(0, 1000) + "...";
                             }
@@ -295,8 +275,8 @@ function fillCache() {
                             tempCandidateData[pageData.title] = {
                                 name: pageData.title,
                                 image: pageData.thumbnail.source,
-                                hint: createMaskedHint(pageData.title, pageData.extract), // 힌트는 기존처럼 앞단 위주로 마스킹 생성
-                                description: cleanDescription // 생애를 포함한 알짜배기 해설 정보 수록 완료
+                                hint: createMaskedHint(pageData.title, rawText), 
+                                description: cleanDescription 
                             };
                         }
                     }
@@ -353,10 +333,7 @@ app.get("/api/quiz", async (req, res) => {
     }
 
     LAST_PLAYED.push(item.name);
-    
-    if (LAST_PLAYED.length > 10) {
-        LAST_PLAYED.shift(); 
-    }
+    if (LAST_PLAYED.length > 10) LAST_PLAYED.shift(); 
 
     res.json({ 
       ...item, 
@@ -371,7 +348,9 @@ app.get("/api/quiz", async (req, res) => {
   }
 });
 
-// --- 정적 파일 ---
+// 이미지 파이프라인 (기존 프록시 라우트가 있다면 이 아래에 그대로 유지하면 돼!)
+// app.get("/api/proxy-image", ...)
+
 app.use(express.static(path.join(process.cwd(), "public")));
 app.get("/", (req, res) => res.sendFile(path.join(process.cwd(), "public", "index.html")));
 
