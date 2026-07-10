@@ -117,40 +117,29 @@ function isValidImageUrl(url) {
 }
 
 // ===============================
-// 4) [강력 필터] 사람 사진 판별기 (휘장/심볼 완벽 차단)
+// 4) [강력 필터] 사람 사진 판별기 (최종 보루 수정 버전)
 // ===============================
 function isHumanPhoto(filename, aliases) {
     if (!filename || typeof filename !== "string") return false;
     const n = filename.toLowerCase();
 
+    // 1차 거름망: 역사 인물 퀴즈에 절대 나오면 안 되는 노이즈 단어
     const BLACKLIST = [
-        "svg", "gif",                   
-        "coat of arms", "coat_of_arms", 
-        "coa", 
-        "stone",
-        "tomb", "_tomb",
-        "arms",                         
-        "emblem",                       
-        "insignia",                     
-        "flag", "standard", "banner",   
-        "seal", "stamp",                
-        "icon", "logo", "symbol",       
-        "map", "chart", "diagram",      
-        "signature", "sign",            
-        "grave", "tomb", "monument",    
-        "book", "cover",                
-        "coin", "currency",             
-        "statue", "sculpture",          
-        "memorial", "plaque", "doctrinae",
-        "landscape", "architectures", "penny", "coin"
+        "svg", "gif", "coat of arms", "coat_of_arms", "coa", "stone", "tomb", "_tomb",
+        "arms", "emblem", "insignia", "flag", "standard", "banner", "seal", "stamp",
+        "icon", "logo", "symbol", "map", "chart", "diagram", "signature", "sign",
+        "grave", "tomb", "monument", "book", "cover", "coin", "currency", "statue",
+        "sculpture", "memorial", "plaque", "doctrinae", "landscape", "architectures", "penny"
     ];
 
     for (const badWord of BLACKLIST) {
         if (n.includes(badWord)) return false;
     }
     
-    if (/(portrait|photo|face|profile|bust|painting|oil|canvas)/i.test(n)) return true;
+    // 조건 1) 초상화, 사진 등 인물 관련 명확한 키워드가 파일명에 있으면 통과
+    if (/(portrait|photo|face|profile|bust|painting|oil|canvas|headshot|crop|standing|sitting)/i.test(n)) return true;
 
+    // 조건 2) 한국어 이름(alias)이 파일명에 매칭되면 통과
     for (const a of aliases) {
         if (!a) continue;
         const cleanName = a.replace(/[\s\-\_]/g, "");
@@ -158,15 +147,21 @@ function isHumanPhoto(filename, aliases) {
         if (cleanFile.includes(cleanName)) return true;
     }
 
-    return true;
+    // 조건 3) 위키 특성상 외국인은 영문 이름(예: Albert_Einstein.jpg)이 많으므로,
+    // 블랙리스트를 피하고 단어 사이에 언더바(_)나 하이픈(-)이 들어간 정상적인 영문 파일명은 허용
+    if (/[a-z]{2,}[_\-][a-z]{2,}/i.test(n)) return true;
+
+    // 🔥 [핵심 수정] 마지막 보루 변경: 위 조건에 하나도 안 걸리는 정체불명의 파일은 국물도 없이 차단
+    return false; 
 }
 
 // ===============================
-// 5) getStableMainImage - 개선된 버전
+// 5) getStableMainImage (우회 구멍 차단 버전)
 // ===============================
 async function getStableMainImage(title) {
     const aliases = makeNameAliases(title);
     
+    // 1) 위키 API 메인 썸네일
     try {
         const thumbRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
             headers: WIKI_HEADERS,
@@ -188,6 +183,7 @@ async function getStableMainImage(title) {
         }
     } catch (e) {}
 
+    // 2) HTML 내부 OG 이미지 및 인포박스 상단 이미지 (★필터 적용 완료)
     try {
         const htmlRes = await axios.get(
             `https://ko.wikipedia.org/wiki/${encodeURIComponent(title)}`,
@@ -195,11 +191,16 @@ async function getStableMainImage(title) {
         );
         const html = htmlRes.data;
 
+        // OG 이미지 추출 후 필터링
         const ogImage = extractOgImage(html);
         if (ogImage && isValidImageUrl(ogImage)) {
-            return ogImage;
+            const ogFileName = decodeURIComponent(ogImage.split('/').pop());
+            if (isHumanPhoto(ogFileName, aliases)) { // ◀ 여기에 필터 추가해서 하이패스 차단
+                return ogImage;
+            }
         }
 
+        // 인포박스 이미지 추출 후 필터링
         const infoboxMatch = html.match(/<table[^>]*class="[^"]*infobox[^"]*"[^>]*>[\s\S]*?<\/table>/i);
         if (infoboxMatch) {
             const srcMatch = infoboxMatch[0].match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i);
@@ -208,12 +209,16 @@ async function getStableMainImage(title) {
                 if (src.startsWith("//")) src = "https:" + src;
                 
                 if (isValidImageUrl(src) && !/pixel\.gif|blank\.gif/i.test(src)) {
-                     return src;
+                    const infoFileName = decodeURIComponent(src.split('/').pop());
+                    if (isHumanPhoto(infoFileName, aliases)) { // ◀ 여기에 필터 추가해서 하이패스 차단
+                        return src;
+                    }
                 }
             }
         }
     } catch (e) {}
 
+    // 3) 문서 전체 이미지 목록 뒤지기
     try {
         const imgListRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
             headers: WIKI_HEADERS,
@@ -255,6 +260,8 @@ async function getStableMainImage(title) {
     console.log(`❌ 최종 이미지 실패: ${title}`);
     return null;
 }
+
+
 
 // --- 이미지 URL 안정성 체크 ---
 async function checkUrlStability(url) {
