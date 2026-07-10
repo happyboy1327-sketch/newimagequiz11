@@ -106,19 +106,22 @@ function isValidImageUrl(url) {
 }
 
 // ===============================
-// 3) [강력 필터] 사람 사진 판별기
+// 3) [강력 필터] 사람 사진 판별기 (필적/문서 철저 차단)
 // ===============================
 function isHumanPhoto(filename, aliases) {
     if (!filename || typeof filename !== "string") return false;
     const n = filename.toLowerCase();
 
+    // 🔥 양사언 필적 같은 예외 케이스 저격을 위해 글씨, 탁본, 문서 관련 키워드 대거 추가
     const BLACKLIST = [
         "svg", "gif", "coat of arms", "coat_of_arms", "coa", "stone", "tomb", "_tomb",
         "arms", "emblem", "insignia", "flag", "standard", "banner", "seal", "stamp",
         "icon", "logo", "symbol", "map", "chart", "diagram", "signature", "sign",
         "grave", "tomb", "monument", "book", "cover", "coin", "currency", "statue",
         "sculpture", "memorial", "plaque", "doctrinae", "landscape", "architectures", "penny",
-        "picto", "auteur", "button", "arrow", "quill" 
+        "picto", "auteur", "button", "arrow", "quill",
+        "calligraphy", "handwriting", "writing", "manuscript", "document", "letter", "text", "rubbing",
+        "필적", "글씨", "서체", "문서", "편지", "탁본", "서간", "간찰", "의궤", "집자", "현판", "비석"
     ];
 
     for (const badWord of BLACKLIST) {
