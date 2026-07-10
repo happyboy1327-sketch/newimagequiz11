@@ -348,31 +348,63 @@ function createMaskedHint(title, extract) {
 // =======================================================
 // 🔥 [핵심 수정] 데이터 채굴 로직 - 15명 대량 병렬 처리 버전
 // =======================================================
-async function fillCache() {
-    if (isCaching || QUIZ_CACHE.length >= CACHE_SIZE) return;
-    isCaching = true;
 
-    cachePromise = new Promise(async (resolve) => {
-        console.log("⛏️ 데이터 채굴 시작...");
+            // =======================================================
+// 퀴즈 캐시 충전 함수 (30명 단위 초고속 배치 스캔 버전)
+// =======================================================
+async function fillCache() {
+    // 캐시가 이미 꽉 차 있으면 실행 안 하고 패스
+    if (QUIZ_CACHE.length >= CACHE_SIZE) return;
+
+    console.log(`🔄 퀴즈 캐시 충전 시작... (현재: ${QUIZ_CACHE.length}/${CACHE_SIZE})`);
+
+    let randomSearchAttempts = 0;
+
+    // 캐시가 다 찰 때까지 혹은 시도 횟수가 끝날 때까지 반복
+    while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 3) {
+        // 500년부터 2000년 사이의 랜덤 연도 지정
+        const year = Math.floor(Math.random() * (2000 - 500 + 1)) + 500;
+        console.log(`📅 랜덤 연도 탐색 중: ${year}년 출생자 스캔`);
 
         try {
-            // -------------------------------------------------------
-            // 1. LEGACY 유명인 우선 시도 (5명 묶어서 한 번에 병렬 처리)
-            // -------------------------------------------------------
-            if (QUIZ_CACHE.length < CACHE_SIZE && Math.random() < 0.85) { 
-                const famousCandidates = LEGACY_NAMES
-                     .filter(name => !QUIZ_CACHE.some(c => c.name === name) && !LAST_PLAYED.includes(name)) // 👈 이 필터로 교체
-                     .sort(() => Math.random() - 0.5)
-                     .slice(0, 5); 
+            // 1) 해당 연도 출생자 목록 넉넉하게 가져오기
+            const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+                headers: WIKI_HEADERS,
+                params: {
+                    action: "query",
+                    list: "categorymembers",
+                    cmtitle: `분류:${year}년_출생`,
+                    cmlimit: 100, 
+                    cmtype: "page",
+                    format: "json",
+                    origin: "*"
+                }
+            });
 
+            const candidates = listRes.data.query?.categorymembers || [];
+
+            // 2) 1차 필터링 및 딱 30명으로 제한
+            const filteredCandidates = candidates
+                .filter(cand => {
+                    if (cand.title.includes(":")) return false; 
+                    if (QUIZ_CACHE.some(c => c.name === cand.title) || LAST_PLAYED.includes(cand.title)) return false;
+                    return !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title);
+                })
+                .sort(() => Math.random() - 0.5)
+                .slice(0, 30); // 🔥 형이 말한 딱 30명 제한 구간
+
+            if (filteredCandidates.length > 0) {
+                // 3) 🔥 [핵심] 30명 인물의 본문, 대표 썸네일, 내부 이미지 목록을 한방에 요청 (네트워크 대폭 절약)
                 const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
                     headers: WIKI_HEADERS,
                     params: {
                         action: "query",
-                        titles: famousCandidates.join('|'),
-                        prop: "extracts",
+                        titles: filteredCandidates.map(c => c.title).join('|'),
+                        prop: "extracts|pageimages|images",
                         exintro: true,
                         explaintext: true,
+                        pithumbsize: 600,
+                        imlimit: 20,
                         format: "json",
                         origin: "*"
                     }
@@ -380,129 +412,90 @@ async function fillCache() {
 
                 const pages = Object.values(detailRes.data.query?.pages || {});
                 
-                // 유명인 5명 병렬 검증
-                const legacyPromises = pages.map(async (pageData) => {
-                    try {
-                        if (!pageData || !pageData.extract || pageData.extract.length < 30) return null;
+                let imageToCandidateMap = {};
+                let imageTitlesToFetch = [];
+                let tempCandidateData = {};
 
-                        const imgUrl = await getStableMainImage(pageData.title);
-                        if (!imgUrl) return null;
-                        
-                        const isStable = await validateImage(imgUrl);
-                        if (!isStable) return null;
+                for (const pageData of pages) {
+                    if (!pageData || !pageData.extract || pageData.extract.length < 100) continue;
+                    if (/(대학교수|명예교수|석좌교수|교수|교육자)/.test(pageData.extract)) continue;
 
-                        return {
+                    const aliases = makeNameAliases(pageData.title);
+
+                    // 루트 A: 메인 대표 썸네일이 바로 존재하고 필터를 통과하는 경우
+                    if (pageData.thumbnail?.source && isValidImageUrl(pageData.thumbnail.source) && isHumanPhoto(pageData.pageimage || "", aliases)) {
+                        tempCandidateData[pageData.title] = {
                             name: pageData.title,
-                            image: imgUrl,
+                            image: pageData.thumbnail.source,
                             hint: createMaskedHint(pageData.title, pageData.extract),
                             description: pageData.extract
                         };
-                    } catch (e) {
-                        return null;
+                        continue;
                     }
-                });
 
-                const legacyResults = await Promise.all(legacyPromises);
-                for (const item of legacyResults) {
-                    if (item && QUIZ_CACHE.length < CACHE_SIZE) {
-                        if (QUIZ_CACHE.some(cached => cached.name === item.name)) continue;
-                        QUIZ_CACHE.push(item);
+                    // 루트 B: 메인 썸네일이 없으면, 내부 이미지 목록에서 깃털/아이콘 빼고 진짜 사진 필터링
+                    const imgs = pageData.images || [];
+                    const validImgs = imgs.filter(i => isHumanPhoto(i.title, aliases));
+
+                    if (validImgs.length > 0) {
+                        const targetImgTitle = validImgs[0].title;
+                        imageTitlesToFetch.push(targetImgTitle);
+                        imageToCandidateMap[targetImgTitle] = {
+                            title: pageData.title,
+                            extract: pageData.extract
+                        };
                     }
                 }
-            }
 
-            // -------------------------------------------------------
-            // 2. 랜덤 연도 탐색 (★ 15명 풀확보 + Promise.all 일괄 병렬 스캔)
-            // -------------------------------------------------------
-            let randomSearchAttempts = 0;
-
-            while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 3) {
-                const year = Math.floor(Math.random() * (2000 - 500 + 1)) + 500;
-
-                const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                    headers: WIKI_HEADERS,
-                    params: {
-                        action: "query",
-                        list: "categorymembers",
-                        cmtitle: `분류:${year}년_출생`,
-                        cmlimit: 80, // 15명을 안정적으로 필터링하기 위해 80명 로드
-                        cmtype: "page",
-                        format: "json",
-                        origin: "*"
-                    }
-                });
-
-                const candidates = listRes.data.query?.categorymembers || [];
-
-                const filteredCandidates = candidates
-                      .filter(cand => {
-                           if (cand.title.includes(":")) return false; 
-        
-                           // ⚡ [속도 최적화 1] 무의미하게 API 쏘기 전에 이미 캐시에 있거나 나온 사람은 미리 탈락시킵니다.
-                           if (QUIZ_CACHE.some(c => c.name === cand.title) || LAST_PLAYED.includes(cand.title)) return false;
-
-                           return !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title);
-                         })
-                        .sort(() => Math.random() - 0.5)
-                        .slice(0, 5); // ⚡ [속도 최적화 2] 15명 -> 6명으로
-
-                if (filteredCandidates.length > 0) {
-                    const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+                // 4) 루트 B에 걸린 후보 이미지들의 실제 다운로드 URL도 단 한번의 배치 요청으로 싹 다 받아오기
+                if (imageTitlesToFetch.length > 0) {
+                    const infoRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
                         headers: WIKI_HEADERS,
                         params: {
                             action: "query",
-                            titles: filteredCandidates.map(c => c.title).join('|'),
-                            prop: "extracts",
-                            exintro: true,
-                            explaintext: true,
+                            titles: imageTitlesToFetch.slice(0, 30).join('|'), // 30개 안전 슬라이스
+                            prop: "imageinfo",
+                            iiprop: "url",
                             format: "json",
                             origin: "*"
                         }
                     });
 
-                    const pages = Object.values(detailRes.data.query?.pages || {});
-                    
-                    // ★ 핵심: 15명의 본문 길이 및 이미지 존재 여부를 한 명씩 기다리지 않고 동시에(In Parallel) 검증
-                    const validationPromises = pages.map(async (pageData) => {
-                        try {
-                            if (!pageData || !pageData.extract || pageData.extract.length < 300) return null;
-                            
-                            const extract = pageData.extract;
-
-                            if (/(대학교수|명예교수|석좌교수|교수|교육자)/.test(extract)) {
-                            return null;
-                            }
-
-                            const imgUrl = await getStableMainImage(pageData.title);
-                            if (!imgUrl) return null;
-                            
-                            const isStable = await validateImage(imgUrl);
-                            if (!isStable) return null;
-
-                            return {
-                                name: pageData.title,
-                                image: imgUrl,
-                                hint: createMaskedHint(pageData.title, pageData.extract),
-                                description: pageData.extract
+                    const infoPages = Object.values(infoRes.data.query?.pages || {});
+                    for (const ip of infoPages) {
+                        const url = ip.imageinfo?.[0]?.url;
+                        const mapItem = imageToCandidateMap[ip.title];
+                        if (url && isValidImageUrl(url) && mapItem) {
+                            tempCandidateData[mapItem.title] = {
+                                name: mapItem.title,
+                                image: url,
+                                hint: createMaskedHint(mapItem.title, mapItem.extract),
+                                description: mapItem.extract
                             };
-                        } catch (e) {
-                            return null;
-                        }
-                    });
-
-                    const results = await Promise.all(validationPromises);
-                    
-                    // 성공적으로 통과한 인물들만 골라서 캐시 저장소에 push
-                    for (const item of results) {
-                        if (item && QUIZ_CACHE.length < CACHE_SIZE) {
-                            if (QUIZ_CACHE.some(cached => cached.name === item.name)) continue;
-                            QUIZ_CACHE.push(item);
                         }
                     }
                 }
 
-                randomSearchAttempts++;
+                // 5) 수집 완료된 임시 데이터들 최종 유효성 검사 후 진짜 캐시 배열에 투하
+                for (const item of Object.values(tempCandidateData)) {
+                    if (QUIZ_CACHE.length < CACHE_SIZE) {
+                        if (QUIZ_CACHE.some(cached => cached.name === item.name)) continue;
+                        
+                        // 이미지가 여전히 살아있는 링크인지 핑 때려보기
+                        const isStable = await validateImage(item.image);
+                        if (isStable) {
+                            QUIZ_CACHE.push(item);
+                            console.log(`   [캐시 추가 성공] 👤 ${item.name}`);
+                        }
+                    }
+                }
             }
+        } catch (error) {
+            console.error("❌ fillCache 도중 에러 발생:", error.message);
+        }
+
+        randomSearchAttempts++;
+    }                  
         } catch (e) {
             console.error("채굴 중 오류:", e.message);
         } finally {
