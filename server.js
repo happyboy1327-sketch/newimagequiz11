@@ -33,8 +33,6 @@ process.on('uncaughtException', (err) => {
 
 // --- 설정 ---
 const CACHE_SIZE = 25;        
-const VALIDATION_TRY = 2;    
-
 let QUIZ_CACHE = [];
 let LAST_PLAYED = [];
 let isCaching = false;
@@ -81,13 +79,12 @@ function isValidImageUrl(url) {
 }
 
 // ===============================
-// 3) 사람 사진 판별기 (유적지/기념비 철저 박멸)
+// 3) 사람 사진 판별기 (유적지/충렬비 철저 차단)
 // ===============================
 function isHumanPhoto(filename, aliases) {
     if (!filename || typeof filename !== "string") return false;
     const n = filename.toLowerCase();
 
-    // 🔥 한국어 유적지, 비석 관련 블랙리스트 대폭 강화 (충렬비, 사당 등 원천 차단)
     const BLACKLIST = [
         "svg", "gif", "coat of arms", "coat_of_arms", "coa", "stone", "tomb", "_tomb",
         "arms", "emblem", "insignia", "flag", "standard", "banner", "seal", "stamp",
@@ -114,30 +111,6 @@ function isHumanPhoto(filename, aliases) {
     }
 
     return true; 
-}
-
-// --- 이미지 URL 안정성 체크 ---
-async function checkUrlStability(url) {
-    if (!url) return false;
-    try {
-        const res = await axios.head(url, { headers: WIKI_HEADERS, timeout: 800 });
-        return res.status === 200;
-    } catch (e) {
-        try {
-            const res = await axios.get(url, { headers: WIKI_HEADERS, timeout: 800, responseType: "stream" });
-            return res.status === 200;
-        } catch(err) {
-            return false; 
-        }
-    }
-}
-
-async function validateImage(url) {
-    for (let i = 0; i < VALIDATION_TRY; i++) {
-        if (await checkUrlStability(url)) return true;
-        if (i < VALIDATION_TRY - 1) await new Promise(resolve => setTimeout(resolve, 200));
-    }
-    return false;
 }
 
 // =======================================================
@@ -186,18 +159,20 @@ function createMaskedHint(title, extract) {
 }
 
 // =======================================================
-// 5) 퀴즈 캐시 충전 함수 (백그라운드 전용 최적화)
+// 5) 퀴즈 캐시 충전 함수 (실시간 푸시 + 초고속 갱신 버전)
 // =======================================================
 async function fillCache() {
     if (isCaching) return;
     if (QUIZ_CACHE.length >= CACHE_SIZE) return;
 
     isCaching = true;
-    console.log(`🔄 퀴즈 캐시 충전 시작... (현재 캐시량: ${QUIZ_CACHE.length}/${CACHE_SIZE})`);
+    console.log(`🔄 캐시 충전 가동 (현재 상태: ${QUIZ_CACHE.length}/${CACHE_SIZE})`);
     let randomSearchAttempts = 0;
 
     try {
-        while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 5) {
+        while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 8) {
+            if (QUIZ_CACHE.length >= CACHE_SIZE) break;
+
             const year = Math.floor(Math.random() * (2000 - 500 + 1)) + 500;
 
             const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
@@ -206,7 +181,7 @@ async function fillCache() {
                     action: "query",
                     list: "categorymembers",
                     cmtitle: `분류:${year}년_출생`,
-                    cmlimit: 80, 
+                    cmlimit: 60, 
                     cmtype: "page",
                     format: "json",
                     origin: "*"
@@ -222,7 +197,7 @@ async function fillCache() {
                     return !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title);
                 })
                 .sort(() => Math.random() - 0.5)
-                .slice(0, 25); 
+                .slice(0, 15); 
 
             if (filteredCandidates.length > 0) {
                 const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
@@ -239,16 +214,19 @@ async function fillCache() {
                 });
 
                 const pages = Object.values(detailRes.data.query?.pages || {});
-                let tempCandidateList = [];
 
                 for (const pageData of pages) {
+                    if (QUIZ_CACHE.length >= CACHE_SIZE) break; // 다 차면 즉시 루프 아웃
                     if (!pageData || !pageData.extract || pageData.extract.length < 100) continue;
                     if (/(대학교수|명예교수|석좌교수|교수|교육자)/.test(pageData.extract)) continue;
 
                     const aliases = makeNameAliases(pageData.title);
 
+                    // 위키백과 CDN 썸네일 검증 (느려터진 Axios 검사부 싹 날려버림)
                     if (pageData.thumbnail?.source && isValidImageUrl(pageData.thumbnail.source) && isHumanPhoto(pageData.pageimage || "", aliases)) {
                         
+                        if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) continue;
+
                         let rawText = pageData.extract;
                         
                         const cutIndex = rawText.search(/==\s*(각주|같이 보기|참고 문헌|외부 링크)\s*==/i);
@@ -256,7 +234,7 @@ async function fillCache() {
                             rawText = rawText.substring(0, cutIndex);
                         }
                         
-                        rawText = rawText.substring(0, 1500);
+                        rawText = rawText.substring(0, 1200);
                         rawText = rawText.replace(/=+\s*.*?\s*=+/g, " ").replace(/\s+/g, " ").trim();
 
                         if (rawText.length < 100) continue;
@@ -266,61 +244,47 @@ async function fillCache() {
                             cleanDescription = cleanDescription.substring(0, 1000) + "...";
                         }
 
-                        tempCandidateList.push({
+                        // 🔥 [핵심 변경] 대기 없이 필터 통과하는 족족 캐시에 실시간 다이렉트 푸시!!
+                        QUIZ_CACHE.push({
                             name: pageData.title,
                             image: pageData.thumbnail.source,
                             hint: createMaskedHint(pageData.title, rawText), 
                             description: cleanDescription 
                         });
-                    }
-                }
-
-                // 이미지 안정성 동시 병렬 검사
-                const validatedResults = await Promise.all(
-                    tempCandidateList.map(async (item) => {
-                        const isStable = await validateImage(item.image);
-                        return isStable ? item : null;
-                    })
-                );
-
-                for (const item of validatedResults) {
-                    if (item && QUIZ_CACHE.length < CACHE_SIZE) {
-                        if (QUIZ_CACHE.some(cached => cached.name === item.name)) continue;
-                        QUIZ_CACHE.push(item);
-                        console.log(`   [캐시 추가 성공] 👤 ${item.name}`);
+                        console.log(`   [실시간 캐시 적재 완료] 👤 ${pageData.title}`);
                     }
                 }
             }
             randomSearchAttempts++;
         }
     } catch (e) {
-        console.error("❌ 채굴 중 오류 발생:", e.message);
+        console.error("❌ 캐시 채굴 중 에러:", e.message);
     } finally {
         isCaching = false;
-        console.log(`✅ 캐시 충전 완료. 최종 캐시량: ${QUIZ_CACHE.length}/${CACHE_SIZE}`);
+        console.log(`✅ 현재 최종 캐시량: ${QUIZ_CACHE.length}/${CACHE_SIZE}`);
         
-        // 🔥 형이 말한 핵심 조건: 유저가 퀴즈를 풀던 도중이든 언제든 캐시가 5개 이하로 떨어져 있으면 3초 뒤 자동 리필 작동!
+        // 형이 말한 핵심 조건: 비동기 사이클이 끝났을 때도 5개 이하면 2초 뒤 자동 리필 재가동
         if (QUIZ_CACHE.length <= 5) {
-            setTimeout(fillCache, 3000);
+            setTimeout(fillCache, 2000);
         }
     }
 }
 
-// 최초 구동 시 캐시 미리 충전
+// 초기 기동 시 자동 충전 시작
 fillCache();
 
 // --- API ---
 app.get("/api/quiz", async (req, res) => {
   try {
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`; 
-    console.log(`[Request] New request: ${requestId}`);
+    console.log(`[Request] 요청 들어옴: ${requestId}`);
 
-    // 🔥 초고속 응답 최적화: 캐시가 완전히 0개라면 백그라운드 구동 후, 딱 1개라도 충전될 때까지만 0.5초 단위로 감시하다 즉시 반환
+    // 만약 캐시가 완전히 말라버렸을 경우, 백그라운드 구동 후 첫 1개가 꽂힐 때까지만 아주 잠깐 폴링 대기 (실시간 푸시라 눈 깜짝할 새 끝남)
     if (QUIZ_CACHE.length === 0) {
         fillCache(); 
         let attempts = 0;
-        while (QUIZ_CACHE.length === 0 && attempts < 14) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+        while (QUIZ_CACHE.length === 0 && attempts < 8) {
+            await new Promise(resolve => setTimeout(resolve, 300));
             attempts++;
         }
     }
@@ -328,10 +292,10 @@ app.get("/api/quiz", async (req, res) => {
     const item = QUIZ_CACHE.shift();
   
     if (!item) {
-        return res.status(503).json({ error: "데이터 준비 중입니다. 잠시 후 새로고침 해주세요.", requestId });
+        return res.status(503).json({ error: "데이터를 불러오는 중입니다. 잠시 후 새로고침 해주세요.", requestId });
     }
 
-    // 🔥 형이 말한 핵심 조건: 소비되어서 캐시가 5개 이하로 부족해지면 자동으로 백그라운드 충전 가동!
+    // 🔥 형이 말한 핵심 자동 리필: 캐시 꺼내 간 뒤 5개 이하로 떨어지면 백그라운드에서 즉시 조용히 자동 충전 시작!
     if (QUIZ_CACHE.length <= 5) {
         fillCache(); 
     }
@@ -346,9 +310,9 @@ app.get("/api/quiz", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("API 퀴즈 처리 중 심각한 오류 발생:", error);
+    console.error("API 오류 발생:", error);
     const errorId = `err_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`; 
-    res.status(500).json({ error: "서버 내부 오류로 퀴즈를 불러올 수 없습니다.", errorId });
+    res.status(500).json({ error: "서버 오류 발생", errorId });
   }
 });
 
