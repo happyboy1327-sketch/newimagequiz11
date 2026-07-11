@@ -26,7 +26,7 @@ process.on('unhandledRejection', (reason) => console.error('Unhandled Rejection:
 process.on('uncaughtException', (err) => console.error('Uncaught Exception:', err));
 
 // --- 설정 ---
-const CACHE_SIZE = 25;        
+const CACHE_SIZE = 40;        
 let QUIZ_CACHE = [];
 let LAST_PLAYED = [];
 let isCaching = false;
@@ -190,7 +190,7 @@ async function fillCache() {
                         titles: targetTitles.join('|'),
                         prop: "extracts|pageimages", 
                         explaintext: true,
-                        pithumbsize: 600,
+                        pithumbsize: 400,
                         format: "json",
                         origin: "*"
                     }
@@ -261,7 +261,7 @@ app.get("/api/quiz", async (req, res) => {
     }
 
     // 캐시가 5개 이하로 떨어지면 백그라운드 자동 충전
-    if (QUIZ_CACHE.length <= 5) fillCache(); 
+    if (QUIZ_CACHE.length <= 18) fillCache(); 
 
     LAST_PLAYED.push(item.name);
     if (LAST_PLAYED.length > 15) LAST_PLAYED.shift(); 
