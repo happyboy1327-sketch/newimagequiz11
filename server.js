@@ -80,9 +80,9 @@ function isHumanPhoto(filename, aliases) {
         "svg", "gif", "coat of arms", "coat_of_arms", "coa", "stone", "tomb", "_tomb",
         "arms", "emblem", "insignia", "flag", "standard", "banner", "seal", "stamp",
         "icon", "logo", "symbol", "map", "chart", "diagram", "signature", "sign",
-        "grave", "monument", "book", "cover", "coin", "currency", "memorial", "plaque", 
+        "grave", "monument", "book", "cover", "coin", "currency", "memorial", "plaque", "grave", 
         "calligraphy", "handwriting", "manuscript", "document", "letter", "rubbing",
-        "필적", "글씨", "서체", "문서", "편지", "탁본", "서간", "의궤", "집자", "현판", "비석",
+        "필적", "글씨", "서체", "문서", "편지", "탁본", "서간", "의궤", "집자", "현판", "비석", "묘", 
         "충렬비", "기념비", "비각", "정려각", "사당", "전경", "생가", "현충사", "사적비", "정려", "탑", "릉"
     ];
 
