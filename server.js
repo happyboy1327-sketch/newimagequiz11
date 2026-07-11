@@ -235,7 +235,7 @@ async function fillCache() {
     isCaching = false;
     console.log(`✅ 현재 최종 캐시량: ${QUIZ_CACHE.length}/${CACHE_SIZE}`);
     
-    if (QUIZ_CACHE.length <= 5) setTimeout(fillCache, 2000);
+    if (QUIZ_CACHE.length <= 18) setTimeout(fillCache, 2000);
 }
 
 fillCache();
