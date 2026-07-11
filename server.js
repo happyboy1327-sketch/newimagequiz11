@@ -45,7 +45,7 @@ const LEGACY_VIP_LIST = [
     "모차르트", "루트비히 판 베토벤", "파블로 피카소", "모네", "나폴레옹 보나파르트", "빈센트 반 고흐",
     "알베르트 아인슈타인", "토머스 에디슨", "에이브러햄 링컨", "마하트마 간디", "마리 퀴리",
     "레오나르도 다 빈치", "윌리엄 셰익스피어", "아이작 뉴턴", "갈릴레오 갈릴레이", "니콜라 테슬라", 
-    "헬렌 켈러", "잔 다르크", "조지 워싱턴", "크리스토퍼 콜럼버스", "찰스 다윈", "넬슨 만델라", 
+    "헬렌 켈러", "잔 다르크", "조지 워싱턴", "크리스토퍼 콜럼버스", "찰스 다윈", "넬슨 만델라", "소크라테스", "아리스토텔레스", "플라톤", "공자", "맹자",
     "마틴 루터 킹 주니어", "어니스트 헤밍웨이", "안네 프랑크", "쇼팽", "클레오파트라 7세",
     "알렉산드로스 대왕", "율리우스 카이사르", "마더 테레사", "체 게바라", "오드리 헵번"
 ];
@@ -226,17 +226,25 @@ async function fillCache() {
                     }
                 }
             }
-        } catch (e) {
-            console.warn(`⚠️ 검색 시도 중 에러 (재시도 진행 중): ${e.message}`);
-            continue; 
-        }
-    }
+                } catch (e) {
+            console.error("채굴 중 오류:", e.message);
+        } finally {
+            isCaching = false;
 
-    isCaching = false;
-    console.log(`✅ 현재 최종 캐시량: ${QUIZ_CACHE.length}/${CACHE_SIZE}`);
-    
-    if (QUIZ_CACHE.length <= 5) setTimeout(fillCache, 2000);
-}
+            // 최근 30초 이내에 유저가 요청을 보냈을 때만 백그라운드 타이머 작동
+            const isPageActive = Date.now() - LAST_ACTIVE < 30000;
+
+            if (QUIZ_CACHE.length < CACHE_SIZE && isPageActive) {
+                // 🔥 [핵심: 긴급 가속 페달] 
+                // 캐시가 5개 미만으로 떨어지면 1.5초씩 쉴 여유가 없습니다. 
+                // 0.1초(100ms)만 쉬고 곧바로 다음 인물 캐러 출동하게 만듭니다!
+                const nextDelay = QUIZ_CACHE.length < 5 ? 100 : 1500;
+                
+                setTimeout(fillCache, nextDelay); 
+            }
+            resolve();
+        }
+
 
 fillCache();
 
@@ -260,8 +268,7 @@ app.get("/api/quiz", async (req, res) => {
         return res.status(503).json({ error: "데이터 준비 중입니다. 잠시 후 새로고침 해주세요.", requestId });
     }
 
-    // 캐시가 5개 이하로 떨어지면 백그라운드 자동 충전
-    if (QUIZ_CACHE.length <= 5) fillCache(); 
+    //; 
 
     LAST_PLAYED.push(item.name);
     if (LAST_PLAYED.length > 15) LAST_PLAYED.shift(); 
