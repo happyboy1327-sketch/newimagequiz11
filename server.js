@@ -235,7 +235,7 @@ async function fillCache() {
     isCaching = false;
     console.log(`✅ 현재 최종 캐시량: ${QUIZ_CACHE.length}/${CACHE_SIZE}`);
     
-    if (QUIZ_CACHE.length <= 18) setTimeout(fillCache, 2000);
+    if (QUIZ_CACHE.length <= 22) setTimeout(fillCache, 2000);
 }
 
 fillCache();
@@ -261,7 +261,7 @@ app.get("/api/quiz", async (req, res) => {
     }
 
     // 캐시가 5개 이하로 떨어지면 백그라운드 자동 충전
-    if (QUIZ_CACHE.length <= 18) fillCache(); 
+    if (QUIZ_CACHE.length <= 22) fillCache(); 
 
     LAST_PLAYED.push(item.name);
     if (LAST_PLAYED.length > 15) LAST_PLAYED.shift(); 
