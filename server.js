@@ -151,11 +151,11 @@ async function fillCache() {
 
         try {
             // 🔥 30% 확률로 레거시 위인 출현, 70%는 사진 빵빵한 근현대 인물
-            const isLegacyTurn = Math.random() < 0.4;
+            const isLegacyTurn = Math.random() < 0.6;
             let targetTitles = [];
 
             if (isLegacyTurn) {
-                const shuffledVips = LEGACY_VIP_LIST.sort(() => Math.random() - 0.5).slice(0, 15);
+                const shuffledVips = LEGACY_VIP_LIST.sort(() => Math.random() - 0.5).slice(0, 16);
                 targetTitles = shuffledVips.filter(name => !QUIZ_CACHE.some(c => c.name.includes(name)) && !LAST_PLAYED.some(lp => lp.includes(name)));
             } else {
                 // 무한 렉 방지: 랜덤 연도를 무조건 사진이 있는 1900년~2000년 사이로 한정!!
