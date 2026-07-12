@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import axios from "axios";
+import https from "https";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -13,7 +14,7 @@ app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '1; mode=block');
-    
+
     if (req.path === '/api/quiz') {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     } else {
@@ -25,12 +26,20 @@ app.use((req, res, next) => {
 process.on('unhandledRejection', (reason) => console.error('Unhandled Rejection:', reason));
 process.on('uncaughtException', (err) => console.error('Uncaught Exception:', err));
 
-// --- 설정 ---
-const CACHE_SIZE = 40;        
-let QUIZ_CACHE = [];
+// ─────────────────────────────────────────────────────────
+// ⚠️ Vercel 서버리스 관련 설계 노트
+// - 이전 버전은 QUIZ_CACHE/fillCache로 "미리 창고를 채워두는" 구조였는데,
+//   Vercel 서버리스 함수는 응답을 보낸 뒤 그대로 얼어붙어서 setTimeout 재귀 호출이
+//   신뢰성 있게 이어지지 않음 → 캐시가 항상 비어있는 것과 마찬가지 상황이 됨.
+// - 그래서 이번 버전은 "요청 하나가 들어오면 그 안에서 5개를 동시에 위키에 쏘고
+//   제일 먼저 성공한 걸 즉시 반환"하는 방식으로 바꿈 (Promise.any 레이싱).
+// - LAST_PLAYED는 같은 웜(warm) 인스턴스가 재사용될 때만 유효한 best-effort
+//   중복 방지임. 완벽한 중복 방지가 필요하면 프론트에서 최근 본 이름들을
+//   ?exclude=이름1,이름2 형태로 넘겨주는 방식을 추가하는 게 안전함.
+// ─────────────────────────────────────────────────────────
+
 let LAST_PLAYED = [];
-let isCaching = false;
-import https from "https";
+
 const keepAliveAgent = new https.Agent({ keepAlive: true, maxSockets: 20 });
 
 const WIKI_AXIOS_CONFIG = {
@@ -38,18 +47,17 @@ const WIKI_AXIOS_CONFIG = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json'
     },
-    timeout: 6500,
+    timeout: 4000, // 레이싱 방식이라 하나가 느리면 다른 게 이기게, 타임아웃을 짧게
     httpsAgent: keepAliveAgent
 };
 
-
 // 🔥 레거시 유명인물 (역사적 레전드 위인) 전용 VIP 풀
 const LEGACY_VIP_LIST = [
-    "세종대왕", "이순신", "안중근", "김구", "유관순", "윤동주", "윤봉길", "신사임당", "이황", "광개토대왕", "장수왕", "장영실", 
-    "모차르트", "베토벤", "파블로 피카소", "모네", "나폴레옹 보나파르트", "빈센트 반 고흐", "소크라테스", "플라톤", "아리스토텔레스", "공자", 
-    "알베르트 아인슈타인", "토머스 에디슨", "에이브러햄 링컨", "마하트마 간디", "마리 퀴리", "맹자", 
-    "레오나르도 다 빈치", "윌리엄 셰익스피어", "아이작 뉴턴", "갈릴레오 갈릴레이", "니콜라 테슬라", 
-    "헬렌 켈러", "잔 다르크", "조지 워싱턴", "크리스토퍼 콜럼버스", "찰스 다윈", "넬슨 만델라", 
+    "세종대왕", "이순신", "안중근", "김구", "유관순", "윤동주", "윤봉길", "신사임당", "이황", "광개토대왕", "장수왕", "장영실",
+    "모차르트", "베토벤", "파블로 피카소", "모네", "나폴레옹 보나파르트", "빈센트 반 고흐", "소크라테스", "플라톤", "아리스토텔레스", "공자",
+    "알베르트 아인슈타인", "토머스 에디슨", "에이브러햄 링컨", "마하트마 간디", "마리 퀴리", "맹자",
+    "레오나르도 다 빈치", "윌리엄 셰익스피어", "아이작 뉴턴", "갈릴레오 갈릴레이", "니콜라 테슬라",
+    "헬렌 켈러", "잔 다르크", "조지 워싱턴", "크리스토퍼 콜럼버스", "찰스 다윈", "넬슨 만델라",
     "마틴 루터 킹 주니어", "어니스트 헤밍웨이", "안네 프랑크", "쇼팽", "클레오파트라 7세",
     "알렉산드로스 대왕", "율리우스 카이사르", "마더 테레사", "체 게바라", "오드리 헵번"
 ];
@@ -79,21 +87,20 @@ function isHumanPhoto(filename, aliases) {
     if (!filename || typeof filename !== "string") return false;
     const n = filename.toLowerCase();
 
-    // 동상(위인들)은 허용하되, 글씨만 있는 비석/충렬비 등은 빡세게 컷
     const BLACKLIST = [
         "svg", "gif", "coat of arms", "coat_of_arms", "coa", "stone", "tomb", "_tomb",
         "arms", "emblem", "insignia", "flag", "standard", "banner", "seal", "stamp",
         "icon", "logo", "symbol", "map", "chart", "diagram", "signature", "sign",
-        "grave", "monument", "book", "cover", "coin", "currency", "memorial", "plaque", "grave", 
+        "grave", "monument", "book", "cover", "coin", "currency", "memorial", "plaque", "grave",
         "calligraphy", "handwriting", "manuscript", "document", "letter", "rubbing",
-        "필적", "글씨", "서체", "문서", "편지", "탁본", "서간", "의궤", "집자", "현판", "비석", "묘", 
+        "필적", "글씨", "서체", "문서", "편지", "탁본", "서간", "의궤", "집자", "현판", "비석", "묘",
         "충렬비", "기념비", "비각", "정려각", "사당", "전경", "생가", "현충사", "사적비", "정려", "탑", "릉"
     ];
 
     for (const badWord of BLACKLIST) {
         if (n.includes(badWord)) return false;
     }
-    
+
     if (/(portrait|photo|face|profile|bust|painting|oil|canvas|illustration|hyakunin|statue)/i.test(n)) return true;
 
     for (const a of aliases) {
@@ -103,13 +110,13 @@ function isHumanPhoto(filename, aliases) {
         if (cleanFile.includes(cleanName)) return true;
     }
 
-    return true; 
+    return true;
 }
 
 function createMaskedHint(title, extract) {
     let hintText = extract.substring(0, 350);
     const cleanTitle = title.trim();
-    
+
     const parenMatch = cleanTitle.match(/\((.*?)\)/);
     if (parenMatch) {
         parenMatch[1].split(/[\s\.\,\-]+/).forEach(part => {
@@ -117,12 +124,12 @@ function createMaskedHint(title, extract) {
         });
     }
 
-    const baseName = cleanTitle.replace(/\s*\(.*?\)\s*/g, ''); 
+    const baseName = cleanTitle.replace(/\s*\(.*?\)\s*/g, '');
     baseName.split(' ').forEach(word => {
         if (word.length >= 2) {
             hintText = hintText.replace(new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), "OOO");
-            if (word.length >= 3 && !/\s/.test(word)) { 
-                for(let i = 0; i <= word.length - 2; i++) {
+            if (word.length >= 3 && !/\s/.test(word)) {
+                for (let i = 0; i <= word.length - 2; i++) {
                     hintText = hintText.replace(new RegExp(word.substring(i, i + 2).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), "OOO");
                 }
             }
@@ -131,15 +138,16 @@ function createMaskedHint(title, extract) {
 
     hintText = hintText.replace(/([a-zA-Z\d\.\,\:\-\s'\[\]\/\(\)ˌˈɛɔ]+)/g, (match, p1) => {
         const cleanedMatch = p1.trim();
-        return (cleanedMatch.length > 1 && /[a-zA-Z]/.test(cleanedMatch)) ? "OOO" : match; 
+        return (cleanedMatch.length > 1 && /[a-zA-Z]/.test(cleanedMatch)) ? "OOO" : match;
     });
 
     return hintText.substring(0, 130).trim() + "...";
 }
 
-
-
-// 1. 위키백과를 한 번 찔러서 유효한 인물 '배열'을 반환하는 핵심 단독 엔진
+// ─────────────────────────────────────────────────────────
+// 위키백과를 한 번 찔러서 유효한 인물 배열을 반환하는 핵심 엔진
+// 비레거시 경로는 "제목만 저렴하게 조회 → 필터링 → 소수만 상세조회" 2단계로 최적화
+// ─────────────────────────────────────────────────────────
 async function scoutWikipedia(forbiddenNames, forceLegacy = false) {
     try {
         const isLegacyTurn = forceLegacy || (Math.random() < 0.6);
@@ -157,44 +165,44 @@ async function scoutWikipedia(forbiddenNames, forceLegacy = false) {
             });
             pages = Object.values(detailRes.data.query?.pages || {});
         } else {
-    const year = Math.random() < 0.5 
-        ? Math.floor(Math.random() * (2000 - 1900 + 1)) + 1900  
-        : Math.floor(Math.random() * (1899 - 900 + 1)) + 900;    
+            const year = Math.random() < 0.5
+                ? Math.floor(Math.random() * (2000 - 1900 + 1)) + 1900
+                : Math.floor(Math.random() * (1899 - 900 + 1)) + 900;
 
-    isHistorical = year < 1900;
+            isHistorical = year < 1900;
 
-    // 1단계: 제목만 저렴하게 조회 (extract 없음)
-    const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-        ...WIKI_AXIOS_CONFIG,
-        params: {
-            action: "query", generator: "categorymembers", gcmtitle: `분류:${year}년_출생`,
-            gcmlimit: 40, gcmtype: "page", format: "json", origin: "*"
+            // 1단계: extract 없이 제목만 저렴하게 조회
+            const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+                ...WIKI_AXIOS_CONFIG,
+                params: {
+                    action: "query", generator: "categorymembers", gcmtitle: `분류:${year}년_출생`,
+                    gcmlimit: 40, gcmtype: "page", format: "json", origin: "*"
+                }
+            });
+
+            let candidates = Object.values(listRes.data.query?.pages || {})
+                .filter(p => !p.title.includes(":") && !forbiddenNames.has(p.title));
+
+            if (!isHistorical) {
+                candidates = candidates.filter(p =>
+                    !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(p.title)
+                );
+            }
+
+            candidates = candidates.slice(0, 12); // 필터링 통과한 소수만 상세 조회
+            if (candidates.length === 0) return [];
+
+            // 2단계: 살아남은 후보만 extract/이미지 포함 상세 조회
+            const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+                ...WIKI_AXIOS_CONFIG,
+                params: {
+                    action: "query", titles: candidates.map(c => c.title).join('|'),
+                    prop: "extracts|pageimages", explaintext: true, pithumbsize: 400,
+                    format: "json", origin: "*"
+                }
+            });
+            pages = Object.values(detailRes.data.query?.pages || {});
         }
-    });
-
-    let candidates = Object.values(listRes.data.query?.pages || {})
-        .filter(page => !page.title.includes(":") && !forbiddenNames.has(page.title));
-
-    if (!isHistorical) {
-        candidates = candidates.filter(page =>
-            !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(page.title)
-        );
-    }
-
-    candidates = candidates.slice(0, 12); // 살아남은 것만 상세 조회
-    if (candidates.length === 0) return [];
-
-    // 2단계: 필터링 통과한 소수만 extract/이미지 요청
-    const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-        ...WIKI_AXIOS_CONFIG,
-        params: {
-            action: "query", titles: candidates.map(c => c.title).join('|'),
-            prop: "extracts|pageimages", explaintext: true, pithumbsize: 400,
-            format: "json", origin: "*"
-        }
-    });
-    pages = Object.values(detailRes.data.query?.pages || {});
-}
 
         const processTasks = pages.map(async (pageData) => {
             if (!pageData.extract || pageData.extract.length < 100) return null;
@@ -206,7 +214,7 @@ async function scoutWikipedia(forbiddenNames, forceLegacy = false) {
             let rawText = pageData.extract;
             const cutIndex = rawText.search(/==\s*(각주|같이 보기|참고 문헌|외부 링크)\s*==/i);
             if (cutIndex !== -1) rawText = rawText.substring(0, cutIndex);
-            
+
             rawText = rawText.substring(0, 1200).replace(/=+\s*.*?\s*=+/g, " ").replace(/\s+/g, " ").trim();
             if (rawText.length < 100) return null;
 
@@ -216,7 +224,7 @@ async function scoutWikipedia(forbiddenNames, forceLegacy = false) {
                     name: pageData.title,
                     image: pageData.thumbnail.source,
                     hint: createMaskedHint(pageData.title, rawText),
-                    description: rawText.length > 1000 ? rawText.substring(0, 1000) + "..." : rawText 
+                    description: rawText.length > 1000 ? rawText.substring(0, 1000) + "..." : rawText
                 };
             }
             return null;
@@ -229,121 +237,51 @@ async function scoutWikipedia(forbiddenNames, forceLegacy = false) {
     }
 }
 
-// 2. 평상시 백그라운드에서 조용히 대량으로 캐시를 모으는 함수
-async function fillCache() {
-    if (isCaching) return;
-    if (QUIZ_CACHE.length >= CACHE_SIZE) return;
-
-    isCaching = true;
-    const forbiddenNames = new Set([...LAST_PLAYED, ...QUIZ_CACHE.map(q => q.name)]);
-
-    try {
-        // 평상시엔 3발만 동시 발사해 백그라운드 부하 최소화
-        const concurrentAttempts = [
-            scoutWikipedia(forbiddenNames),
-            scoutWikipedia(forbiddenNames),
-            scoutWikipedia(forbiddenNames),
-            scoutWikipedia(forbiddenNames),
-            scoutWikipedia(forbiddenNames)
-        ];
-        const allResults = await Promise.all(concurrentAttempts);
-
-        allResults.flat().forEach(item => {
-    if (item && QUIZ_CACHE.length < CACHE_SIZE) {
-        // 🛑 스냅샷 대신 넣는 순간의 최신 배열 상태를 직접 확인
-        const isDuplicate = LAST_PLAYED.includes(item.name) || QUIZ_CACHE.some(q => q.name === item.name);
-        if (!isDuplicate) {
-            QUIZ_CACHE.push(item);
-        }
-    }
-});
-
-    } catch (err) {
-        console.error("백그라운드 캐싱 에러:", err);
-    } finally {
-        isCaching = false;
-        if (QUIZ_CACHE.length < CACHE_SIZE) {
-            setTimeout(fillCache, 1500);
-        }
-    }
-}
-
 app.get("/api/quiz", async (req, res) => {
-    try {
-        const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-        const forbiddenNames = new Set([...LAST_PLAYED, ...QUIZ_CACHE.map(q => q.name)]);
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 
-        // [경로 A] 창고에 물건이 존재하면? 0초 만에 낚아채서 즉시 반환
-        if (QUIZ_CACHE.length > 0) {
-            const item = QUIZ_CACHE.shift();
-            
-            LAST_PLAYED.push(item.name);
-            if (LAST_PLAYED.length > 15) LAST_PLAYED.shift();
-            
-            // 캐시가 22개 이하로 떨어지면 충전 요청 (두 번째 블록 조건 적용)
-            if (QUIZ_CACHE.length <= 30) fillCache(); 
-            return res.json({ ...item, imageUrl: item.image, requestId });
+    try {
+        const forbiddenNames = new Set(LAST_PLAYED);
+        // 프론트에서 최근 본 이름들을 넘겨주면 서버리스 콜드스타트로 인한
+        // LAST_PLAYED 초기화 문제를 보완할 수 있음 (선택사항, 없어도 동작함)
+        if (req.query.exclude) {
+            String(req.query.exclude).split(',').forEach(n => {
+                if (n.trim()) forbiddenNames.add(n.trim());
+            });
         }
 
-        // [경로 B] 🚨 비상 상황: 캐시가 0개다! 꼼수 없이 위키백과 정면 돌파 + 레이싱 가동
-        console.warn("🚨 캐시 전멸! 레이싱 엔진 및 백그라운드 충전 동시 가동합니다.");
-        
-        // 백그라운드 일반 충전도 같이 트리거
-        fillCache(); 
+        // 5개를 동시에 위키에 쏘고 제일 먼저 유효한 결과를 낸 놈이 승리
+        const RACER_COUNT = 5;
+        const racers = Array.from({ length: RACER_COUNT }, () =>
+            scoutWikipedia(forbiddenNames).then(items => {
+                const pick = items.find(it => !forbiddenNames.has(it.name));
+                if (!pick) throw new Error("no valid candidate");
+                return pick;
+            })
+        );
 
         let resolvedItem = null;
+        try {
+            // Vercel Hobby 플랜은 함수 실행시간이 10초로 하드캡되어 있고
+            // (vercel.json이 builds 방식이라 maxDuration으로 못 늘림) 콜드스타트
+            // 오버헤드까지 감안해 6.5초에서 끊음
+            resolvedItem = await Promise.any([
+                ...racers,
+                new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 6500))
+            ]);
+        } catch (e) {
+            // 레이서 전원 실패 + 6.5초 타임아웃 → resolvedItem은 null
+        }
 
-const racers = Array.from({ length: 5 }, () =>
-    scoutWikipedia(forbiddenNames, true).then(items => {
-        if (items.length === 0) throw new Error("empty");
-
-        const isDuplicate = LAST_PLAYED.includes(items[0].name) || QUIZ_CACHE.some(q => q.name === items[0].name);
-
-        items.slice(1).forEach(subItem => {
-            if (QUIZ_CACHE.length < CACHE_SIZE) {
-                const isSubDuplicate = LAST_PLAYED.includes(subItem.name) || QUIZ_CACHE.some(q => q.name === subItem.name);
-                if (!isSubDuplicate) QUIZ_CACHE.push(subItem);
-            }
-        });
-
-        if (isDuplicate) throw new Error("duplicate");
-        return items[0];
-    })
-);
-
-try {
-    resolvedItem = await Promise.any([
-        ...racers,
-        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000))
-    ]);
-} catch (e) {
-    // 5개 다 실패하거나 3초 타임아웃 → resolvedItem은 null 그대로
-}
-
-        // 레이싱 엔진이 먼저 물어온 경우
         if (resolvedItem) {
             LAST_PLAYED.push(resolvedItem.name);
             if (LAST_PLAYED.length > 15) LAST_PLAYED.shift();
-            
-            fillCache();
             return res.json({ ...resolvedItem, imageUrl: resolvedItem.image, requestId });
         }
 
-        // 레이싱은 늦었지만 fillCache가 먼저 창고에 채워 넣은 경우 (기존 while 루프의 안전망 역할)
-        if (QUIZ_CACHE.length > 0) {
-            const item = QUIZ_CACHE.shift();
-            
-            LAST_PLAYED.push(item.name);
-            if (LAST_PLAYED.length > 15) LAST_PLAYED.shift();
-            
-            if (QUIZ_CACHE.length <= 22) fillCache();
-            return res.json({ ...item, imageUrl: item.image, requestId });
-        }
-
-        // 둘 다 실패해서 진짜 아무것도 안 나왔을 때의 최종 컷트라인
-        return res.status(503).json({ 
-            error: "데이터 준비 중입니다. 잠시 후 새로고침 해주세요.", 
-            requestId 
+        return res.status(503).json({
+            error: "데이터 준비 중입니다. 잠시 후 새로고침 해주세요.",
+            requestId
         });
 
     } catch (error) {
@@ -355,8 +293,12 @@ try {
 app.use(express.static(path.join(process.cwd(), "public")));
 app.get("/", (req, res) => res.sendFile(path.join(process.cwd(), "public", "index.html")));
 
-// 서버 구동 시 예열
-app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
-    fillCache(); // 서버 켜지자마자 미리 땡겨놓기
-});
+// Vercel 환경에서는 상시 리스닝하지 않고 app을 그대로 export해서
+// @vercel/node가 요청마다 핸들러로 사용하게 함. 로컬 개발 시에만 listen.
+if (!process.env.VERCEL) {
+    app.listen(PORT, () => {
+        console.log(`Server running at http://localhost:${PORT}`);
+    });
+}
+
+export default app;
