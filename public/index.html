@@ -39,7 +39,7 @@
   <div id="timer">15s</div>
   
   <div class="img-box">
-    <img id="person-img" src="" alt="위인 이미지" referrerpolicy="no-referrer">
+    <img id="person-img" alt="위인 이미지" referrerpolicy="no-referrer">
   </div>
   
   <div id="hint">데이터 검증 및 수신 중...</div>
@@ -92,7 +92,7 @@ async function loadQuiz(){
   document.getElementById('hint').textContent = "이미지를 로드 중입니다...";
 
   try {
-    const res = await fetch(`/api/quiz?sessionId=${sessionId}`, {signal});
+      const res = await fetch(`/api/quiz?sessionId=${encodeURIComponent(sessionId)}`, {signal});
     const data = await res.json();
     
     if(token !== requestToken) return;
