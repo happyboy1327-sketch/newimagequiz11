@@ -2,12 +2,10 @@
   "version": 2,
   "functions": {
     "server.js": {
-      "includeFiles": "quiz-db.json"
+      "includeFiles": ["quiz-db.json", "public/**"]
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/server.js" },
-    { "source": "/", "destination": "/public/index.html" },
-    { "source": "/(.*)", "destination": "/public/$1" }
+    { "source": "/(.*)", "destination": "/server.js" }
   ]
 }
