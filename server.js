@@ -66,9 +66,9 @@ app.get("/api/quiz", (req, res) => {
 // 3. [여기 중요] 로컬/Vercel 상관없이 항상 정적 파일과 메인화면을 Express가 직접 서빙함
 app.use(express.static(path.join(process.cwd(), "public")));
 
-app.get("*catchall", (req, res) => {
-    res.sendFile(path.join(process.cwd(), "public", "index.html"));
-});
+if (String(req.url).includes("undefined")) {
+        return res.status(404).send("Not Found");
+}
 
 // 4. 포트 열고 대기하는 listen 기능만 Vercel 환경에서 제외 (Vercel 자체 에러 방지)
 // 3. 로컬 환경에서만 정적 파일 서빙 (Vercel에서는 위의 vercel.json이 처리함)
