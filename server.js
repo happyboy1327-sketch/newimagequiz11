@@ -66,7 +66,7 @@ app.get("/api/quiz", (req, res) => {
 // 3. [여기 중요] 로컬/Vercel 상관없이 항상 정적 파일과 메인화면을 Express가 직접 서빙함
 app.use(express.static(path.join(process.cwd(), "public")));
 
-app.get("*", (req, res) => {
+app.get("*catchall", (req, res) => {
     res.sendFile(path.join(process.cwd(), "public", "index.html"));
 });
 
