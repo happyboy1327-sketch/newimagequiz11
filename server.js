@@ -225,46 +225,176 @@ async function fillCache() {
         }
     }
 
+// 1. 위키백과를 한 번 찔러서 유효한 인물 '배열'을 반환하는 핵심 단독 엔진
+async function scoutWikipedia(forbiddenNames, forceLegacy = false) {
     try {
-        // 🛠️ 내부 while 루프 완전 삭제! 무조건 딱 '1번만' 동시 발사하고 끝냄.
-        // 비상 상황이면 화력을 6발로 늘려서 확실하게 리턴 보장.
-        const fireCount = isEmergency ? 6 : 4;
-        const concurrentAttempts = Array.from({ length: fireCount }, () => runSingleAttempt());
-        
-        const allResults = await Promise.all(concurrentAttempts);
-        let foundCount = 0;
+        const isLegacyTurn = forceLegacy || (Math.random() < 0.6);
+        let pages = [];
+        let isHistorical = false;
 
-        allResults.flat().forEach(item => {
-            if (item && QUIZ_CACHE.length < CACHE_SIZE) {
-                if (!forbiddenNames.has(item.name)) {
-                    QUIZ_CACHE.push(item);
-                    forbiddenNames.add(item.name);
-                    foundCount++;
+        if (isLegacyTurn) {
+            const shuffledVips = LEGACY_VIP_LIST.sort(() => Math.random() - 0.5).slice(0, 10);
+            const targetTitles = shuffledVips.filter(name => !forbiddenNames.has(name));
+            if (targetTitles.length === 0) return [];
+
+            const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+                ...WIKI_AXIOS_CONFIG,
+                params: { action: "query", titles: targetTitles.join('|'), prop: "extracts|pageimages", explaintext: true, pithumbsize: 600, format: "json", origin: "*" }
+            });
+            pages = Object.values(detailRes.data.query?.pages || {});
+        } else {
+            const year = Math.random() < 0.5 
+                ? Math.floor(Math.random() * (2000 - 1900 + 1)) + 1900  
+                : Math.floor(Math.random() * (1899 - 900 + 1)) + 900;    
+
+            isHistorical = year < 1900;
+
+            const res = await axios.get("https://ko.wikipedia.org/w/api.php", {
+                ...WIKI_AXIOS_CONFIG,
+                params: {
+                    action: "query", generator: "categorymembers", gcmtitle: `분류:${year}년_출생`,
+                    gcmlimit: 40, gcmtype: "page", prop: "extracts|pageimages",
+                    explaintext: true, pithumbsize: 600, format: "json", origin: "*"
                 }
-            }
-        });
-
-        // 🛠️ 즉시 락을 해제해서 서버가 숨을 쉴 수 있게 만듦
-        isCaching = false;
-        console.log(`✅ 배치 종료 (이번에 ${foundCount}명 추가, 총 ${QUIZ_CACHE.length}/${CACHE_SIZE})`);
-        
-        // 🛠️ 모자라면 '비동기'로 잠시 후에 다시 fillCache를 깨움 (락을 쥐고 대기하지 않음)
-        if (QUIZ_CACHE.length < CACHE_SIZE) {
-            const nextDelay = isEmergency ? 300 : 3000;
-            setTimeout(fillCache, nextDelay);
+            });
+            pages = Object.values(res.data.query?.pages || {})
+                .filter(page => !page.title.includes(":") && !forbiddenNames.has(page.title));
         }
 
-    } catch (err) {
-        console.error("❌ 캐시 엔진 치명적 에러:", err);
-        isCaching = false;
-        setTimeout(fillCache, 5000);
+        const processTasks = pages.map(async (pageData) => {
+            if (!pageData.extract || pageData.extract.length < 100) return null;
+            if (!isLegacyTurn && !isHistorical) {
+                if (/(대학교수|교수|석좌교수|교육자)/.test(pageData.extract)) return null;
+                if (/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(pageData.title)) return null;
+            }
+
+            let rawText = pageData.extract;
+            const cutIndex = rawText.search(/==\s*(각주|같이 보기|참고 문헌|외부 링크)\s*==/i);
+            if (cutIndex !== -1) rawText = rawText.substring(0, cutIndex);
+            
+            rawText = rawText.substring(0, 1200).replace(/=+\s*.*?\s*=+/g, " ").replace(/\s+/g, " ").trim();
+            if (rawText.length < 100) return null;
+
+            const aliases = makeNameAliases(pageData.title);
+            if (pageData.thumbnail?.source && isValidImageUrl(pageData.thumbnail.source) && isHumanPhoto(pageData.pageimage || "", aliases)) {
+                return {
+                    name: pageData.title,
+                    image: pageData.thumbnail.source,
+                    hint: createMaskedHint(pageData.title, rawText),
+                    description: rawText.length > 1000 ? rawText.substring(0, 1000) + "..." : rawText 
+                };
+            }
+            return null;
+        });
+
+        const results = await Promise.all(processTasks);
+        return results.filter(item => item !== null);
+    } catch (e) {
+        return [];
     }
 }
 
+// 2. 평상시 백그라운드에서 조용히 대량으로 캐시를 모으는 함수
+async function fillCache() {
+    if (isCaching) return;
+    if (QUIZ_CACHE.length >= CACHE_SIZE) return;
+
+    isCaching = true;
+    const forbiddenNames = new Set([...LAST_PLAYED, ...QUIZ_CACHE.map(q => q.name)]);
+
+    try {
+        // 평상시엔 3발만 동시 발사해 백그라운드 부하 최소화
+        const concurrentAttempts = [
+            scoutWikipedia(forbiddenNames),
+            scoutWikipedia(forbiddenNames),
+            scoutWikipedia(forbiddenNames)
+        ];
+        const allResults = await Promise.all(concurrentAttempts);
+
+        allResults.flat().forEach(item => {
+            if (item && QUIZ_CACHE.length < CACHE_SIZE && !forbiddenNames.has(item.name)) {
+                QUIZ_CACHE.push(item);
+                forbiddenNames.add(item.name);
+            }
+        });
+    } catch (err) {
+        console.error("백그라운드 캐싱 에러:", err);
+    } finally {
+        isCaching = false;
+        if (QUIZ_CACHE.length < CACHE_SIZE) {
+            setTimeout(fillCache, 4000);
+        }
+    }
+}
+
+// 3. 🔥 라우터: 캐시가 완전히 말랐을 때 대기 시간을 최소화하는 기믹
+app.get("/api/quiz", async (req, res) => {
+    try {
+        const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        const forbiddenNames = new Set([...LAST_PLAYED, ...QUIZ_CACHE.map(q => q.name)]);
+
+        // [경로 A] 캐시에 데이터가 있으면? 0초 만에 즉시 반환
+        if (QUIZ_CACHE.length > 0) {
+            const item = QUIZ_CACHE.shift();
+            LAST_PLAYED.push(item.name);
+            if (LAST_PLAYED.length > 15) LAST_PLAYED.shift();
+            
+            if (QUIZ_CACHE.length <= 20) fillCache(); // 꺼내 쓰고 남은 양 적으면 충전 요청
+            return res.json({ ...item, imageUrl: item.image, requestId });
+        }
+
+        // [경로 B] 🚨 비상 상황: 캐시가 0개다! 꼼수 없이 위키백과로 정면 돌파
+        console.warn("🚨 캐시 전멸! 레이싱 엔진 가동합니다.");
+
+        // 5발을 동시에 쏘되, 각 화살이 독립적으로 결과를 처리하게 만듦
+        let resolvedItem = null;
+        
+        const racers = Array.from({ length: 5 }, async () => {
+            if (resolvedItem) return; // 이미 다른 넘이 1등으로 골인했으면 탈출
+            
+            // 캐시가 비었을 땐 성공 확률 100%인 레거시 트랙 강제 비중 높임
+            const items = await scoutWikipedia(forbiddenNames, true); 
+            if (items.length > 0 && !resolvedItem) {
+                // 가장 먼저 성공한 리스트의 첫 번째 놈을 정답으로 낚아챔
+                resolvedItem = items[0]; 
+                
+                // 1등 빼고 남은 짜바리 데이터들은 버리지 않고 캐시에 적립 (자원 재활용)
+                items.slice(1).forEach(subItem => {
+                    if (QUIZ_CACHE.length < CACHE_SIZE && !forbiddenNames.has(subItem.name)) {
+                        QUIZ_CACHE.push(subItem);
+                    }
+                });
+            }
+        });
+
+        // 5개의 요청 중 "가장 먼저 데이터 확보에 성공한 놈"이 나올 때까지 주기적으로 체크 (최대 6초 대기)
+        for (let i = 0; i < 30; i++) {
+            if (resolvedItem) break;
+            await new Promise(resolve => setTimeout(resolve, 200)); // 0.2초마다 체크
+        }
+
+        if (resolvedItem) {
+            LAST_PLAYED.push(resolvedItem.name);
+            if (LAST_PLAYED.length > 15) LAST_PLAYED.shift();
+            
+            // 남은 레이서들이 가져올 데이터 수거를 위해 백그라운드 충전 가동
+            fillCache();
+            return res.json({ ...resolvedItem, imageUrl: resolvedItem.image, requestId });
+        }
+
+        // 만에 하나 위키백과 전체가 누워버려서 진짜 아무것도 안 나왔을 때의 최소한의 방어선
+        return res.status(503).json({ error: "위키백과 응답 지연. 잠시 후 다시 시도해주세요." });
+
+    } catch (error) {
+        console.error("API 오류:", error);
+        res.status(500).json({ error: "서버 오류" });
+    }
+});
 
 
 
-fillCache();
+
+
 
 // --- API ---
 app.get("/api/quiz", async (req, res) => {
@@ -303,4 +433,8 @@ app.get("/api/quiz", async (req, res) => {
 app.use(express.static(path.join(process.cwd(), "public")));
 app.get("/", (req, res) => res.sendFile(path.join(process.cwd(), "public", "index.html")));
 
-app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
+// 서버 구동 시 예열
+app.listen(PORT, () => {
+    console.log(`Server running at http://localhost:${PORT}`);
+    fillCache(); // 서버 켜지자마자 미리 땡겨놓기
+});
