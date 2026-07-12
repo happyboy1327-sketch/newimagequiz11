@@ -30,14 +30,18 @@ const CACHE_SIZE = 40;
 let QUIZ_CACHE = [];
 let LAST_PLAYED = [];
 let isCaching = false;
+import https from "https";
+const keepAliveAgent = new https.Agent({ keepAlive: true, maxSockets: 20 });
 
 const WIKI_AXIOS_CONFIG = {
     headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json'
     },
-    timeout: 6500 
+    timeout: 6500,
+    httpsAgent: keepAliveAgent
 };
+
 
 // 🔥 레거시 유명인물 (역사적 레전드 위인) 전용 VIP 풀
 const LEGACY_VIP_LIST = [
@@ -254,7 +258,7 @@ app.get("/api/quiz", async (req, res) => {
             if (LAST_PLAYED.length > 15) LAST_PLAYED.shift();
             
             // 캐시가 22개 이하로 떨어지면 충전 요청 (두 번째 블록 조건 적용)
-            if (QUIZ_CACHE.length <= 22) fillCache(); 
+            if (QUIZ_CACHE.length <= 30) fillCache(); 
             return res.json({ ...item, imageUrl: item.image, requestId });
         }
 
