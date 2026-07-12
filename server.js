@@ -242,6 +242,8 @@ async function fillCache() {
         const concurrentAttempts = [
             scoutWikipedia(forbiddenNames),
             scoutWikipedia(forbiddenNames),
+            scoutWikipedia(forbiddenNames),
+            scoutWikipedia(forbiddenNames),
             scoutWikipedia(forbiddenNames)
         ];
         const allResults = await Promise.all(concurrentAttempts);
@@ -322,7 +324,7 @@ app.get("/api/quiz", async (req, res) => {
 
         // 🔗 통합 체크 루프: 레이싱 결과(resolvedItem)가 나오거나, 
         // 혹은 fillCache()가 백그라운드에서 먼저 긁어와서 QUIZ_CACHE에 넣을 때까지 양쪽 다 감시함
-        for (let i = 0; i < 30; i++) {
+        for (let i = 0; i < 15; i++) {
             if (resolvedItem || QUIZ_CACHE.length > 0) break;
             await new Promise(resolve => setTimeout(resolve, 200)); // 0.2초마다 촘촘하게 체크
         }
