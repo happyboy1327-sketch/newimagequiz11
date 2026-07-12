@@ -7,16 +7,16 @@
 <style>
   body{font-family:'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif; display:flex; justify-content:center; align-items:center; min-height:100vh; background:#f0f2f5; margin:0;}
   .card{width:90%; max-width:420px; background:#fff; border-radius:16px; padding:24px; text-align:center; box-shadow:0 8px 24px rgba(0,0,0,0.1);}
-
+  
+  /* 이미지 영역 */
   .img-box {width:100%; height:320px; margin-bottom:16px; border-radius:12px; background:#f8f9fa; overflow:hidden; position:relative;}
-  img {width:100%; height:100%; object-fit:contain; display:block; opacity:1; transition:opacity .15s ease; transform:translateZ(0);}
-  img.is-loading {opacity:0;}
-
+  img {width:100%; height:100%; object-fit:contain; display:block;}
+  
   #hint {margin:12px 0; font-size:0.95rem; color:#495057; background:#e9ecef; padding:12px; border-radius:8px; line-height:1.5; word-break:keep-all;}
-
+  
   input {width:100%; padding:14px; margin-bottom:12px; border-radius:8px; border:1px solid #ced4da; font-size:1rem; box-sizing:border-box; outline:none;}
   input:focus {border-color:#4c6ef5; box-shadow:0 0 0 3px rgba(76,110,245,0.2);}
-
+  
   .btn-group {display:flex; gap:8px;}
   button {flex:1; padding:14px; border:none; border-radius:8px; font-weight:700; cursor:pointer; font-size:1rem; color:#fff;}
   #checkBtn {background:#a4fa23;}
@@ -24,9 +24,9 @@
   #reloadBtn {background:#38ebf4;}
   #reloadBtn:hover {background:#368df1;}
   button:disabled {background:#dee2e6; cursor:not-allowed;}
-
+  
   #timer {font-weight:800; color:#fa5252; margin-bottom:8px; font-size:1.4rem;}
-
+  
   #result {margin-top:20px; text-align:left;}
   .res-header {font-size:1.2rem; font-weight:800; margin-bottom:8px; text-align:center;}
   .desc-box {font-size:0.9rem; color:#343a40; background:#f1f3f5; padding:12px; border-radius:8px; line-height:1.6;}
@@ -37,222 +37,144 @@
 <div class="card">
   <h2>랜덤 위인 퀴즈</h2>
   <div id="timer">15s</div>
-
+  
   <div class="img-box">
     <img id="person-img" src="" alt="위인 이미지" referrerpolicy="no-referrer">
   </div>
-
+  
   <div id="hint">데이터 검증 및 수신 중...</div>
 
+  
   <input id="answer" placeholder="정답 입력" autocomplete="off">
-
+  
   <div class="btn-group">
-    <button id="checkBtn" disabled>정답 확인</button>
+    <button id="checkBtn">정답 확인</button>
     <button id="reloadBtn">다음 문제</button>
   </div>
-
+  
   <div id="result"></div>
 </div>
 
 <script>
-const ANSWER_TIME = 15;
-const MAX_RETRY = 3;
-const IMAGE_LOAD_TIMEOUT_MS = 12000;
-const RETRY_DELAY_MS = 250;
-
-const LOADING_IMG = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
-
-const els = {
-  img: document.getElementById('person-img'),
-  hint: document.getElementById('hint'),
-  answer: document.getElementById('answer'),
-  checkBtn: document.getElementById('checkBtn'),
-  reloadBtn: document.getElementById('reloadBtn'),
-  result: document.getElementById('result'),
-  timer: document.getElementById('timer')
-};
-
 let retryCount = 0;
+const MAX_RETRY = 2;
+let isLoading = false;
+let requestToken = 0;
+
 let sessionId = localStorage.getItem('sessionId') || `session_${Date.now()}`;
 localStorage.setItem('sessionId', sessionId);
 
-let currentData = null;
-let timer = null;
-let timeLeft = ANSWER_TIME;
-let activeLoadId = 0;
-let activeAbortController = null;
-let imageLoadTimeout = null;
-let retryTimer = null;
-let isLoading = false;
+let currentData = null, timer = null, timeLeft = 15;
 
-function setButtons(loading) {
-  isLoading = loading;
-  els.checkBtn.disabled = loading || !currentData;
-  els.reloadBtn.disabled = loading;
-}
+// 투명 이미지 (로딩용)
+const LOADING_IMG = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
 
-function resetQuestionUI() {
+async function loadQuiz(){
+  if (isLoading) return;
+  isLoading = true;
+  const token = ++requestToken;
   clearInterval(timer);
-  clearTimeout(imageLoadTimeout);
-  clearTimeout(retryTimer);
+  document.getElementById('result').innerHTML = "";
+  document.getElementById('answer').value = "";
+  document.getElementById('answer').focus();
+  document.getElementById('checkBtn').disabled = true;
+  
+  const img = document.getElementById('person-img');
+  img.onload = null;
+  img.src = LOADING_IMG;
 
-  currentData = null;
-  timeLeft = ANSWER_TIME;
-  els.timer.textContent = `${timeLeft}s`;
-  els.result.innerHTML = "";
-  els.answer.value = "";
-  els.answer.focus();
+  // 이미지 패스 처리
+  img.onerror = () => {
+    console.warn("이미지 로드 실패 → 패스");
 
-  els.img.classList.add('is-loading');
-  els.img.src = LOADING_IMG;
-
-  setButtons(true);
-}
-
-async function loadQuiz() {
-  const loadId = ++activeLoadId;
-
-  if (activeAbortController) {
-    activeAbortController.abort();
-  }
-  activeAbortController = new AbortController();
-
-  resetQuestionUI();
-  els.hint.textContent = "최적의 이미지를 선별하고 있습니다...";
-
-  try {
-    const res = await fetch(`/api/quiz?sessionId=${encodeURIComponent(sessionId)}&t=${Date.now()}`, {
-      cache: 'no-store',
-      signal: activeAbortController.signal
-    });
-
-    if (loadId !== activeLoadId) return;
-
-    if (res.status === 503) {
-      els.hint.textContent = "적절한 이미지 찾는 중... 잠시 후 '다음 문제'를 눌러주세요.";
-      setButtons(false);
-      return;
+    retryCount++;
+    isLoading = false;
+    if (retryCount > MAX_RETRY) {
+        document.getElementById('hint').textContent = "이미지 불안정으로 로드 실패. 다시 시도해주세요.";
+        return;
     }
 
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
+    // 자동 재요청
+    loadQuiz();
+};
 
+  
+  document.getElementById('hint').textContent = "최적의 이미지를 선별하고 있습니다...";
+  timeLeft = 15;
+  document.getElementById('timer').textContent = `${timeLeft}s`;
+
+  try{
+    const res = await fetch(`/api/quiz?sessionId=${sessionId}`);
+    if(res.status === 503) {
+        document.getElementById('hint').textContent = "적절한 이미지 찾는 중... 약 20초 후 '다음 문제'를 눌러주세요.";
+        document.getElementById('reloadBtn').disabled = false;
+        return;
+    }
+    
     const data = await res.json();
-    if (loadId !== activeLoadId) return;
-    if (data.error) throw new Error(data.error);
+    if (token !== requestToken) return;
+    if(data.error) throw new Error(data.error);
 
     currentData = data;
-    els.hint.textContent = data.hint || "";
-
-    const preloader = new Image();
-    preloader.decoding = "async";
-    preloader.fetchPriority = "high";
-    preloader.referrerPolicy = "no-referrer";
-
-    let settled = false;
-
-    const finalizeReady = () => {
-      if (settled || loadId !== activeLoadId) return;
-      settled = true;
-      clearTimeout(imageLoadTimeout);
-
-      els.img.src = preloader.src;
-      els.img.classList.remove('is-loading');
-
-      retryCount = 0;
-      setButtons(false);
-      startTimer();
+    img.src = data.image; // 이미지 다운로드 시작
+    
+    // ★ 수정: 이미지가 화면에 완전히 로딩 완료된 "그 순간"부터 게임을 시작합니다.
+    img.onload = () => {
+        if (token !== requestToken) return;
+        retryCount = 0;
+        isLoading = false;
+        document.getElementById('checkBtn').disabled = false;
+        startTimer();
     };
 
-    const retryLoad = () => {
-      if (settled || loadId !== activeLoadId) return;
-      settled = true;
-      clearTimeout(imageLoadTimeout);
+    document.getElementById('hint').textContent = data.hint;
+    
+    // [주의] 기존에 여기에 있던 checkBtn.disabled = false 와 startTimer()는 지워졌습니다!
 
-      retryCount += 1;
-      if (retryCount > MAX_RETRY) {
-        els.hint.textContent = "이미지 불안정으로 로드 실패. 다시 시도해주세요.";
-        setButtons(false);
-        return;
-      }
-
-      retryTimer = setTimeout(() => {
-        if (loadId === activeLoadId) loadQuiz();
-      }, RETRY_DELAY_MS);
-    };
-
-    preloader.onload = finalizeReady;
-    preloader.onerror = retryLoad;
-    preloader.src = data.image;
-
-    imageLoadTimeout = setTimeout(() => {
-      retryLoad();
-    }, IMAGE_LOAD_TIMEOUT_MS);
-
-    if (preloader.complete && preloader.naturalWidth > 0) {
-      finalizeReady();
-    }
-  } catch (e) {
-    if (e && e.name === 'AbortError') return;
+  }catch(e){
     console.error(e);
-
-    if (loadId !== activeLoadId) return;
-    els.hint.textContent = "오류가 발생했습니다.";
-    setButtons(false);
+    document.getElementById('hint').textContent = "오류가 발생했습니다.";
+    isLoading = false;
   }
 }
 
-function startTimer() {
-  clearInterval(timer);
-  timer = setInterval(() => {
-    timeLeft -= 1;
-    els.timer.textContent = `${timeLeft}s`;
-
-    if (timeLeft <= 0) {
+function startTimer(){
+  clearInterval(timer); // ★ 핵심: 겹쳐있는 유령 타이머들 완벽 제거
+  
+  timer = setInterval(()=>{
+    timeLeft--;
+    document.getElementById('timer').textContent = `${timeLeft}s`;
+    if(timeLeft <= 0){
       clearInterval(timer);
       showResult(false, true);
     }
   }, 1000);
 }
 
-function showResult(isCorrect, isTimeout = false) {
+function showResult(isCorrect, isTimeout=false){
   clearInterval(timer);
-  setButtons(false);
-
+  document.getElementById('checkBtn').disabled = true;
+  
   const color = isCorrect ? "#40c057" : "#fa5252";
-  const title = isTimeout ? "⏰ 시간 초과" : (isCorrect ? "🎉 정답!" : "❌ 아닙니다!");
-
-  els.result.innerHTML = `
+  const title = isTimeout ? "⏰ 시간 초과" : (isCorrect ? "🎉 정답!" : "❌ 땡!");
+  
+  document.getElementById('result').innerHTML = `
     <div class="res-header" style="color:${color}">${title}</div>
     <div class="res-header">${currentData.name}</div>
     <div class="desc-box">${currentData.description}</div>
   `;
 }
 
-els.checkBtn.addEventListener('click', () => {
-  if (!currentData || isLoading) return;
-
-  const user = els.answer.value.replace(/\s+/g, '').trim();
-  const correct = currentData.name.replace(/\s+/g, '').trim();
-  if (!user) return alert("답을 입력하세요");
-
+document.getElementById('checkBtn').addEventListener('click', ()=>{
+  if(!currentData) return;
+  const user = document.getElementById('answer').value.replace(/\s+/g,'').trim();
+  const correct = currentData.name.replace(/\s+/g,'').trim();
+  if(!user) return alert("답을 입력하세요");
   showResult(user === correct);
 });
 
-els.reloadBtn.addEventListener('click', () => {
-  if (isLoading) return;
-  loadQuiz();
-});
-
-els.answer.addEventListener('keydown', (e) => {
-  if (e.key === "Enter") els.checkBtn.click();
-});
-
-els.img.addEventListener('error', () => {
-  // 실제 표시용 이미지가 깨지면 다음 로드를 기다리지 않고 재시도
-  if (!isLoading) return;
-});
+document.getElementById('reloadBtn').addEventListener('click', loadQuiz);
+document.getElementById('answer').addEventListener('keydown', e=>{ if(e.key==="Enter") document.getElementById('checkBtn').click(); });
 
 window.addEventListener('load', loadQuiz);
 </script>
