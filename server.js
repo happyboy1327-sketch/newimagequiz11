@@ -222,11 +222,15 @@ async function fillCache() {
         const allResults = await Promise.all(concurrentAttempts);
 
         allResults.flat().forEach(item => {
-            if (item && QUIZ_CACHE.length < CACHE_SIZE && !forbiddenNames.has(item.name)) {
-                QUIZ_CACHE.push(item);
-                forbiddenNames.add(item.name);
-            }
-        });
+    if (item && QUIZ_CACHE.length < CACHE_SIZE) {
+        // 🛑 스냅샷 대신 넣는 순간의 최신 배열 상태를 직접 확인
+        const isDuplicate = LAST_PLAYED.includes(item.name) || QUIZ_CACHE.some(q => q.name === item.name);
+        if (!isDuplicate) {
+            QUIZ_CACHE.push(item);
+        }
+    }
+});
+
     } catch (err) {
         console.error("백그라운드 캐싱 에러:", err);
     } finally {
@@ -264,20 +268,31 @@ app.get("/api/quiz", async (req, res) => {
         
         // 5발 레이서 동시 발사
         const racers = Array.from({ length: 5 }, async () => {
-            if (resolvedItem) return; 
-            
-            const items = await scoutWikipedia(forbiddenNames, true); 
-            if (items.length > 0 && !resolvedItem) {
-                resolvedItem = items[0]; 
-                
-                // 1등 빼고 남은 데이터는 창고에 적립
-                items.slice(1).forEach(subItem => {
-                    if (QUIZ_CACHE.length < CACHE_SIZE && !forbiddenNames.has(subItem.name)) {
-                        QUIZ_CACHE.push(subItem);
-                    }
-                });
+        const racers = Array.from({ length: 5 }, async () => {
+    if (resolvedItem) return; 
+    
+    const items = await scoutWikipedia(forbiddenNames, true); 
+    if (items.length > 0 && !resolvedItem) {
+        // 🛑 1등 골인 직전 실시간 중복 체크
+        const isDuplicate = LAST_PLAYED.includes(items[0].name) || QUIZ_CACHE.some(q => q.name === items[0].name);
+        if (!isDuplicate && !resolvedItem) {
+            resolvedItem = items[0]; 
+        }
+        
+        // 🛑 남은 짜바리 데이터들도 실시간으로 중복 검사하며 창고에 적립
+        items.slice(1).forEach(subItem => {
+            if (QUIZ_CACHE.length < CACHE_SIZE) {
+                const isSubDuplicate = LAST_PLAYED.includes(subItem.name) || 
+                                       QUIZ_CACHE.some(q => q.name === subItem.name) || 
+                                       (resolvedItem && resolvedItem.name === subItem.name);
+                if (!isSubDuplicate) {
+                    QUIZ_CACHE.push(subItem);
+                }
             }
         });
+    }
+});
+
 
         // 🔗 통합 체크 루프: 레이싱 결과(resolvedItem)가 나오거나, 
         // 혹은 fillCache()가 백그라운드에서 먼저 긁어와서 QUIZ_CACHE에 넣을 때까지 양쪽 다 감시함
