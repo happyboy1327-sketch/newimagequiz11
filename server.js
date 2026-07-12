@@ -141,18 +141,23 @@ async function fillCache() {
     if (QUIZ_CACHE.length >= CACHE_SIZE) return;
 
     isCaching = true;
-    console.log(`🔄 [완벽 검수판] 캐시 충전 시작 (현재: ${QUIZ_CACHE.length}/${CACHE_SIZE})`);
+    
+    // 🔥 [치트키] 캐시가 완전히 말라버린 비상 상황인가?
+    const isEmergency = QUIZ_CACHE.length === 0;
+    
+    console.log(`🔄 [타임아웃 봉쇄판] 캐시 충전 시작 (현재: ${QUIZ_CACHE.length}/${CACHE_SIZE}${isEmergency ? ' - 🚨 비상 가동' : ''})`);
 
     const forbiddenNames = new Set([
         ...LAST_PLAYED,
         ...QUIZ_CACHE.map(q => q.name)
     ]);
 
-    // 한 번의 API 사이클 함수
     async function runSingleAttempt() {
         try {
-            const isLegacyTurn = Math.random() < 0.6;
+            // 비상 상황이면 100% 레거시 위인 검색 / 평상시엔 60% 레거시
+            const isLegacyTurn = isEmergency ? true : (Math.random() < 0.6);
             let pages = [];
+            let isHistorical = false;
 
             if (isLegacyTurn) {
                 const shuffledVips = LEGACY_VIP_LIST.sort(() => Math.random() - 0.5).slice(0, 10);
@@ -169,6 +174,8 @@ async function fillCache() {
                     ? Math.floor(Math.random() * (2000 - 1900 + 1)) + 1900  
                     : Math.floor(Math.random() * (1899 - 900 + 1)) + 900;    
 
+                isHistorical = year < 1900; // 🛠️ 1900년 이전 역사의 인물인가?
+
                 const res = await axios.get("https://ko.wikipedia.org/w/api.php", {
                     ...WIKI_AXIOS_CONFIG,
                     params: {
@@ -178,15 +185,18 @@ async function fillCache() {
                     }
                 });
                 
-                // 🛠️ [복구] 네임스페이스(:) 차단 및 1차 중복 체크 필터 적용
                 pages = Object.values(res.data.query?.pages || {})
                     .filter(page => !page.title.includes(":") && !forbiddenNames.has(page.title));
             }
 
             const processTasks = pages.map(async (pageData) => {
                 if (!pageData.extract || pageData.extract.length < 100) return null;
-                if (!isLegacyTurn && /(대학교수|교수|석좌교수|교육자)/.test(pageData.extract)) return null;
-                if (!isLegacyTurn && /\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(pageData.title)) return null;
+                
+                // 🛠️ [필터 수정] 레거시가 아니고 '현대 인물(1900년 이후)'일 때만 직업 필터 작동!
+                if (!isLegacyTurn && !isHistorical) {
+                    if (/(대학교수|교수|석좌교수|교육자)/.test(pageData.extract)) return null;
+                    if (/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(pageData.title)) return null;
+                }
 
                 let rawText = pageData.extract;
                 const cutIndex = rawText.search(/==\s*(각주|같이 보기|참고 문헌|외부 링크)\s*==/i);
@@ -216,45 +226,41 @@ async function fillCache() {
     }
 
     try {
-        let batchCount = 0;
+        // 🛠️ 내부 while 루프 완전 삭제! 무조건 딱 '1번만' 동시 발사하고 끝냄.
+        // 비상 상황이면 화력을 6발로 늘려서 확실하게 리턴 보장.
+        const fireCount = isEmergency ? 6 : 4;
+        const concurrentAttempts = Array.from({ length: fireCount }, () => runSingleAttempt());
         
-        // 🔥 [진짜 해결] 목표 CACHE_SIZE를 다 채울 때까지 3발씩 병렬로 연사 유기적 반복!
-        // (서버 부하를 고려해 무한루프 방지용 batchCount 장착)
-        while (QUIZ_CACHE.length < CACHE_SIZE && batchCount < 5) {
-            batchCount++;
-            
-            const concurrentAttempts = [
-                runSingleAttempt(),
-                runSingleAttempt(),
-                runSingleAttempt()
-            ];
-            
-            const allResults = await Promise.all(concurrentAttempts);
-            
-            allResults.flat().forEach(item => {
-                if (item && QUIZ_CACHE.length < CACHE_SIZE) {
-                    if (!forbiddenNames.has(item.name)) {
-                        QUIZ_CACHE.push(item);
-                        forbiddenNames.add(item.name);
-                    }
-                }
-            });
-        }
+        const allResults = await Promise.all(concurrentAttempts);
+        let foundCount = 0;
 
+        allResults.flat().forEach(item => {
+            if (item && QUIZ_CACHE.length < CACHE_SIZE) {
+                if (!forbiddenNames.has(item.name)) {
+                    QUIZ_CACHE.push(item);
+                    forbiddenNames.add(item.name);
+                    foundCount++;
+                }
+            }
+        });
+
+        // 🛠️ 즉시 락을 해제해서 서버가 숨을 쉴 수 있게 만듦
         isCaching = false;
-        console.log(`✅ 캐시 충전 완수 (현재: ${QUIZ_CACHE.length}/${CACHE_SIZE}, 총 ${batchCount}회 배치 가동)`);
+        console.log(`✅ 배치 종료 (이번에 ${foundCount}명 추가, 총 ${QUIZ_CACHE.length}/${CACHE_SIZE})`);
         
-        // 비상 빵꾸 방지용 마지노선 예약 장치
-        if (QUIZ_CACHE.length <= 5) {
-            setTimeout(fillCache, 4000);
+        // 🛠️ 모자라면 '비동기'로 잠시 후에 다시 fillCache를 깨움 (락을 쥐고 대기하지 않음)
+        if (QUIZ_CACHE.length < CACHE_SIZE) {
+            const nextDelay = isEmergency ? 300 : 3000;
+            setTimeout(fillCache, nextDelay);
         }
 
     } catch (err) {
         console.error("❌ 캐시 엔진 치명적 에러:", err);
         isCaching = false;
-        setTimeout(fillCache, 10000);
+        setTimeout(fillCache, 5000);
     }
 }
+
 
 
 
