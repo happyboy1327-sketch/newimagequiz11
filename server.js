@@ -267,7 +267,8 @@ app.get("/api/quiz", async (req, res) => {
         let resolvedItem = null;
         
         // 5발 레이서 동시 발사
-        const racers = Array.from({ length: 5 }, async () => {
+        //;
+
         const racers = Array.from({ length: 5 }, async () => {
     if (resolvedItem) return; 
     
