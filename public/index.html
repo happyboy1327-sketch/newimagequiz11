@@ -81,7 +81,9 @@ async function loadQuiz(){
   document.getElementById('checkBtn').disabled = true;
   
   const img = document.getElementById('person-img');
-  img.src = LOADING_IMG; // 투명 이미지로 초기화
+  // img.src를 비워두기만 하면 브라우저가 현재 페이지를 요청하려 하므로,
+  // 아예 src를 지워버리는 것이 안전합니다.
+  img.removeAttribute('src'); 
 
   // 이미지 오류 처리: 무한 재요청 대신 메시지만 띄움
   img.onerror = () => {
