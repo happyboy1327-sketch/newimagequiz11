@@ -141,101 +141,103 @@ async function fillCache() {
     if (QUIZ_CACHE.length >= CACHE_SIZE) return;
 
     isCaching = true;
-    console.log(`🔄 투트랙 캐시 충전 가동 (현재 상태: ${QUIZ_CACHE.length}/${CACHE_SIZE})`);
-    
+    let foundCount = 0; 
     let randomSearchAttempts = 0;
 
-    while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 10) {
-        if (QUIZ_CACHE.length >= CACHE_SIZE) break;
-        randomSearchAttempts++;
+    console.log(`🔄 캐시 충전 시작 (현재: ${QUIZ_CACHE.length}/${CACHE_SIZE})`);
 
+    while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 10) {
+        randomSearchAttempts++;
         try {
-            // 🔥 30% 확률로 레거시 위인 출현, 70%는 사진 빵빵한 근현대 인물
-            const isLegacyTurn = Math.random() < 0.6;
+            // 1. 레거시/일반 모드 결정
+            const isLegacyTurn = Math.random() < 0.4;
             let targetTitles = [];
 
             if (isLegacyTurn) {
-                const shuffledVips = LEGACY_VIP_LIST.sort(() => Math.random() - 0.5).slice(0, 16);
-                targetTitles = shuffledVips.filter(name => !QUIZ_CACHE.some(c => c.name.includes(name)) && !LAST_PLAYED.some(lp => lp.includes(name)));
+                const shuffledVips = LEGACY_VIP_LIST.sort(() => Math.random() - 0.5).slice(0, 10);
+                targetTitles = shuffledVips.filter(name => !QUIZ_CACHE.some(c => c.name.includes(name)));
             } else {
-                // 무한 렉 방지: 랜덤 연도를 무조건 사진이 있는 1900년~2000년 사이로 한정!!
-                const year = Math.floor(Math.random() * (2000 - 900 + 1)) + 900;
+                // 1900~2000년생 카테고리 멤버 API 호출
+                const year = Math.floor(Math.random() * (2000 - 1900 + 1)) + 1900;
                 const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
                     ...WIKI_AXIOS_CONFIG,
                     params: {
                         action: "query",
                         list: "categorymembers",
                         cmtitle: `분류:${year}년_출생`,
-                        cmlimit: 60, 
+                        cmlimit: 50,
                         cmtype: "page",
                         format: "json",
                         origin: "*"
                     }
                 });
-
-                const candidates = listRes.data.query?.categorymembers || [];
-                targetTitles = candidates
-                    .filter(cand => !cand.title.includes(":") && !QUIZ_CACHE.some(c => c.name === cand.title) && !LAST_PLAYED.includes(cand.title))
-                    .filter(cand => !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title))
+                targetTitles = (listRes.data.query?.categorymembers || [])
+                    .filter(c => !c.title.includes(":") && !QUIZ_CACHE.some(q => q.name === c.title))
                     .sort(() => Math.random() - 0.5)
-                    .map(c => c.title)
-                    .slice(0, 15); 
+                    .map(c => c.title).slice(0, 15);
             }
 
-            if (targetTitles.length > 0) {
-                const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                    ...WIKI_AXIOS_CONFIG,
-                    params: {
-                        action: "query",
-                        titles: targetTitles.join('|'),
-                        prop: "extracts|pageimages", 
-                        explaintext: true,
-                        pithumbsize: 400,
-                        format: "json",
-                        origin: "*"
-                    }
-                });
+            if (targetTitles.length === 0) continue;
 
-                const pages = Object.values(detailRes.data.query?.pages || {});
-
-                for (const pageData of pages) {
-                    if (QUIZ_CACHE.length >= CACHE_SIZE) break; 
-                    if (!pageData || !pageData.extract || pageData.extract.length < 100) continue;
-                    if (!isLegacyTurn && /(대학교수|명예교수|석좌교수|교수|교육자)/.test(pageData.extract)) continue;
-
-                    const aliases = makeNameAliases(pageData.title);
-
-                    if (pageData.thumbnail?.source && isValidImageUrl(pageData.thumbnail.source) && isHumanPhoto(pageData.pageimage || "", aliases)) {
-                        
-                        if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) continue;
-
-                        let rawText = pageData.extract;
-                        const cutIndex = rawText.search(/==\s*(각주|같이 보기|참고 문헌|외부 링크)\s*==/i);
-                        if (cutIndex !== -1) rawText = rawText.substring(0, cutIndex);
-                        
-                        rawText = rawText.substring(0, 1200).replace(/=+\s*.*?\s*=+/g, " ").replace(/\s+/g, " ").trim();
-                        if (rawText.length < 100) continue;
-
-                        QUIZ_CACHE.push({
-                            name: pageData.title,
-                            image: pageData.thumbnail.source,
-                            hint: createMaskedHint(pageData.title, rawText), 
-                            description: rawText.length > 1000 ? rawText.substring(0, 1000) + "..." : rawText 
-                        });
-                        console.log(`   [캐시 적재 완료] 👤 ${pageData.title} ${isLegacyTurn ? '(⭐레거시VIP)' : ''}`);
-                    }
+            // 2. [API 호출] 위키백과 상세 정보 가져오기
+            const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+                ...WIKI_AXIOS_CONFIG,
+                params: {
+                    action: "query",
+                    titles: targetTitles.join('|'),
+                    prop: "extracts|pageimages",
+                    explaintext: true,
+                    pithumbsize: 600,
+                    format: "json",
+                    origin: "*"
                 }
-            }
+            });
+            const pages = Object.values(detailRes.data.query?.pages || {});
+
+            // 3. [병렬 처리] 페이지별 이미지 및 사진 유효성 검사
+            const processTasks = pages.map(async (pageData) => {
+                if (!pageData.extract || pageData.extract.length < 100) return null;
+                // 교수님 컷
+                if (!isLegacyTurn && /(대학교수|교수|석좌교수|교육자)/.test(pageData.extract)) return null;
+
+                const aliases = makeNameAliases(pageData.title);
+                // 유효성 검사 (isHumanPhoto, isValidImageUrl은 기존 함수 그대로 사용)
+                if (pageData.thumbnail?.source && isValidImageUrl(pageData.thumbnail.source) && isHumanPhoto(pageData.pageimage || "", aliases)) {
+                    return {
+                        name: pageData.title,
+                        image: pageData.thumbnail.source,
+                        hint: createMaskedHint(pageData.title, pageData.extract),
+                        description: pageData.extract.substring(0, 1000)
+                    };
+                }
+                return null;
+            });
+
+            // 모든 검사를 병렬로 처리
+            const results = await Promise.all(processTasks);
+            
+            // 4. 결과 취합
+            results.forEach(item => {
+                if (item && QUIZ_CACHE.length < CACHE_SIZE) {
+                    QUIZ_CACHE.push(item);
+                    foundCount++;
+                }
+            });
+
         } catch (e) {
-            console.warn(`⚠️ 검색 시도 중 에러 (재시도 진행 중): ${e.message}`);
-            continue; 
+            console.warn(`⚠️ API 검색 중 에러 발생: ${e.message}`);
         }
     }
 
     isCaching = false;
-    console.log(`✅ 현재 최종 캐시량: ${QUIZ_CACHE.length}/${CACHE_SIZE}`);
+    console.log(`✅ 캐시 충전 종료 (이번에 ${foundCount}명 추가, 총 ${QUIZ_CACHE.length}명)`);
     
-    if (QUIZ_CACHE.length <= 22) setTimeout(fillCache, 2000);
+    // 5. [안전장치] 캐시 5개 이하일 때 재시도 (데이터 없으면 10초, 있으면 2초)
+    if (QUIZ_CACHE.length <= 5) {
+        const delay = (foundCount > 0) ? 2000 : 10000;
+        console.log(`⏳ 다음 자동 충전까지 ${delay/1000}초 대기...`);
+        setTimeout(fillCache, delay);
+    }
 }
 
 fillCache();
