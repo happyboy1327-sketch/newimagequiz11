@@ -58,21 +58,22 @@
 <script>
 let retryCount = 0;
 const MAX_RETRY = 2;
-let isLoading = false;
-let requestToken = 0;
 
 let sessionId = localStorage.getItem('sessionId') || `session_${Date.now()}`;
 localStorage.setItem('sessionId', sessionId);
 
 let currentData = null, timer = null, timeLeft = 15;
+let quizController=null;
+let requestToken=0;
 
 // 투명 이미지 (로딩용)
 const LOADING_IMG = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
 
 async function loadQuiz(){
-  if (isLoading) return;
-  isLoading = true;
-  const token = ++requestToken;
+  if(quizController) quizController.abort();
+  quizController=new AbortController();
+  const signal=quizController.signal;
+  const token=++requestToken;
   clearInterval(timer);
   document.getElementById('result').innerHTML = "";
   document.getElementById('answer').value = "";
@@ -88,7 +89,6 @@ async function loadQuiz(){
     console.warn("이미지 로드 실패 → 패스");
 
     retryCount++;
-    isLoading = false;
     if (retryCount > MAX_RETRY) {
         document.getElementById('hint').textContent = "이미지 불안정으로 로드 실패. 다시 시도해주세요.";
         return;
@@ -104,7 +104,7 @@ async function loadQuiz(){
   document.getElementById('timer').textContent = `${timeLeft}s`;
 
   try{
-    const res = await fetch(`/api/quiz?sessionId=${sessionId}`);
+    const res = await fetch(`/api/quiz?sessionId=${sessionId}`,{signal});
     if(res.status === 503) {
         document.getElementById('hint').textContent = "적절한 이미지 찾는 중... 약 20초 후 '다음 문제'를 눌러주세요.";
         document.getElementById('reloadBtn').disabled = false;
@@ -112,7 +112,7 @@ async function loadQuiz(){
     }
     
     const data = await res.json();
-    if (token !== requestToken) return;
+    if(token!==requestToken) return;
     if(data.error) throw new Error(data.error);
 
     currentData = data;
@@ -120,11 +120,10 @@ async function loadQuiz(){
     
     // ★ 수정: 이미지가 화면에 완전히 로딩 완료된 "그 순간"부터 게임을 시작합니다.
     img.onload = () => {
-        if (token !== requestToken) return;
-        retryCount = 0;
-        isLoading = false;
-        document.getElementById('checkBtn').disabled = false;
-        startTimer();
+        if(token!==requestToken) return;
+        retryCount = 0; // 정상 이미지 → 카운터 초기화
+        document.getElementById('checkBtn').disabled = false; // 정답 버튼 활성화
+        startTimer(); // 타이머 시작!
     };
 
     document.getElementById('hint').textContent = data.hint;
@@ -132,9 +131,9 @@ async function loadQuiz(){
     // [주의] 기존에 여기에 있던 checkBtn.disabled = false 와 startTimer()는 지워졌습니다!
 
   }catch(e){
+    if(e.name==='AbortError') return;
     console.error(e);
     document.getElementById('hint').textContent = "오류가 발생했습니다.";
-    isLoading = false;
   }
 }
 
