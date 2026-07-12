@@ -75,17 +75,20 @@ async function scrape(yearOrTitle, isVip = false) {
             rawText = rawText.substring(0, 1000).replace(/\s+/g, " ").trim();
 
             const aliases = makeNameAliases(page.title);
-            if (page.thumbnail?.source && isValidImageUrl(page.thumbnail.source) && isHumanPhoto(page.pageimage || "", aliases)) {
-                if (!RESULT_POOL.some(item => item.name === page.title)) {
-                    RESULT_POOL.push({
-                        name: page.title,
-                        imageUrl: page.thumbnail.source,
-                        hint: createMaskedHint(page.title, rawText),
-                        description: rawText.length > 500 ? rawText.substring(0, 500) + "..." : rawText
-                    });
-                }
-            }
+            // 기존 if 문을 아래와 같이 교체
+if (page.thumbnail?.source && isValidImageUrl(page.thumbnail.source) && isHumanPhoto(page.pageimage || "", aliases)) {
+    if (page.thumbnail.source && !page.thumbnail.source.includes("undefined")) { 
+        if (!RESULT_POOL.some(item => item.name === page.title)) {
+            RESULT_POOL.push({
+                name: page.title,
+                imageUrl: page.thumbnail.source,
+                hint: createMaskedHint(page.title, rawText),
+                description: rawText.length > 500 ? rawText.substring(0, 500) + "..." : rawText
+            });
         }
+    }
+}
+
     } catch (e) { 
         console.error(`⚠️ [Scrape Error] 연도/인물 ${yearOrTitle} 처리 중 에러 발생 (건너뜀)`);
     }
