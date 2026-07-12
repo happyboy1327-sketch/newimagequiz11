@@ -162,6 +162,17 @@ document.getElementById('reloadBtn').addEventListener('click', loadQuiz);
 document.getElementById('answer').addEventListener('keydown', e=>{ if(e.key==="Enter") document.getElementById('checkBtn').click(); });
 
 window.addEventListener('load', loadQuiz);
+  const imgObserver = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'src') {
+            const img = mutation.target;
+            if (img.src && (img.src.includes('undefined') || img.src.endsWith('/undefined'))) {
+                img.removeAttribute('src');
+            }
+        }
+    });
+});
+imgObserver.observe(document.getElementById('person-img'), { attributes: true });
 </script>
 </body>
 </html>
