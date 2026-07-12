@@ -197,6 +197,22 @@ async function fillCache() {
                 });
 
                 const pages = Object.values(detailRes.data.query?.pages || {});
+                
+                const listRes = await axios.get(...);
+
+                console.log("출생연도 조회:", Date.now() - t0, "ms");
+
+                const t1 = Date.now();
+
+                const detailRes = await axios.get(...);
+
+                console.log("상세 조회:", Date.now() - t1, "ms");
+
+                const t2 = Date.now();
+
+                const t0 = Date.now();
+
+
 
                 for (const pageData of pages) {
                     if (QUIZ_CACHE.length >= CACHE_SIZE) break; 
@@ -231,7 +247,7 @@ async function fillCache() {
             continue; 
         }
     }
-
+    console.log("이미지 검사:", Date.now() - t2, "ms");
     isCaching = false;
     console.log(`✅ 현재 최종 캐시량: ${QUIZ_CACHE.length}/${CACHE_SIZE}`);
     
@@ -240,37 +256,59 @@ async function fillCache() {
 
 fillCache();
 
+// for (const pageData of pages) { ... }
+
+
+
 // --- API ---
 app.get("/api/quiz", async (req, res) => {
+app.get("/api/quiz", async (req, res) => {
+  const apiStart = Date.now();   // ← 추가
+
   try {
-    const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`; 
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 
     if (QUIZ_CACHE.length === 0) {
-        fillCache(); 
-        let attempts = 0;
-        while (QUIZ_CACHE.length === 0 && attempts < 15) { 
-            await new Promise(resolve => setTimeout(resolve, 400));
-            attempts++;
-        }
-    }
-  
-    const item = QUIZ_CACHE.shift();
-  
-    if (!item) {
-        return res.status(503).json({ error: "데이터 준비 중입니다. 잠시 후 새로고침 해주세요.", requestId });
+      fillCache();
+
+      let attempts = 0;
+      while (QUIZ_CACHE.length === 0 && attempts < 15) {
+        await new Promise(resolve => setTimeout(resolve, 400));
+        attempts++;
+      }
     }
 
-    // 캐시가 5개 이하로 떨어지면 백그라운드 자동 충전
-    if (QUIZ_CACHE.length <= 22) fillCache(); 
+    const item = QUIZ_CACHE.shift();
+
+    if (!item) {
+      console.log("API 처리:", Date.now() - apiStart, "ms");   // ← 추가
+      return res.status(503).json({
+        error: "데이터 준비 중입니다. 잠시 후 새로고침 해주세요.",
+        requestId
+      });
+    }
+
+    if (QUIZ_CACHE.length <= 22) fillCache();
 
     LAST_PLAYED.push(item.name);
-    if (LAST_PLAYED.length > 15) LAST_PLAYED.shift(); 
+    if (LAST_PLAYED.length > 15) LAST_PLAYED.shift();
 
-    res.json({ ...item, imageUrl: item.image, requestId });
+    console.log("API 처리:", Date.now() - apiStart, "ms");   // ← 추가
+
+    res.json({
+      ...item,
+      imageUrl: item.image,
+      requestId
+    });
 
   } catch (error) {
     console.error("API 오류 발생:", error);
-    res.status(500).json({ error: "서버 내부 오류", errorId: `err_${Date.now()}` });
+    console.log("API 처리:", Date.now() - apiStart, "ms");   // ← 추가
+
+    res.status(500).json({
+      error: "서버 내부 오류",
+      errorId: `err_${Date.now()}`
+    });
   }
 });
 
