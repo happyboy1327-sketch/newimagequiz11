@@ -150,7 +150,7 @@ async function fillCache() {
         randomSearchAttempts++;
         try {
             // 1. 레거시/일반 모드 결정
-            const isLegacyTurn = Math.random() < 0.4;
+            const isLegacyTurn = Math.random() < 0.6;
             let targetTitles = [];
 
             if (isLegacyTurn) {
@@ -158,7 +158,7 @@ async function fillCache() {
                 targetTitles = shuffledVips.filter(name => !QUIZ_CACHE.some(c => c.name.includes(name)));
             } else {
                 // 1900~2000년생 카테고리 멤버 API 호출
-                const year = Math.floor(Math.random() * (2000 - 1900 + 1)) + 1900;
+                const year = Math.floor(Math.random() * (2000 - 900 + 1)) + 900;
                 const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
                     ...WIKI_AXIOS_CONFIG,
                     params: {
