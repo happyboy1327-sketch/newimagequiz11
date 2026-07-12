@@ -146,33 +146,32 @@ async function fillCache() {
 
     console.log(`🔄 캐시 충전 시작 (현재: ${QUIZ_CACHE.length}/${CACHE_SIZE})`);
 
+    // ⚡ O(1) 초고속 중복 체크용 Set 생성
+    const forbiddenNames = new Set([
+        ...LAST_PLAYED,
+        ...QUIZ_CACHE.map(q => q.name)
+    ]);
+
     while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 10) {
         randomSearchAttempts++;
         try {
-            // 1. 레거시/일반 모드 결정
-            const isLegacyTurn = Math.random() < 0.6;
+            const isLegacyTurn = Math.random() < 0.6; // 레거시 60%
             let targetTitles = [];
 
             if (isLegacyTurn) {
                 const shuffledVips = LEGACY_VIP_LIST.sort(() => Math.random() - 0.5).slice(0, 10);
-                // 🛠️ 수정: 현재 캐시뿐만 아니라 최근에 플레이한 유저 목록(LAST_PLAYED)에서도 제외
-                targetTitles = shuffledVips.filter(name => 
-                    !QUIZ_CACHE.some(c => c.name.includes(name)) &&
-                    !LAST_PLAYED.some(lp => lp.includes(name))
-                );
+                targetTitles = shuffledVips.filter(name => !forbiddenNames.has(name));
             } else {
-                const year = Math.floor(Math.random() * (2000 - 900 + 1)) + 900;
+                const year = Math.floor(Math.random() * (2000 - 900 + 1)) + 900; // 900년 ~ 2000년
                 const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
                     ...WIKI_AXIOS_CONFIG,
-                    params: { action: "query", list: "categorymembers", cmtitle: `분류:${year}년_출생`, cmlimit: 50, cmtype: "page", format: "json", origin: "*" }
+                    params: { action: "query", list: "categorymembers", cmtitle: `분류:${year}년_출생`, cmlimit: 60, cmtype: "page", format: "json", origin: "*" }
                 });
-                // 🛠️ 수정: 일반 인물 검색에서도 최근 플레이 목록(LAST_PLAYED) 필터링 추가
+                
+                // 🛠️ [복구 1] 괄호 분기 및 노이즈 직업군(선수, 음악 등) 칼같이 차단
                 targetTitles = (listRes.data.query?.categorymembers || [])
-                    .filter(c => 
-                        !c.title.includes(":") && 
-                        !QUIZ_CACHE.some(q => q.name === c.title) &&
-                        !LAST_PLAYED.includes(c.title)
-                    )
+                    .filter(c => !c.title.includes(":") && !forbiddenNames.has(c.title))
+                    .filter(c => !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(c.title))
                     .sort(() => Math.random() - 0.5)
                     .map(c => c.title).slice(0, 15);
             }
@@ -189,13 +188,21 @@ async function fillCache() {
                 if (!pageData.extract || pageData.extract.length < 100) return null;
                 if (!isLegacyTurn && /(대학교수|교수|석좌교수|교육자)/.test(pageData.extract)) return null;
 
+                // 🛠️ [복구 2] 위키백과 지저분한 구문(각주, ==제목==, 공백) 정제 로직
+                let rawText = pageData.extract;
+                const cutIndex = rawText.search(/==\s*(각주|같이 보기|참고 문헌|외부 링크)\s*==/i);
+                if (cutIndex !== -1) rawText = rawText.substring(0, cutIndex);
+                
+                rawText = rawText.substring(0, 1200).replace(/=+\s*.*?\s*=+/g, " ").replace(/\s+/g, " ").trim();
+                if (rawText.length < 100) return null;
+
                 const aliases = makeNameAliases(pageData.title);
                 if (pageData.thumbnail?.source && isValidImageUrl(pageData.thumbnail.source) && isHumanPhoto(pageData.pageimage || "", aliases)) {
                     return {
                         name: pageData.title,
                         image: pageData.thumbnail.source,
-                        hint: createMaskedHint(pageData.title, pageData.extract),
-                        description: pageData.extract.substring(0, 1000)
+                        hint: createMaskedHint(pageData.title, rawText), // 정제된 텍스트로 힌트 생성
+                        description: rawText.length > 1000 ? rawText.substring(0, 1000) + "..." : rawText 
                     };
                 }
                 return null;
@@ -203,12 +210,11 @@ async function fillCache() {
 
             const results = await Promise.all(processTasks);
             
-            // 4. 결과 취합
             results.forEach(item => {
                 if (item && QUIZ_CACHE.length < CACHE_SIZE) {
-                    // 🛠️ 안전장치: 혹시 모를 동시 적재 중복 한 번 더 방어
-                    if (!QUIZ_CACHE.some(q => q.name === item.name) && !LAST_PLAYED.includes(item.name)) {
+                    if (!forbiddenNames.has(item.name)) {
                         QUIZ_CACHE.push(item);
+                        forbiddenNames.add(item.name); 
                         foundCount++;
                     }
                 }
@@ -227,6 +233,7 @@ async function fillCache() {
         setTimeout(fillCache, delay);
     }
 }
+
 
 fillCache();
 
