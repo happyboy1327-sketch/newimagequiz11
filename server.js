@@ -149,7 +149,7 @@ async function scoutWikipedia(forbiddenNames, forceLegacy = false) {
 
             const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
                 ...WIKI_AXIOS_CONFIG,
-                params: { action: "query", titles: targetTitles.join('|'), prop: "extracts|pageimages", explaintext: true, pithumbsize: 600, format: "json", origin: "*" }
+                params: { action: "query", titles: targetTitles.join('|'), prop: "extracts|pageimages", explaintext: true, pithumbsize: 400, format: "json", origin: "*" }
             });
             pages = Object.values(detailRes.data.query?.pages || {});
         } else {
@@ -164,7 +164,7 @@ async function scoutWikipedia(forbiddenNames, forceLegacy = false) {
                 params: {
                     action: "query", generator: "categorymembers", gcmtitle: `분류:${year}년_출생`,
                     gcmlimit: 40, gcmtype: "page", prop: "extracts|pageimages",
-                    explaintext: true, pithumbsize: 600, format: "json", origin: "*"
+                    explaintext: true, pithumbsize: 400, format: "json", origin: "*"
                 }
             });
             pages = Object.values(res.data.query?.pages || {})
