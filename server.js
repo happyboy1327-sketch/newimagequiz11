@@ -28,6 +28,9 @@ let LAST_PLAYED = [];
 
 // 2. 핵심 퀴즈 API 핸들러
 app.get("/api/quiz", (req, res) => {
+    if (req.url.includes("undefined")) {
+    return res.status(204).end(); // 204(No Content)를 주면 브라우저가 요청을 조용히 중단함
+    }
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 
     if (QUIZ_DATABASE.length === 0) {
