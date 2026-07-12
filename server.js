@@ -292,42 +292,33 @@ app.get("/api/quiz", async (req, res) => {
         fillCache(); 
 
         let resolvedItem = null;
-        
-        // 5발 레이서 동시 발사
-        //;
 
-        const racers = Array.from({ length: 5 }, async () => {
-    if (resolvedItem) return; 
-    
-    const items = await scoutWikipedia(forbiddenNames, true); 
-    if (items.length > 0 && !resolvedItem) {
-        // 🛑 1등 골인 직전 실시간 중복 체크
+const racers = Array.from({ length: 5 }, () =>
+    scoutWikipedia(forbiddenNames, true).then(items => {
+        if (items.length === 0) throw new Error("empty");
+
         const isDuplicate = LAST_PLAYED.includes(items[0].name) || QUIZ_CACHE.some(q => q.name === items[0].name);
-        if (!isDuplicate && !resolvedItem) {
-            resolvedItem = items[0]; 
-        }
-        
-        // 🛑 남은 짜바리 데이터들도 실시간으로 중복 검사하며 창고에 적립
+
         items.slice(1).forEach(subItem => {
             if (QUIZ_CACHE.length < CACHE_SIZE) {
-                const isSubDuplicate = LAST_PLAYED.includes(subItem.name) || 
-                                       QUIZ_CACHE.some(q => q.name === subItem.name) || 
-                                       (resolvedItem && resolvedItem.name === subItem.name);
-                if (!isSubDuplicate) {
-                    QUIZ_CACHE.push(subItem);
-                }
+                const isSubDuplicate = LAST_PLAYED.includes(subItem.name) || QUIZ_CACHE.some(q => q.name === subItem.name);
+                if (!isSubDuplicate) QUIZ_CACHE.push(subItem);
             }
         });
-    }
-});
 
+        if (isDuplicate) throw new Error("duplicate");
+        return items[0];
+    })
+);
 
-        // 🔗 통합 체크 루프: 레이싱 결과(resolvedItem)가 나오거나, 
-        // 혹은 fillCache()가 백그라운드에서 먼저 긁어와서 QUIZ_CACHE에 넣을 때까지 양쪽 다 감시함
-        for (let i = 0; i < 15; i++) {
-            if (resolvedItem || QUIZ_CACHE.length > 0) break;
-            await new Promise(resolve => setTimeout(resolve, 200)); // 0.2초마다 촘촘하게 체크
-        }
+try {
+    resolvedItem = await Promise.any([
+        ...racers,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000))
+    ]);
+} catch (e) {
+    // 5개 다 실패하거나 3초 타임아웃 → resolvedItem은 null 그대로
+}
 
         // 레이싱 엔진이 먼저 물어온 경우
         if (resolvedItem) {
