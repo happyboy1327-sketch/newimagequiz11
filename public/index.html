@@ -71,71 +71,57 @@ const LOADING_IMG = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="
 
 async function loadQuiz(){
   if(quizController) quizController.abort();
-  quizController=new AbortController();
-  const signal=quizController.signal;
-  const token=++requestToken;
+  quizController = new AbortController();
+  const signal = quizController.signal;
+  const token = ++requestToken;
+  
   clearInterval(timer);
   document.getElementById('result').innerHTML = "";
   document.getElementById('answer').value = "";
-  document.getElementById('answer').focus();
   document.getElementById('checkBtn').disabled = true;
   
   const img = document.getElementById('person-img');
-  img.onload = null;
-  img.src = LOADING_IMG;
+  img.src = LOADING_IMG; // 투명 이미지로 초기화
 
-  // 이미지 패스 처리
+  // 이미지 오류 처리: 무한 재요청 대신 메시지만 띄움
   img.onerror = () => {
-    console.warn("이미지 로드 실패 → 패스");
+    document.getElementById('hint').textContent = "이미지를 불러올 수 없습니다. 다시 시도해주세요.";
+    document.getElementById('checkBtn').disabled = true;
+  };
 
-    retryCount++;
-    if (retryCount > MAX_RETRY) {
-        document.getElementById('hint').textContent = "이미지 불안정으로 로드 실패. 다시 시도해주세요.";
-        return;
-    }
+  document.getElementById('hint').textContent = "이미지를 로드 중입니다...";
 
-    // 자동 재요청
-    loadQuiz();
-};
-
-  
-  document.getElementById('hint').textContent = "최적의 이미지를 선별하고 있습니다...";
-  timeLeft = 15;
-  document.getElementById('timer').textContent = `${timeLeft}s`;
-
-  try{
-    const res = await fetch(`/api/quiz?sessionId=${sessionId}`,{signal});
-    if(res.status === 503) {
-        document.getElementById('hint').textContent = "적절한 이미지 찾는 중... 약 20초 후 '다음 문제'를 눌러주세요.";
-        document.getElementById('reloadBtn').disabled = false;
-        return;
-    }
-    
+  try {
+    const res = await fetch(`/api/quiz?sessionId=${sessionId}`, {signal});
     const data = await res.json();
-    if(token!==requestToken) return;
+    
+    if(token !== requestToken) return;
     if(data.error) throw new Error(data.error);
+    
+    // 데이터 검증: 이미지 경로가 없으면 에러 던짐
+    if (!data.image || data.image === "undefined") {
+        throw new Error("서버에서 올바른 이미지 경로를 받지 못했습니다.");
+    }
 
     currentData = data;
-    img.src = data.image; // 이미지 다운로드 시작
     
-    // ★ 수정: 이미지가 화면에 완전히 로딩 완료된 "그 순간"부터 게임을 시작합니다.
+    // 이미지 로드 감지
     img.onload = () => {
-        if(token!==requestToken) return;
-        retryCount = 0; // 정상 이미지 → 카운터 초기화
-        document.getElementById('checkBtn').disabled = false; // 정답 버튼 활성화
-        startTimer(); // 타이머 시작!
+        if(token !== requestToken) return;
+        document.getElementById('checkBtn').disabled = false;
+        document.getElementById('hint').textContent = data.hint || "정답을 입력하세요!";
+        startTimer();
     };
-
-    document.getElementById('hint').textContent = data.hint;
     
-    // [주의] 기존에 여기에 있던 checkBtn.disabled = false 와 startTimer()는 지워졌습니다!
+    img.src = data.image; // 이미지 로드 시작
 
-  }catch(e){
-    if(e.name==='AbortError') return;
-    console.error(e);
-    document.getElementById('hint').textContent = "오류가 발생했습니다.";
+  } catch(e) {
+    if(e.name === 'AbortError') return;
+    console.error("데이터 로드 실패:", e);
+    document.getElementById('hint').textContent = "데이터를 불러오는 중 오류가 발생했습니다.";
   }
 }
+
 
 function startTimer(){
   clearInterval(timer); // ★ 핵심: 겹쳐있는 유령 타이머들 완벽 제거
