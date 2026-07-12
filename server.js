@@ -141,54 +141,53 @@ async function fillCache() {
     if (QUIZ_CACHE.length >= CACHE_SIZE) return;
 
     isCaching = true;
-    let foundCount = 0; 
-    let randomSearchAttempts = 0;
+    console.log(`🔄 [완벽 검수판] 캐시 충전 시작 (현재: ${QUIZ_CACHE.length}/${CACHE_SIZE})`);
 
-    console.log(`🔄 캐시 충전 시작 (현재: ${QUIZ_CACHE.length}/${CACHE_SIZE})`);
-
-    // ⚡ O(1) 초고속 중복 체크용 Set 생성
     const forbiddenNames = new Set([
         ...LAST_PLAYED,
         ...QUIZ_CACHE.map(q => q.name)
     ]);
 
-    while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 10) {
-        randomSearchAttempts++;
+    // 한 번의 API 사이클 함수
+    async function runSingleAttempt() {
         try {
-            const isLegacyTurn = Math.random() < 0.6; // 레거시 60%
-            let targetTitles = [];
+            const isLegacyTurn = Math.random() < 0.6;
+            let pages = [];
 
             if (isLegacyTurn) {
                 const shuffledVips = LEGACY_VIP_LIST.sort(() => Math.random() - 0.5).slice(0, 10);
-                targetTitles = shuffledVips.filter(name => !forbiddenNames.has(name));
-            } else {
-                const year = Math.floor(Math.random() * (2000 - 900 + 1)) + 900; // 900년 ~ 2000년
-                const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+                const targetTitles = shuffledVips.filter(name => !forbiddenNames.has(name));
+                if (targetTitles.length === 0) return [];
+
+                const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
                     ...WIKI_AXIOS_CONFIG,
-                    params: { action: "query", list: "categorymembers", cmtitle: `분류:${year}년_출생`, cmlimit: 60, cmtype: "page", format: "json", origin: "*" }
+                    params: { action: "query", titles: targetTitles.join('|'), prop: "extracts|pageimages", explaintext: true, pithumbsize: 600, format: "json", origin: "*" }
+                });
+                pages = Object.values(detailRes.data.query?.pages || {});
+            } else {
+                const year = Math.random() < 0.5 
+                    ? Math.floor(Math.random() * (2000 - 1900 + 1)) + 1900  
+                    : Math.floor(Math.random() * (1899 - 900 + 1)) + 900;    
+
+                const res = await axios.get("https://ko.wikipedia.org/w/api.php", {
+                    ...WIKI_AXIOS_CONFIG,
+                    params: {
+                        action: "query", generator: "categorymembers", gcmtitle: `분류:${year}년_출생`,
+                        gcmlimit: 40, gcmtype: "page", prop: "extracts|pageimages",
+                        explaintext: true, pithumbsize: 600, format: "json", origin: "*"
+                    }
                 });
                 
-                // 🛠️ [복구 1] 괄호 분기 및 노이즈 직업군(선수, 음악 등) 칼같이 차단
-                targetTitles = (listRes.data.query?.categorymembers || [])
-                    .filter(c => !c.title.includes(":") && !forbiddenNames.has(c.title))
-                    .filter(c => !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(c.title))
-                    .sort(() => Math.random() - 0.5)
-                    .map(c => c.title).slice(0, 15);
+                // 🛠️ [복구] 네임스페이스(:) 차단 및 1차 중복 체크 필터 적용
+                pages = Object.values(res.data.query?.pages || {})
+                    .filter(page => !page.title.includes(":") && !forbiddenNames.has(page.title));
             }
-
-            if (targetTitles.length === 0) continue;
-
-            const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                ...WIKI_AXIOS_CONFIG,
-                params: { action: "query", titles: targetTitles.join('|'), prop: "extracts|pageimages", explaintext: true, pithumbsize: 600, format: "json", origin: "*" }
-            });
-            const pages = Object.values(detailRes.data.query?.pages || {});
 
             const processTasks = pages.map(async (pageData) => {
                 if (!pageData.extract || pageData.extract.length < 100) return null;
                 if (!isLegacyTurn && /(대학교수|교수|석좌교수|교육자)/.test(pageData.extract)) return null;
+                if (!isLegacyTurn && /\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(pageData.title)) return null;
 
-                // 🛠️ [복구 2] 위키백과 지저분한 구문(각주, ==제목==, 공백) 정제 로직
                 let rawText = pageData.extract;
                 const cutIndex = rawText.search(/==\s*(각주|같이 보기|참고 문헌|외부 링크)\s*==/i);
                 if (cutIndex !== -1) rawText = rawText.substring(0, cutIndex);
@@ -201,7 +200,7 @@ async function fillCache() {
                     return {
                         name: pageData.title,
                         image: pageData.thumbnail.source,
-                        hint: createMaskedHint(pageData.title, rawText), // 정제된 텍스트로 힌트 생성
+                        hint: createMaskedHint(pageData.title, rawText),
                         description: rawText.length > 1000 ? rawText.substring(0, 1000) + "..." : rawText 
                     };
                 }
@@ -209,30 +208,54 @@ async function fillCache() {
             });
 
             const results = await Promise.all(processTasks);
-            
-            results.forEach(item => {
-                if (item && QUIZ_CACHE.length < CACHE_SIZE) {
-                    if (!forbiddenNames.has(item.name)) {
-                        QUIZ_CACHE.push(item);
-                        forbiddenNames.add(item.name); 
-                        foundCount++;
-                    }
-                }
-            });
+            return results.filter(item => item !== null);
 
         } catch (e) {
-            console.warn(`⚠️ API 검색 중 에러 발생: ${e.message}`);
+            return [];
         }
     }
 
-    isCaching = false;
-    console.log(`✅ 캐시 충전 종료 (이번에 ${foundCount}명 추가, 총 ${QUIZ_CACHE.length}명)`);
-    
-    if (QUIZ_CACHE.length <= 5) {
-        const delay = (foundCount > 0) ? 2000 : 10000;
-        setTimeout(fillCache, delay);
+    try {
+        let batchCount = 0;
+        
+        // 🔥 [진짜 해결] 목표 CACHE_SIZE를 다 채울 때까지 3발씩 병렬로 연사 유기적 반복!
+        // (서버 부하를 고려해 무한루프 방지용 batchCount 장착)
+        while (QUIZ_CACHE.length < CACHE_SIZE && batchCount < 5) {
+            batchCount++;
+            
+            const concurrentAttempts = [
+                runSingleAttempt(),
+                runSingleAttempt(),
+                runSingleAttempt()
+            ];
+            
+            const allResults = await Promise.all(concurrentAttempts);
+            
+            allResults.flat().forEach(item => {
+                if (item && QUIZ_CACHE.length < CACHE_SIZE) {
+                    if (!forbiddenNames.has(item.name)) {
+                        QUIZ_CACHE.push(item);
+                        forbiddenNames.add(item.name);
+                    }
+                }
+            });
+        }
+
+        isCaching = false;
+        console.log(`✅ 캐시 충전 완수 (현재: ${QUIZ_CACHE.length}/${CACHE_SIZE}, 총 ${batchCount}회 배치 가동)`);
+        
+        // 비상 빵꾸 방지용 마지노선 예약 장치
+        if (QUIZ_CACHE.length <= 5) {
+            setTimeout(fillCache, 4000);
+        }
+
+    } catch (err) {
+        console.error("❌ 캐시 엔진 치명적 에러:", err);
+        isCaching = false;
+        setTimeout(fillCache, 10000);
     }
 }
+
 
 
 fillCache();
