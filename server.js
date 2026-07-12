@@ -155,53 +155,41 @@ async function fillCache() {
 
             if (isLegacyTurn) {
                 const shuffledVips = LEGACY_VIP_LIST.sort(() => Math.random() - 0.5).slice(0, 10);
-                targetTitles = shuffledVips.filter(name => !QUIZ_CACHE.some(c => c.name.includes(name)));
+                // 🛠️ 수정: 현재 캐시뿐만 아니라 최근에 플레이한 유저 목록(LAST_PLAYED)에서도 제외
+                targetTitles = shuffledVips.filter(name => 
+                    !QUIZ_CACHE.some(c => c.name.includes(name)) &&
+                    !LAST_PLAYED.some(lp => lp.includes(name))
+                );
             } else {
-                // 1900~2000년생 카테고리 멤버 API 호출
                 const year = Math.floor(Math.random() * (2000 - 900 + 1)) + 900;
                 const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
                     ...WIKI_AXIOS_CONFIG,
-                    params: {
-                        action: "query",
-                        list: "categorymembers",
-                        cmtitle: `분류:${year}년_출생`,
-                        cmlimit: 50,
-                        cmtype: "page",
-                        format: "json",
-                        origin: "*"
-                    }
+                    params: { action: "query", list: "categorymembers", cmtitle: `분류:${year}년_출생`, cmlimit: 50, cmtype: "page", format: "json", origin: "*" }
                 });
+                // 🛠️ 수정: 일반 인물 검색에서도 최근 플레이 목록(LAST_PLAYED) 필터링 추가
                 targetTitles = (listRes.data.query?.categorymembers || [])
-                    .filter(c => !c.title.includes(":") && !QUIZ_CACHE.some(q => q.name === c.title))
+                    .filter(c => 
+                        !c.title.includes(":") && 
+                        !QUIZ_CACHE.some(q => q.name === c.title) &&
+                        !LAST_PLAYED.includes(c.title)
+                    )
                     .sort(() => Math.random() - 0.5)
                     .map(c => c.title).slice(0, 15);
             }
 
             if (targetTitles.length === 0) continue;
 
-            // 2. [API 호출] 위키백과 상세 정보 가져오기
             const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
                 ...WIKI_AXIOS_CONFIG,
-                params: {
-                    action: "query",
-                    titles: targetTitles.join('|'),
-                    prop: "extracts|pageimages",
-                    explaintext: true,
-                    pithumbsize: 600,
-                    format: "json",
-                    origin: "*"
-                }
+                params: { action: "query", titles: targetTitles.join('|'), prop: "extracts|pageimages", explaintext: true, pithumbsize: 600, format: "json", origin: "*" }
             });
             const pages = Object.values(detailRes.data.query?.pages || {});
 
-            // 3. [병렬 처리] 페이지별 이미지 및 사진 유효성 검사
             const processTasks = pages.map(async (pageData) => {
                 if (!pageData.extract || pageData.extract.length < 100) return null;
-                // 교수님 컷
                 if (!isLegacyTurn && /(대학교수|교수|석좌교수|교육자)/.test(pageData.extract)) return null;
 
                 const aliases = makeNameAliases(pageData.title);
-                // 유효성 검사 (isHumanPhoto, isValidImageUrl은 기존 함수 그대로 사용)
                 if (pageData.thumbnail?.source && isValidImageUrl(pageData.thumbnail.source) && isHumanPhoto(pageData.pageimage || "", aliases)) {
                     return {
                         name: pageData.title,
@@ -213,14 +201,16 @@ async function fillCache() {
                 return null;
             });
 
-            // 모든 검사를 병렬로 처리
             const results = await Promise.all(processTasks);
             
             // 4. 결과 취합
             results.forEach(item => {
                 if (item && QUIZ_CACHE.length < CACHE_SIZE) {
-                    QUIZ_CACHE.push(item);
-                    foundCount++;
+                    // 🛠️ 안전장치: 혹시 모를 동시 적재 중복 한 번 더 방어
+                    if (!QUIZ_CACHE.some(q => q.name === item.name) && !LAST_PLAYED.includes(item.name)) {
+                        QUIZ_CACHE.push(item);
+                        foundCount++;
+                    }
                 }
             });
 
@@ -232,10 +222,8 @@ async function fillCache() {
     isCaching = false;
     console.log(`✅ 캐시 충전 종료 (이번에 ${foundCount}명 추가, 총 ${QUIZ_CACHE.length}명)`);
     
-    // 5. [안전장치] 캐시 5개 이하일 때 재시도 (데이터 없으면 10초, 있으면 2초)
     if (QUIZ_CACHE.length <= 5) {
         const delay = (foundCount > 0) ? 2000 : 10000;
-        console.log(`⏳ 다음 자동 충전까지 ${delay/1000}초 대기...`);
         setTimeout(fillCache, delay);
     }
 }
