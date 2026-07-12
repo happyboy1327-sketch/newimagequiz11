@@ -18,7 +18,7 @@ try {
         QUIZ_DATABASE = JSON.parse(fs.readFileSync(dbPath, "utf-8"));
         console.log(`[System] 로컬 퀴즈 DB 로드 성공 (총 ${QUIZ_DATABASE.length}명)`);
     } else {
-        console.error("[Warning] quiz-db.json 파일이 람다 환경에 존재하지 않습니다.");
+        console.error("[Warning] quiz-db.json 파일이 존재하지 않습니다.");
     }
 } catch (err) {
     console.error("DB 로드 에러:", err);
@@ -27,10 +27,9 @@ try {
 let LAST_PLAYED = [];
 
 // 2. 핵심 퀴즈 API 핸들러
-const quizHandler = (req, res) => {
+app.get("/api/quiz", (req, res) => {
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 
-    // DB 파일 누락 등 비상 상황 발생 시 HTML이 아닌 깨끗한 JSON 에러로 프론트에 반환 (SyntaxError 방지)
     if (QUIZ_DATABASE.length === 0) {
         return res.status(503).json({ 
             error: "데이터베이스가 준비되지 않았습니다. 빌드 단계를 확인하세요.", 
@@ -62,18 +61,17 @@ const quizHandler = (req, res) => {
     if (LAST_PLAYED.length > 20) LAST_PLAYED.shift();
 
     return res.json({ ...pick, requestId });
-};
+});
 
-// Vercel 라우팅 환경에 맞춰 두 주소 모두 대응
-app.get("/api/quiz", quizHandler);
-app.get("/quiz", quizHandler);
+// 3. [여기 중요] 로컬/Vercel 상관없이 항상 정적 파일과 메인화면을 Express가 직접 서빙함
+app.use(express.static(path.join(process.cwd(), "public")));
 
-// 3. [중요] 로컬 컴퓨터 환경에서만 static 폴더 작동 활성화
-// Vercel(배포 환경)에서는 위 vercel.json의 CDN 레이어가 이 역할을 대신 수행함
+app.get("*", (req, res) => {
+    res.sendFile(path.join(process.cwd(), "public", "index.html"));
+});
+
+// 4. 포트 열고 대기하는 listen 기능만 Vercel 환경에서 제외 (Vercel 자체 에러 방지)
 if (!process.env.VERCEL) {
-    app.use(express.static(path.join(process.cwd(), "public")));
-    app.get("*", (req, res) => res.sendFile(path.join(process.cwd(), "public", "index.html")));
-    
     app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
 }
 
