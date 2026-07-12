@@ -237,38 +237,40 @@ async function fillCache() {
     }
 }
 
-// 3. 🔥 라우터: 캐시가 완전히 말랐을 때 대기 시간을 최소화하는 기믹
 app.get("/api/quiz", async (req, res) => {
     try {
         const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
         const forbiddenNames = new Set([...LAST_PLAYED, ...QUIZ_CACHE.map(q => q.name)]);
 
-        // [경로 A] 캐시에 데이터가 있으면? 0초 만에 즉시 반환
+        // [경로 A] 창고에 물건이 존재하면? 0초 만에 낚아채서 즉시 반환
         if (QUIZ_CACHE.length > 0) {
             const item = QUIZ_CACHE.shift();
+            
             LAST_PLAYED.push(item.name);
             if (LAST_PLAYED.length > 15) LAST_PLAYED.shift();
             
-            if (QUIZ_CACHE.length <= 20) fillCache(); // 꺼내 쓰고 남은 양 적으면 충전 요청
+            // 캐시가 22개 이하로 떨어지면 충전 요청 (두 번째 블록 조건 적용)
+            if (QUIZ_CACHE.length <= 22) fillCache(); 
             return res.json({ ...item, imageUrl: item.image, requestId });
         }
 
-        // [경로 B] 🚨 비상 상황: 캐시가 0개다! 꼼수 없이 위키백과로 정면 돌파
-        console.warn("🚨 캐시 전멸! 레이싱 엔진 가동합니다.");
+        // [경로 B] 🚨 비상 상황: 캐시가 0개다! 꼼수 없이 위키백과 정면 돌파 + 레이싱 가동
+        console.warn("🚨 캐시 전멸! 레이싱 엔진 및 백그라운드 충전 동시 가동합니다.");
+        
+        // 백그라운드 일반 충전도 같이 트리거
+        fillCache(); 
 
-        // 5발을 동시에 쏘되, 각 화살이 독립적으로 결과를 처리하게 만듦
         let resolvedItem = null;
         
+        // 5발 레이서 동시 발사
         const racers = Array.from({ length: 5 }, async () => {
-            if (resolvedItem) return; // 이미 다른 넘이 1등으로 골인했으면 탈출
+            if (resolvedItem) return; 
             
-            // 캐시가 비었을 땐 성공 확률 100%인 레거시 트랙 강제 비중 높임
             const items = await scoutWikipedia(forbiddenNames, true); 
             if (items.length > 0 && !resolvedItem) {
-                // 가장 먼저 성공한 리스트의 첫 번째 놈을 정답으로 낚아챔
                 resolvedItem = items[0]; 
                 
-                // 1등 빼고 남은 짜바리 데이터들은 버리지 않고 캐시에 적립 (자원 재활용)
+                // 1등 빼고 남은 데이터는 창고에 적립
                 items.slice(1).forEach(subItem => {
                     if (QUIZ_CACHE.length < CACHE_SIZE && !forbiddenNames.has(subItem.name)) {
                         QUIZ_CACHE.push(subItem);
@@ -277,67 +279,43 @@ app.get("/api/quiz", async (req, res) => {
             }
         });
 
-        // 5개의 요청 중 "가장 먼저 데이터 확보에 성공한 놈"이 나올 때까지 주기적으로 체크 (최대 6초 대기)
+        // 🔗 통합 체크 루프: 레이싱 결과(resolvedItem)가 나오거나, 
+        // 혹은 fillCache()가 백그라운드에서 먼저 긁어와서 QUIZ_CACHE에 넣을 때까지 양쪽 다 감시함
         for (let i = 0; i < 30; i++) {
-            if (resolvedItem) break;
-            await new Promise(resolve => setTimeout(resolve, 200)); // 0.2초마다 체크
+            if (resolvedItem || QUIZ_CACHE.length > 0) break;
+            await new Promise(resolve => setTimeout(resolve, 200)); // 0.2초마다 촘촘하게 체크
         }
 
+        // 레이싱 엔진이 먼저 물어온 경우
         if (resolvedItem) {
             LAST_PLAYED.push(resolvedItem.name);
             if (LAST_PLAYED.length > 15) LAST_PLAYED.shift();
             
-            // 남은 레이서들이 가져올 데이터 수거를 위해 백그라운드 충전 가동
             fillCache();
             return res.json({ ...resolvedItem, imageUrl: resolvedItem.image, requestId });
         }
 
-        // 만에 하나 위키백과 전체가 누워버려서 진짜 아무것도 안 나왔을 때의 최소한의 방어선
-        return res.status(503).json({ error: "위키백과 응답 지연. 잠시 후 다시 시도해주세요." });
+        // 레이싱은 늦었지만 fillCache가 먼저 창고에 채워 넣은 경우 (기존 while 루프의 안전망 역할)
+        if (QUIZ_CACHE.length > 0) {
+            const item = QUIZ_CACHE.shift();
+            
+            LAST_PLAYED.push(item.name);
+            if (LAST_PLAYED.length > 15) LAST_PLAYED.shift();
+            
+            if (QUIZ_CACHE.length <= 22) fillCache();
+            return res.json({ ...item, imageUrl: item.image, requestId });
+        }
+
+        // 둘 다 실패해서 진짜 아무것도 안 나왔을 때의 최종 컷트라인
+        return res.status(503).json({ 
+            error: "데이터 준비 중입니다. 잠시 후 새로고침 해주세요.", 
+            requestId 
+        });
 
     } catch (error) {
-        console.error("API 오류:", error);
-        res.status(500).json({ error: "서버 오류" });
+        console.error("API 오류 발생:", error);
+        res.status(500).json({ error: "서버 내부 오류", errorId: `err_${Date.now()}` });
     }
-});
-
-
-
-
-
-
-// --- API ---
-app.get("/api/quiz", async (req, res) => {
-  try {
-    const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`; 
-
-    if (QUIZ_CACHE.length === 0) {
-        fillCache(); 
-        let attempts = 0;
-        while (QUIZ_CACHE.length === 0 && attempts < 15) { 
-            await new Promise(resolve => setTimeout(resolve, 400));
-            attempts++;
-        }
-    }
-  
-    const item = QUIZ_CACHE.shift();
-  
-    if (!item) {
-        return res.status(503).json({ error: "데이터 준비 중입니다. 잠시 후 새로고침 해주세요.", requestId });
-    }
-
-    // 캐시가 5개 이하로 떨어지면 백그라운드 자동 충전
-    if (QUIZ_CACHE.length <= 22) fillCache(); 
-
-    LAST_PLAYED.push(item.name);
-    if (LAST_PLAYED.length > 15) LAST_PLAYED.shift(); 
-
-    res.json({ ...item, imageUrl: item.image, requestId });
-
-  } catch (error) {
-    console.error("API 오류 발생:", error);
-    res.status(500).json({ error: "서버 내부 오류", errorId: `err_${Date.now()}` });
-  }
 });
 
 app.use(express.static(path.join(process.cwd(), "public")));
