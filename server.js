@@ -157,23 +157,44 @@ async function scoutWikipedia(forbiddenNames, forceLegacy = false) {
             });
             pages = Object.values(detailRes.data.query?.pages || {});
         } else {
-            const year = Math.random() < 0.5 
-                ? Math.floor(Math.random() * (2000 - 1900 + 1)) + 1900  
-                : Math.floor(Math.random() * (1899 - 900 + 1)) + 900;    
+    const year = Math.random() < 0.5 
+        ? Math.floor(Math.random() * (2000 - 1900 + 1)) + 1900  
+        : Math.floor(Math.random() * (1899 - 900 + 1)) + 900;    
 
-            isHistorical = year < 1900;
+    isHistorical = year < 1900;
 
-            const res = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                ...WIKI_AXIOS_CONFIG,
-                params: {
-                    action: "query", generator: "categorymembers", gcmtitle: `분류:${year}년_출생`,
-                    gcmlimit: 40, gcmtype: "page", prop: "extracts|pageimages",
-                    explaintext: true, pithumbsize: 400, format: "json", origin: "*"
-                }
-            });
-            pages = Object.values(res.data.query?.pages || {})
-                .filter(page => !page.title.includes(":") && !forbiddenNames.has(page.title));
+    // 1단계: 제목만 저렴하게 조회 (extract 없음)
+    const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+        ...WIKI_AXIOS_CONFIG,
+        params: {
+            action: "query", generator: "categorymembers", gcmtitle: `분류:${year}년_출생`,
+            gcmlimit: 40, gcmtype: "page", format: "json", origin: "*"
         }
+    });
+
+    let candidates = Object.values(listRes.data.query?.pages || {})
+        .filter(page => !page.title.includes(":") && !forbiddenNames.has(page.title));
+
+    if (!isHistorical) {
+        candidates = candidates.filter(page =>
+            !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(page.title)
+        );
+    }
+
+    candidates = candidates.slice(0, 12); // 살아남은 것만 상세 조회
+    if (candidates.length === 0) return [];
+
+    // 2단계: 필터링 통과한 소수만 extract/이미지 요청
+    const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+        ...WIKI_AXIOS_CONFIG,
+        params: {
+            action: "query", titles: candidates.map(c => c.title).join('|'),
+            prop: "extracts|pageimages", explaintext: true, pithumbsize: 400,
+            format: "json", origin: "*"
+        }
+    });
+    pages = Object.values(detailRes.data.query?.pages || {});
+}
 
         const processTasks = pages.map(async (pageData) => {
             if (!pageData.extract || pageData.extract.length < 100) return null;
@@ -240,7 +261,7 @@ async function fillCache() {
     } finally {
         isCaching = false;
         if (QUIZ_CACHE.length < CACHE_SIZE) {
-            setTimeout(fillCache, 4000);
+            setTimeout(fillCache, 1500);
         }
     }
 }
