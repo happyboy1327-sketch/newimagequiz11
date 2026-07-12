@@ -71,8 +71,17 @@ app.get("*catchall", (req, res) => {
 });
 
 // 4. 포트 열고 대기하는 listen 기능만 Vercel 환경에서 제외 (Vercel 자체 에러 방지)
+// 3. 로컬 환경에서만 정적 파일 서빙 (Vercel에서는 위의 vercel.json이 처리함)
 if (!process.env.VERCEL) {
+    app.use(express.static(path.join(process.cwd(), "public")));
+    
+    app.use((req, res, next) => {
+        if (req.path.startsWith('/api')) return next();
+        res.sendFile(path.join(process.cwd(), "public", "index.html"));
+    });
+
     app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
 }
 
 export default app;
+
