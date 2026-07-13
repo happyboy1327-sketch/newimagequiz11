@@ -238,7 +238,36 @@ async function fillCache() {
                     if (!pageData || !pageData.extract || pageData.extract.length < 100) continue;
                     if (!isLegacyTurn && /(대학교수|명예교수|석좌교수|교수|교육자)/.test(pageData.extract)) continue;
 
+    if (!pageData) {
+        console.log("❌ pageData 없음");
+        continue;
+    }
+
+    if (!pageData.extract || pageData.extract.length < 100) {
+        console.log(`❌ ${pageData.title} → extract 부족`);
+        continue;
+    }
+
+    if (!isLegacyTurn && /(대학교수|명예교수|석좌교수|교수|교육자)/.test(pageData.extract)) {
+        console.log(`❌ ${pageData.title} → 교수 제외`);
+        continue;
+    }
                     const aliases = makeNameAliases(pageData.title);
+
+                    if (!pageData.thumbnail?.source) {
+        console.log(`❌ ${pageData.title} → 썸네일 없음`);
+        continue;
+    }
+
+    if (!isValidImageUrl(pageData.thumbnail.source)) {
+        console.log(`❌ ${pageData.title} → 이미지 형식 제외 (${pageData.thumbnail.source})`);
+        continue;
+    }
+
+    if (!isHumanPhoto(pageData.pageimage || "", aliases)) {
+        console.log(`❌ ${pageData.title} → 사람사진 판정 실패 (${pageData.pageimage})`);
+        continue;
+    }
 
                     const imageName = (pageData.pageimage || "").toLowerCase();
  
