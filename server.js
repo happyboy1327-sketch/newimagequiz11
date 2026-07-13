@@ -240,6 +240,15 @@ async function fillCache() {
 
                     const aliases = makeNameAliases(pageData.title);
 
+                    const imageName = (pageData.pageimage || "").toLowerCase();
+ 
+                    if (
+                       /coin|medal|seal|flag|coat_of_arms|emblem|tomb|map|signature|statue|bust/i.test(imageName)
+                     )  {
+                    console.log(`⛔ 사람 사진 없음으로 제외: ${pageData.title}`);
+                    continue;
+                       }
+
                     if (pageData.thumbnail?.source && isValidImageUrl(pageData.thumbnail.source) && isHumanPhoto(pageData.pageimage || "", aliases)) {
                         if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) continue;
 
