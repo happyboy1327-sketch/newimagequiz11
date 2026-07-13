@@ -228,7 +228,7 @@ async function fillCache() {
                 const pages = Object.values(detailRes.data.query?.pages || {});
                 console.log(`상세조회: ${Date.now() - detailStart}ms / 페이지 ${pages.length}개`);
 
-                let addedCount = 0;
+                
 
                 for (const pageData of pages) {
                     if (QUIZ_CACHE.length >= CACHE_SIZE) break;
