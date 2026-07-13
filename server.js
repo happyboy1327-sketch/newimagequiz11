@@ -155,25 +155,33 @@ async function fillCache() {
             let targetTitles = [];
 
             if (isLegacyTurn) {
-                const shuffledVips = LEGACY_VIP_LIST.sort(() => Math.random() - 0.5).slice(0, 16);
+                const shuffledVips = [...LEGACY_VIP_LIST].sort(() => Math.random() - 0.5).slice(0, 16);
                 targetTitles = shuffledVips.filter(name => !QUIZ_CACHE.some(c => c.name.includes(name)) && !LAST_PLAYED.some(lp => lp.includes(name)));
             } else {
                 // 무한 렉 방지: 랜덤 연도를 무조건 사진이 있는 1900년~2000년 사이로 한정!!
-                const year = Math.floor(Math.random() * (2000 - 900 + 1)) + 900;
-                const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                    ...WIKI_AXIOS_CONFIG,
-                    params: {
-                        action: "query",
-                        list: "categorymembers",
-                        cmtitle: `분류:${year}년_출생`,
-                        cmlimit: 60, 
-                        cmtype: "page",
-                        format: "json",
-                        origin: "*"
-                    }
-                });
+                const startYear = Math.floor(Math.random() * ((2000 - 900) / 10 + 1)) * 10 + 900;
 
-                const candidates = listRes.data.query?.categorymembers || [];
+let candidates = [];
+
+for (let y = startYear; y <= Math.min(startYear + 9, 2000); y++) {
+    const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+        ...WIKI_AXIOS_CONFIG,
+        params: {
+            action: "query",
+            list: "categorymembers",
+            cmtitle: `분류:${y}년_출생`,
+            cmlimit: 60,
+            cmtype: "page",
+            format: "json",
+            origin: "*"
+        }
+    });
+
+    candidates.push(...(listRes.data.query?.categorymembers || []));
+}
+
+// 중복 제거
+candidates = [...new Map(candidates.map(c => [c.pageid, c])).values()];
                 targetTitles = candidates
                     .filter(cand => !cand.title.includes(":") && !QUIZ_CACHE.some(c => c.name === cand.title) && !LAST_PLAYED.includes(cand.title))
                     .filter(cand => !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title))
