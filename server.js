@@ -164,35 +164,42 @@ async function fillCache() {
                     name => !QUIZ_CACHE.some(c => c.name.includes(name)) && !LAST_PLAYED.some(lp => lp.includes(name))
                 );
                 console.log(`VIP 후보선정: ${Date.now() - vipStart}ms`);
-            } else {
-                const yearPickStart = Date.now();
-                const startYear = Math.floor(Math.random() * ((2000 - 900) / 10 + 1)) * 10 + 900;
+                        } else {
+                // 양방향 근사치 탐색: baseYear 기준으로
+                // baseYear, -1/+1, -2/+2 ... 순서로 찾고, 900~2000 범위 안에서만 조회
+                const baseYear = Math.floor(Math.random() * (2000 - 900 + 1)) + 900;
+                const MAX_OFFSET = 10;
 
                 let candidates = [];
 
-                for (let y = startYear; y <= Math.min(startYear + 9, 2000); y++) {
-                    const listStart = Date.now();
+                for (let offset = 0; offset <= MAX_OFFSET && candidates.length === 0; offset++) {
+                    const years = offset === 0
+                        ? [baseYear]
+                        : [baseYear - offset, baseYear + offset];
 
-                    const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                        ...WIKI_AXIOS_CONFIG,
-                        params: {
-                            action: "query",
-                            list: "categorymembers",
-                            cmtitle: `분류:${y}년_출생`,
-                            cmlimit: 60,
-                            cmtype: "page",
-                            format: "json",
-                            origin: "*"
-                        }
-                    });
+                    for (const year of years) {
+                        if (year < 900 || year > 2000) continue;
 
-                    const members = listRes.data.query?.categorymembers || [];
-                    candidates.push(...members);
+                        const listStart = Date.now();
+                        const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+                            ...WIKI_AXIOS_CONFIG,
+                            params: {
+                                action: "query",
+                                list: "categorymembers",
+                                cmtitle: `분류:${year}년_출생`,
+                                cmlimit: 60,
+                                cmtype: "page",
+                                format: "json",
+                                origin: "*"
+                            }
+                        });
 
-                    console.log(`분류 ${y}년_출생 조회: ${Date.now() - listStart}ms / ${members.length}명`);
+                        candidates = listRes.data.query?.categorymembers || [];
+                        console.log(`📅 ${year}년_출생 조회: ${Date.now() - listStart}ms / ${candidates.length}명`);
+
+                        if (candidates.length > 0) break;
+                    }
                 }
-
-                candidates = [...new Map(candidates.map(c => [c.pageid, c])).values()];
 
                 targetTitles = candidates
                     .filter(cand => !cand.title.includes(":") && !QUIZ_CACHE.some(c => c.name === cand.title) && !LAST_PLAYED.includes(cand.title))
@@ -201,7 +208,7 @@ async function fillCache() {
                     .map(c => c.title)
                     .slice(0, 15);
 
-                console.log(`연도범위 후보선정(${startYear}~${Math.min(startYear + 9, 2000)}): ${Date.now() - yearPickStart}ms / 후보 ${targetTitles.length}개`);
+                console.log(`연도 후보선정: baseYear=${baseYear}, 후보 ${targetTitles.length}개`);
             }
 
             if (targetTitles.length > 0) {
