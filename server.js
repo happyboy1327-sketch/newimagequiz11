@@ -223,6 +223,7 @@ async function fillCache() {
                     { ...WIKI_AXIOS_CONFIG, 
                      params: { action: "query", titles: batch.join("|"), prop: "extracts|pageimages", explaintext: true, pithumbsize: 400, format: "json", origin: "*" } 
                     }); 
+                }
                     
 
                 const pages = Object.values(detailRes.data.query?.pages || {});
