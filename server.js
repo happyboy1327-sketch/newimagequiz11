@@ -219,7 +219,8 @@ async function fillCache() {
                     params: {
                         action: "query",
                         titles: targetTitles.join('|'),
-                        prop: "extracts|pageimages",
+                        prop: "extracts|pageimages|images",
+                        imlimit: 8,
                         explaintext: true,
                         pithumbsize: 400,
                         format: "json",
