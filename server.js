@@ -212,21 +212,18 @@ async function fillCache() {
             }
 
             if (targetTitles.length > 0) {
-                const detailStart = Date.now();
-
-                const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                    ...WIKI_AXIOS_CONFIG,
-                    params: {
-                        action: "query",
-                        titles: targetTitles.join('|'),
-                        prop: "extracts|pageimages|images",
-                        imlimit: 8,
-                        explaintext: true,
-                        pithumbsize: 400,
-                        format: "json",
-                        origin: "*"
-                    }
-                });
+                const detailStart = Date.now(); 
+                let addedCount = 0; 
+                
+                for (let i = 0; i < targetTitles.length; i += 5) { 
+                    
+                    const batch = targetTitles.slice(i, i + 5); 
+                    
+                    const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", 
+                    { ...WIKI_AXIOS_CONFIG, 
+                     params: { action: "query", titles: batch.join("|"), prop: "extracts|pageimages", explaintext: true, pithumbsize: 400, format: "json", origin: "*" } 
+                    }); 
+                    
 
                 const pages = Object.values(detailRes.data.query?.pages || {});
                 console.log(`상세조회: ${Date.now() - detailStart}ms / 페이지 ${pages.length}개`);
