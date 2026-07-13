@@ -223,11 +223,9 @@ async function fillCache() {
                     { ...WIKI_AXIOS_CONFIG, 
                      params: { action: "query", titles: batch.join("|"), prop: "extracts|pageimages", explaintext: true, pithumbsize: 400, format: "json", origin: "*" } 
                     }); 
-                    const pages = Object.values(detailRes.data.query?.pages || {});
-                }
                     
 
-                
+                const pages = Object.values(detailRes.data.query?.pages || {});
                 console.log(`상세조회: ${Date.now() - detailStart}ms / 페이지 ${pages.length}개`);
 
                 
@@ -296,7 +294,7 @@ async function fillCache() {
 
                         addedCount++;
                     }
-                }
+                }}
 
                 console.log(`캐시 적재: ${addedCount}개 / ${Date.now() - detailStart}ms`);
                 await new Promise(resolve => setTimeout(resolve, 150));
