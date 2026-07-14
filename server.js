@@ -318,10 +318,15 @@ async function fillCache() {
                 console.log(`후보 없음 / ${Date.now() - loopStart}ms`);
             }
         } catch (e) {
-      console.warn(`⚠️ 검색 시도 중 에러: ${e.message}`);
-      await new Promise(resolve => setTimeout(resolve, 1200));
-      continue;
-   }
+      catch (e) {
+    console.warn(`⚠️ 검색 시도 중 에러: ${e.message}`);
+
+    if (e.response?.status === 429) {
+        await new Promise(resolve => setTimeout(resolve, 4500));
+    }
+
+    continue;
+        }
 
         console.log(`루프 1회 종료: ${Date.now() - loopStart}ms / 현재 캐시 ${QUIZ_CACHE.length}`);
     }
