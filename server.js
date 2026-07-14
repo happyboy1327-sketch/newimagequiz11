@@ -295,6 +295,11 @@ async function fillCache() {
 
                         rawText = rawText.substring(0, 1200).replace(/=+\s*.*?\s*=+/g, " ").replace(/\s+/g, " ").trim();
                         if (rawText.length < 100) continue;
+                        if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) {
+                        console.log(`중복 제외: ${pageData.title}`);
+                        continue;}
+
+                        console.log(`추가 후보: ${pageData.title}`);
 
                         QUIZ_CACHE.push({
                             name: pageData.title,
