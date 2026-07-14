@@ -320,6 +320,8 @@ async function fillCache() {
         console.log(`루프 1회 종료: ${Date.now() - loopStart}ms / 현재 캐시 ${QUIZ_CACHE.length}`);
     }
 
+    QUIZ_CACHE = shuffle(QUIZ_CACHE);
+    
     isCaching = false;
     console.log(`✅ 현재 최종 캐시량: ${QUIZ_CACHE.length}/${CACHE_SIZE} / 총 ${Date.now() - t0}ms`);
 
