@@ -317,7 +317,6 @@ async function fillCache() {
             } else {
                 console.log(`후보 없음 / ${Date.now() - loopStart}ms`);
             }
-        } catch (e) {
       catch (e) {
     console.warn(`⚠️ 검색 시도 중 에러: ${e.message}`);
 
