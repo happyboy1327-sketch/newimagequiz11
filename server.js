@@ -158,7 +158,7 @@ async function fillCache() {
 
     let randomSearchAttempts = 0;
 
-    while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 10) {
+    while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 30) {
         if (QUIZ_CACHE.length >= CACHE_SIZE) break;
         randomSearchAttempts++;
 
