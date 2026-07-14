@@ -50,6 +50,17 @@ const LEGACY_VIP_LIST = [
     "알렉산드로스 대왕", "율리우스 카이사르", "마더 테레사", "체 게바라", "오드리 헵번"
 ];
 
+function shuffle(array) {
+    const arr = [...array];
+
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+
+    return arr;
+}
+
 function makeNameAliases(title) {
     const cleanKo = title.replace(/\(.+?\)/g, "").trim();
     const lowerKo = cleanKo.toLowerCase();
@@ -159,7 +170,7 @@ async function fillCache() {
 
             if (isLegacyTurn) {
                 const vipStart = Date.now();
-                const shuffledVips = [...LEGACY_VIP_LIST].sort(() => Math.random() - 0.5).slice(0, 16);
+                const shuffledVips = shuffle(LEGACY_VIP_LIST).slice(0, 16);
                 targetTitles = shuffledVips.filter(
                     name => !QUIZ_CACHE.some(c => c.name.includes(name)) && !LAST_PLAYED.some(lp => lp.includes(name))
                 );
