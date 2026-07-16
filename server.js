@@ -313,7 +313,7 @@ async function fillCache() {
                 }}
 
                 console.log(`캐시 적재: ${addedCount}개 / ${Date.now() - detailStart}ms`);
-                await new Promise(resolve => setTimeout(resolve, 150));
+                await new Promise(resolve => setTimeout(resolve, 350));
             } else {
                 console.log(`후보 없음 / ${Date.now() - loopStart}ms`);
             }
