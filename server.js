@@ -36,7 +36,7 @@ const WIKI_AXIOS_CONFIG = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json'
     },
-    timeout: 8000 
+    timeout: 9500 
 };
 
 // 🔥 레거시 유명인물 (역사적 레전드 위인) 전용 VIP 풀
@@ -314,12 +314,16 @@ async function fillCache() {
 
                     let imageUrl = pageData.thumbnail?.source;
 
-if (
-    !imageUrl ||
-    !isValidImageUrl(imageUrl) ||
-    !isHumanPhoto(pageData.pageimage || "", aliases)
-) {
-    console.log(`🔍 ${pageData.title} → 대체 이미지 탐색`);
+// 대표 이미지가 아예 없으면 제외
+if (!imageUrl) {
+    console.log(`❌ ${pageData.title} → 썸네일 없음`);
+    continue;
+}
+
+// SVG, 문장, 국기 등인 경우에만 대체 이미지 탐색
+if (!isValidImageUrl(imageUrl)) {
+
+    console.log(`🔍 ${pageData.title} → 대표 이미지 제외, 대체 이미지 탐색`);
 
     imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
 
@@ -327,18 +331,23 @@ if (
         console.log(`❌ ${pageData.title} → 사람사진 없음`);
         continue;
     }
+}
+// 대표 이미지는 JPG인데 사람이 아니면 그냥 제외
+else if (!isHumanPhoto(pageData.pageimage || "", aliases)) {
 
-    console.log(`✅ ${pageData.title} → 대체 사람사진 사용`);
+    console.log(`❌ ${pageData.title} → 사람사진 판정 실패`);
+    continue;
 }
 
                     const imageName = (pageData.pageimage || "").toLowerCase();
  
                     if (
-                       /coin|medal|seal|flag|coat_of_arms|emblem|tomb|map|signature|statue|bust/i.test(imageName)
-                     )  {
-                    console.log(`⛔ 사람 사진 없음으로 제외: ${pageData.title}`);
-                    continue;
-                       }
+    imageUrl === pageData.thumbnail?.source &&
+    /coin|medal|seal|flag|coat_of_arms|emblem|tomb|map|signature|statue|bust/i.test(imageName)
+) {
+    console.log(`⛔ 사람 사진 없음으로 제외: ${pageData.title}`);
+    continue;
+}
 
                     if (pageData.thumbnail?.source && isValidImageUrl(pageData.thumbnail.source) && isHumanPhoto(pageData.pageimage || "", aliases)) {
                         if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) continue;
