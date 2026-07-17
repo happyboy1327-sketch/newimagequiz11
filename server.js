@@ -164,7 +164,10 @@ async function findAlternativeHumanImage(title, aliases) {
     }
 
     // ===== 2순위 : 위키백과 문서 내 이미지 목록 검색 =====
-    const res = await axios.get("https://ko.wikipedia.org/w/api.php", {
+    let res;
+
+try {
+    res = await axios.get("https://ko.wikipedia.org/w/api.php", {
         ...WIKI_AXIOS_CONFIG,
         params: {
             action: "query",
@@ -175,6 +178,10 @@ async function findAlternativeHumanImage(title, aliases) {
             origin: "*"
         }
     });
+} catch (e) {
+    console.log("위키 이미지 검색 오류:", e.code, e.message);
+    throw e;
+}
 
     const page = Object.values(res.data?.query?.pages || {})[0];
     const images = page?.images;
@@ -197,17 +204,24 @@ async function findAlternativeHumanImage(title, aliases) {
     for (let i = 0; i < targets.length; i += COMMONS_BATCH_SIZE) {
         const batch = targets.slice(i, i + COMMONS_BATCH_SIZE);
 
-        const info = await axios.get("https://commons.wikimedia.org/w/api.php", {
-            ...WIKI_AXIOS_CONFIG,
-            params: {
-                action: "query",
-                titles: batch.join("|"),
-                prop: "imageinfo",
-                iiprop: "url",
-                format: "json",
-                origin: "*"
-            }
-        });
+        let info;
+
+try {
+    info = await axios.get("https://commons.wikimedia.org/w/api.php", {
+        ...WIKI_AXIOS_CONFIG,
+        params: {
+            action: "query",
+            titles: batch.join("|"),
+            prop: "imageinfo",
+            iiprop: "url",
+            format: "json",
+            origin: "*"
+        }
+    });
+} catch (e) {
+    console.log("Commons API 오류:", e.code, e.message);
+    continue;
+}
 
         const commonsPages = Object.values(info.data?.query?.pages || {});
         const urlMap = new Map();
