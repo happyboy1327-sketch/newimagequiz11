@@ -136,6 +136,7 @@ const COMMONS_BATCH_SIZE = 12;
 async function findAlternativeHumanImage(title, aliases) {
     // ===== 1순위 : 인포박스 이미지 =====
     try {
+        const tInfobox = Date.now();
         const htmlRes = await axios.get("https://ko.wikipedia.org/w/index.php", {
             ...WIKI_AXIOS_CONFIG,
             params: {
@@ -143,6 +144,7 @@ async function findAlternativeHumanImage(title, aliases) {
                 action: "render"
             }
         });
+        console.log(`인포박스: ${Date.now() - tInfobox}ms`);
 
         const imageUrl = extractInfoboxImage(htmlRes.data);
 
@@ -164,7 +166,9 @@ async function findAlternativeHumanImage(title, aliases) {
     }
 
     // ===== 2순위 : 위키백과 문서 내 이미지 목록 검색 =====
-    let res;
+let res;
+
+const tImages = Date.now();
 
 try {
     res = await axios.get("https://ko.wikipedia.org/w/api.php", {
@@ -178,77 +182,68 @@ try {
             origin: "*"
         }
     });
+
+    console.log(`Images API: ${Date.now() - tImages}ms`);
+
 } catch (e) {
+    console.log(`Images API: ${Date.now() - tImages}ms`);
     console.log("위키 이미지 검색 오류:", e.code, e.message);
     throw e;
 }
 
-    const page = Object.values(res.data?.query?.pages || {})[0];
-    const images = page?.images;
+const page = Object.values(res.data?.query?.pages || {})[0];
+const images = page?.images;
 
-    if (!images || images.length === 0) return null;
+if (!images || images.length === 0) return null;
+    
+    // ===== 3순위 : 위키미디어 커먼즈에서 이미지 실제 URL 조회 =====
+for (let i = 0; i < targets.length; i += COMMONS_BATCH_SIZE) {
+    const batch = targets.slice(i, i + COMMONS_BATCH_SIZE);
 
-    const targets = [];
-    for (const img of images) {
-        const name = img.title.replace(/^File:/i, "");
+    let info;
 
-        if (!IMAGE_EXT_RE.test(name)) {
-        console.log("확장자 제외:", name);
+    const tCommons = Date.now();
+
+    try {
+        info = await axios.get("https://commons.wikimedia.org/w/api.php", {
+            ...WIKI_AXIOS_CONFIG,
+            params: {
+                action: "query",
+                titles: batch.join("|"),
+                prop: "imageinfo",
+                iiprop: "url",
+                format: "json",
+                origin: "*"
+            }
+        });
+
+        console.log(`Commons API: ${Date.now() - tCommons}ms`);
+
+    } catch (e) {
+        console.log(`Commons API: ${Date.now() - tCommons}ms`);
+        console.log("Commons API 오류:", e.code, e.message);
         continue;
     }
-        if (!isHumanPhoto(name, aliases)) {
-    console.log("사람사진 아니라 제외:", name);
-    continue;
-}
-        console.log("후보:", name);
 
-        targets.push(img.title);
-    }
+    const commonsPages = Object.values(info.data?.query?.pages || {});
+    const urlMap = new Map();
 
-    if (targets.length === 0) return null;
+    for (const file of commonsPages) {
+        const pageTitle = file.title;
+        const url = file.imageinfo?.[0]?.url;
 
-    // ===== 3순위 : 위키미디어 커먼즈에서 이미지 실제 URL 조회 =====
-    for (let i = 0; i < targets.length; i += COMMONS_BATCH_SIZE) {
-        const batch = targets.slice(i, i + COMMONS_BATCH_SIZE);
-
-        let info;
-
-try {
-    info = await axios.get("https://commons.wikimedia.org/w/api.php", {
-        ...WIKI_AXIOS_CONFIG,
-        params: {
-            action: "query",
-            titles: batch.join("|"),
-            prop: "imageinfo",
-            iiprop: "url",
-            format: "json",
-            origin: "*"
-        }
-    });
-} catch (e) {
-    console.log("Commons API 오류:", e.code, e.message);
-    continue;
-}
-
-        const commonsPages = Object.values(info.data?.query?.pages || {});
-        const urlMap = new Map();
-
-        for (const file of commonsPages) {
-            const pageTitle = file.title;
-            const url = file.imageinfo?.[0]?.url;
-
-            if (url && isValidImageUrl(url)) {
-                urlMap.set(pageTitle, url);
-            }
-        }
-
-        for (const target of batch) {
-            const url = urlMap.get(target);
-            if (url) return url;
+        if (url && isValidImageUrl(url)) {
+            urlMap.set(pageTitle, url);
         }
     }
 
-    return null;
+    for (const target of batch) {
+        const url = urlMap.get(target);
+        if (url) return url;
+    }
+}
+
+return null;
 }
 
 
