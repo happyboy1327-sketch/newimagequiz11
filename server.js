@@ -52,10 +52,12 @@ const LEGACY_VIP_LIST = [
 
 function shuffle(array) {
     const arr = [...array];
+
     for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [arr[i], arr[j]] = [arr[j], arr[i]];
     }
+
     return arr;
 }
 
@@ -84,11 +86,12 @@ function isHumanPhoto(filename, aliases) {
     if (!filename || typeof filename !== "string") return false;
     const n = filename.toLowerCase();
 
+    // 동상(위인들)은 허용하되, 글씨만 있는 비석/충렬비 등은 빡세게 컷
     const BLACKLIST = [
         "svg", "gif", "coat of arms", "coat_of_arms", "coa", "stone", "tomb", "_tomb",
         "arms", "emblem", "insignia", "flag", "standard", "banner", "seal", "stamp",
         "icon", "logo", "symbol", "map", "chart", "diagram", "signature", "sign",
-        "grave", "monument", "book", "cover", "coin", "currency", "memorial", "plaque", 
+        "grave", "monument", "book", "cover", "coin", "currency", "memorial", "plaque", "grave", 
         "calligraphy", "handwriting", "manuscript", "document", "letter", "rubbing",
         "필적", "글씨", "서체", "문서", "편지", "탁본", "서간", "의궤", "집자", "현판", "비석", "묘", 
         "충렬비", "기념비", "비각", "정려각", "사당", "전경", "생가", "현충사", "사적비", "정려", "탑", "릉"
@@ -111,7 +114,9 @@ function isHumanPhoto(filename, aliases) {
 }
 
 function extractInfoboxImage(html) {
-    const match = html.match(/.../i);
+    const match = html.match(
+        /<table[^>]*class="[^"]*infobox[\s\S]*?<img[^>]+src="([^"]+)"/i
+    );
 
     if (!match) return null;
 
@@ -124,13 +129,13 @@ function extractInfoboxImage(html) {
     return url;
 }
 
+const HUMAN_IMAGE_BLOCKLIST = /coin|medal|seal|flag|coat_of_arms|emblem|tomb|map|signature|statue|bust/i;
 const IMAGE_EXT_RE = /\.(jpg|jpeg|png|webp)$/i;
 const COMMONS_BATCH_SIZE = 12;
 
 async function findAlternativeHumanImage(title, aliases) {
     // ===== 1순위 : 인포박스 이미지 =====
     try {
-        const tInfobox = Date.now();
         const htmlRes = await axios.get("https://ko.wikipedia.org/w/index.php", {
             ...WIKI_AXIOS_CONFIG,
             params: {
@@ -138,7 +143,6 @@ async function findAlternativeHumanImage(title, aliases) {
                 action: "render"
             }
         });
-        console.log(`인포박스: ${Date.now() - tInfobox}ms`);
 
         const imageUrl = extractInfoboxImage(htmlRes.data);
 
@@ -160,9 +164,7 @@ async function findAlternativeHumanImage(title, aliases) {
     }
 
     // ===== 2순위 : 위키백과 문서 내 이미지 목록 검색 =====
-let res;
-
-const tImages = Date.now();
+    let res;
 
 try {
     res = await axios.get("https://ko.wikipedia.org/w/api.php", {
@@ -176,99 +178,79 @@ try {
             origin: "*"
         }
     });
-
-    console.log(`Images API: ${Date.now() - tImages}ms`);
-
 } catch (e) {
-    console.log(`Images API: ${Date.now() - tImages}ms`);
     console.log("위키 이미지 검색 오류:", e.code, e.message);
     throw e;
 }
 
-const page = Object.values(res.data?.query?.pages || {})[0];
-const images = page?.images;
+    const page = Object.values(res.data?.query?.pages || {})[0];
+    const images = page?.images;
 
-if (!images || images.length === 0) return null;
-    
-    // ===== 3순위 : 위키미디어 커먼즈에서 이미지 실제 URL 조회 =====
-for (let i = 0; i < targets.length; i += COMMONS_BATCH_SIZE) {
-    const batch = targets.slice(i, i + COMMONS_BATCH_SIZE);
+    if (!images || images.length === 0) return null;
 
-    let info;
+    const targets = [];
+    for (const img of images) {
+        const name = img.title.replace(/^File:/i, "");
 
-    const tCommons = Date.now();
-
-    try {
-        info = await axios.get("https://commons.wikimedia.org/w/api.php", {
-            ...WIKI_AXIOS_CONFIG,
-            params: {
-                action: "query",
-                titles: batch.join("|"),
-                prop: "imageinfo",
-                iiprop: "url",
-                format: "json",
-                origin: "*"
-            }
-        });
-
-        console.log(`Commons API: ${Date.now() - tCommons}ms`);
-
-    } catch (e) {
-        console.log(`Commons API: ${Date.now() - tCommons}ms`);
-        console.log("Commons API 오류:", e.code, e.message);
+        if (!IMAGE_EXT_RE.test(name)) {
+        console.log("확장자 제외:", name);
         continue;
     }
+        if (!isHumanPhoto(name, aliases)) {
+    console.log("사람사진 아니라 제외:", name);
+    continue;
+}
+        console.log("후보:", name);
 
-    const commonsPages = Object.values(info.data?.query?.pages || {});
-    const urlMap = new Map();
+        targets.push(img.title);
+    }
 
-    for (const file of commonsPages) {
-        const pageTitle = file.title;
-        const url = file.imageinfo?.[0]?.url;
+    if (targets.length === 0) return null;
 
-        if (url && isValidImageUrl(url)) {
-            urlMap.set(pageTitle, url);
+    // ===== 3순위 : 위키미디어 커먼즈에서 이미지 실제 URL 조회 =====
+    for (let i = 0; i < targets.length; i += COMMONS_BATCH_SIZE) {
+        const batch = targets.slice(i, i + COMMONS_BATCH_SIZE);
+
+        let info;
+
+try {
+    info = await axios.get("https://commons.wikimedia.org/w/api.php", {
+        ...WIKI_AXIOS_CONFIG,
+        params: {
+            action: "query",
+            titles: batch.join("|"),
+            prop: "imageinfo",
+            iiprop: "url",
+            format: "json",
+            origin: "*"
         }
-    }
-
-    for (const target of batch) {
-        const url = urlMap.get(target);
-        if (url) return url;
-    }
+    });
+} catch (e) {
+    console.log("Commons API 오류:", e.code, e.message);
+    continue;
 }
 
-return null;
-}
-function createMaskedHint(title, extract) {
-    let hintText = extract.substring(0, 350);
-    const cleanTitle = title.trim();
-    
-    const parenMatch = cleanTitle.match(/\((.*?)\)/);
-    if (parenMatch) {
-        parenMatch[1].split(/[\s\.\,\-]+/).forEach(part => {
-            if (part.length > 1) hintText = hintText.replace(new RegExp(part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), "OOO");
-        });
-    }
+        const commonsPages = Object.values(info.data?.query?.pages || {});
+        const urlMap = new Map();
 
-    const baseName = cleanTitle.replace(/\s*\(.*?\)\s*/g, ''); 
-    baseName.split(' ').forEach(word => {
-        if (word.length >= 2) {
-            hintText = hintText.replace(new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), "OOO");
-            if (word.length >= 3 && !/\s/.test(word)) { 
-                for(let i = 0; i <= word.length - 2; i++) {
-                    hintText = hintText.replace(new RegExp(word.substring(i, i + 2).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), "OOO");
-                }
+        for (const file of commonsPages) {
+            const pageTitle = file.title;
+            const url = file.imageinfo?.[0]?.url;
+
+            if (url && isValidImageUrl(url)) {
+                urlMap.set(pageTitle, url);
             }
         }
-    });
 
-    hintText = hintText.replace(/([a-zA-Z\d\.\,\:\-\s'\[\]\/\(\)ˌˈɛɔ]+)/g, (match, p1) => {
-        const cleanedMatch = p1.trim();
-        return (cleanedMatch.length > 1 && /[a-zA-Z]/.test(cleanedMatch)) ? "OOO" : match; 
-    });
+        for (const target of batch) {
+            const url = urlMap.get(target);
+            if (url) return url;
+        }
+    }
 
-    return hintText.substring(0, 130).trim() + "...";
+    return null;
 }
+
 // =======================================================
 // 5) 투트랙 최적화 캐시 충전
 // =======================================================
