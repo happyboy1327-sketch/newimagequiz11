@@ -36,7 +36,7 @@ const WIKI_AXIOS_CONFIG = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json'
     },
-    timeout: 8500 
+    timeout: 9500 
 };
 
 // 🔥 레거시 유명인물 (역사적 레전드 위인) 전용 VIP 풀
@@ -192,8 +192,15 @@ try {
     for (const img of images) {
         const name = img.title.replace(/^File:/i, "");
 
-        if (!IMAGE_EXT_RE.test(name)) continue;
-        if (!isHumanPhoto(name, aliases)) continue;
+        if (!IMAGE_EXT_RE.test(name)) {
+        console.log("확장자 제외:", name);
+        continue;
+    }
+        if (!isHumanPhoto(name, aliases)) {
+    console.log("사람사진 아니라 제외:", name);
+    continue;
+}
+        console.log("후보:", name);
 
         targets.push(img.title);
     }
