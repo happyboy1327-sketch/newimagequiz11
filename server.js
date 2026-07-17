@@ -194,6 +194,24 @@ async function findAlternativeHumanImage(title, aliases) {
 
     if (!images || images.length === 0) return null;
     const targets = images.map(img => img.title);
+
+    for (const img of images) {
+        const name = img.title.replace(/^File:/i, "");
+
+        if (!IMAGE_EXT_RE.test(name)) {
+        console.log("확장자 제외:", name);
+        continue;
+    }
+        if (!isHumanPhoto(name, aliases)) {
+    console.log("사람사진 아니라 제외:", name);
+    continue;
+}
+        console.log("후보:", name);
+
+        targets.push(img.title);
+    }
+
+    if (targets.length === 0) return null;
     
     // ===== 3순위 : 위키미디어 커먼즈에서 이미지 실제 URL 조회 =====
     for (let i = 0; i < targets.length; i += COMMONS_BATCH_SIZE) {
