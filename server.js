@@ -609,7 +609,8 @@ if (targetTitles.length > 0) {
 
     console.log(`후보 없음 / ${Date.now() - loopStart}ms`);
 
-                    }
+    }
+}
                 
       catch (e) {
     console.warn("⚠️ 검색 시도 중 에러");
