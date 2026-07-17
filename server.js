@@ -323,82 +323,75 @@ async function fillCache() {
                         ? [baseYear]
                         : [baseYear - offset, baseYear + offset];
 
-                    for (const year of years) {
-                        if (year < 900 || year > 2000) continue;
+                  for (const year of years) {
+    if (year < 900 || year > 2000) continue;
 
-                        const listStart = Date.now();
-                        const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                            ...WIKI_AXIOS_CONFIG,
-                            params: {
-                                action: "query",
-                                list: "categorymembers",
-                                cmtitle: `분류:${year}년_출생`,
-                                cmlimit: 60,
-                                cmtype: "page",
-                                format: "json",
-                                origin: "*"
-                            }
-                        });
-
-                        candidates = listRes.data.query?.categorymembers || [];
-                        console.log(`📅 ${year}년_출생 조회: ${Date.now() - listStart}ms / ${candidates.length}명`);
-
-                        if (candidates.length > 0) break;
-                    }
-                }
-
-                targetTitles = candidates
-                    .filter(cand => !cand.title.includes(":") && !QUIZ_CACHE.some(c => c.name === cand.title) && !LAST_PLAYED.includes(cand.title))
-                    .filter(cand => !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title))
-                    .sort(() => Math.random() - 0.5)
-                    .map(c => c.title)
-                    .slice(0, 15);
-
-                console.log(`연도 후보선정: baseYear=${baseYear}, 후보 ${targetTitles.length}개`);
-            }
-
-            if (targetTitles.length > 0) {
-                
-                const batchStart = Date.now();
-                let addedCount = 0;
-                
-                for (let i = 0; i < targetTitles.length; i += 5) { 
-                    const detailStart = Date.now();
-
-const batch = targetTitles.slice(i, i + 5);
-
-let detailRes;
-
-try {
-    detailRes = await axios.get(
-        "https://ko.wikipedia.org/w/api.php",
-        {
-            ...WIKI_AXIOS_CONFIG,
-            params: {
-                action: "query",
-                titles: batch.join("|"),
-                prop: "extracts|pageimages",
-                explaintext: true,
-                pithumbsize: 800,
-                format: "json",
-                origin: "*"
-            }
+    const listStart = Date.now();
+    const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+        ...WIKI_AXIOS_CONFIG,
+        params: {
+            action: "query",
+            list: "categorymembers",
+            cmtitle: `분류:${year}년_출생`,
+            cmlimit: 60,
+            cmtype: "page",
+            format: "json",
+            origin: "*"
         }
-    );
-} catch (e) {
-    console.log(`❌ 상세조회 실패 (${Date.now() - detailStart}ms)`);
-    console.log(`배치: ${batch.join(", ")}`);
-    console.log(`코드: ${e.code}`);
-    console.log(`메시지: ${e.message}`);
-    continue;
+    });
+
+    candidates = listRes.data.query?.categorymembers || [];
+    console.log(`📅 ${year}년_출생 조회: ${Date.now() - listStart}ms / ${candidates.length}명`);
+
+    if (candidates.length > 0) break;
 }
 
-const pages = Object.values(detailRes.data.query?.pages || {});
-console.log(`상세조회(${batch.join(", ")}): ${Date.now() - detailStart}ms / 페이지 ${pages.length}개`);
+targetTitles = candidates
+    .filter(cand => !cand.title.includes(":") && !QUIZ_CACHE.some(c => c.name === cand.title) && !LAST_PLAYED.includes(cand.title))
+    .filter(cand => !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title))
+    .sort(() => Math.random() - 0.5)
+    .map(c => c.title)
+    .slice(0, 15);
 
+console.log(`연도 후보선정: baseYear=${baseYear}, 후보 ${targetTitles.length}개`);
+
+if (targetTitles.length > 0) {
+    const batchStart = Date.now();
+    let addedCount = 0;
+    
+    for (let i = 0; i < targetTitles.length; i += 5) { 
+        const detailStart = Date.now();
+        const batch = targetTitles.slice(i, i + 5);
+        let detailRes;
+
+        try {
+            detailRes = await axios.get(
+                "https://ko.wikipedia.org/w/api.php",
+                {
+                    ...WIKI_AXIOS_CONFIG,
+                    params: {
+                        action: "query",
+                        titles: batch.join("|"),
+                        prop: "extracts|pageimages",
+                        explaintext: true,
+                        pithumbsize: 800,
+                        format: "json",
+                        origin: "*"
+                    }
+                }
+            );
+        } catch (e) {
+            console.log(`❌ 상세조회 실패 (${Date.now() - detailStart}ms)`);
+            console.log(`배치: ${batch.join(", ")}`);
+            console.log(`코드: ${e.code}`);
+            console.log(`메시지: ${e.message}`);
+            continue;
+        }
+
+        const pages = Object.values(detailRes.data.query?.pages || {});
+        console.log(`상세조회(${batch.join(", ")}): ${Date.now() - detailStart}ms / 페이지 ${pages.length}개`);
 
         for (const pageData of pages) {
-
             if (QUIZ_CACHE.length >= CACHE_SIZE) break;
 
             if (!pageData || !pageData.extract || pageData.extract.length < 100) continue;
@@ -431,9 +424,7 @@ console.log(`상세조회(${batch.join(", ")}): ${Date.now() - detailStart}ms / 
             }
 
             if (!isValidImageUrl(imageUrl)) {
-
                 console.log(`🔍 ${pageData.title} → 대표 이미지 제외, 대체 이미지 탐색`);
-
                 const t1 = Date.now();
 
                 imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
@@ -445,7 +436,6 @@ console.log(`상세조회(${batch.join(", ")}): ${Date.now() - detailStart}ms / 
                     continue;
                 }
             } else if (!isHumanPhoto(pageData.pageimage || "", aliases)) {
-
                 console.log(`❌ ${pageData.title} → 사람사진 판정 실패`);
                 continue;
             }
@@ -460,8 +450,7 @@ console.log(`상세조회(${batch.join(", ")}): ${Date.now() - detailStart}ms / 
                 continue;
             }
 
-                        if (imageUrl) {
-
+            if (imageUrl) {
                 if (LAST_PLAYED.includes(pageData.title)) {
                     console.log(`최근 출제 제외: ${pageData.title}`);
                     continue;
@@ -473,7 +462,6 @@ console.log(`상세조회(${batch.join(", ")}): ${Date.now() - detailStart}ms / 
                 }
 
                 let rawText = pageData.extract;
-
                 const cutIndex = rawText.search(/==\s*(각주|같이 보기|참고 문헌|외부 링크)\s*==/i);
 
                 if (cutIndex !== -1) {
@@ -504,6 +492,9 @@ console.log(`상세조회(${batch.join(", ")}): ${Date.now() - detailStart}ms / 
             }
         }
     }
+}    
+                
+
         
         
 
