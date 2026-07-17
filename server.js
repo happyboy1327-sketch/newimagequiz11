@@ -611,6 +611,8 @@ if (targetTitles.length > 0) {
 
     }
 }
+                }
+                
                 
       catch (e) {
     console.warn("⚠️ 검색 시도 중 에러");
