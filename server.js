@@ -111,12 +111,16 @@ function isHumanPhoto(filename, aliases) {
 }
 
 function extractInfoboxImage(html) {
-    const match = html.match(/<table[^>]*class="[^"]*infobox[\s\S]*?<img[^>]+src="([^"]+)"/i);
+    const match = html.match(/.../i);
+
     if (!match) return null;
+
     let url = match[1];
+
     if (url.startsWith("//")) {
         url = "https:" + url;
     }
+
     return url;
 }
 
