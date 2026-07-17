@@ -12,7 +12,7 @@ app.disable('x-powered-by');
 app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('X-XSS-Protection', '1; mode=block'); 
     
     if (req.path === '/api/quiz') {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -415,7 +415,11 @@ if (!isValidImageUrl(imageUrl)) {
 
     console.log(`🔍 ${pageData.title} → 대표 이미지 제외, 대체 이미지 탐색`);
 
+    const t1 = Date.now();
+
     imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
+
+    console.log(`findAlternativeHumanImage: ${Date.now() - t1}ms`);
 
     if (!imageUrl) {
         console.log(`❌ ${pageData.title} → 사람사진 없음`);
