@@ -36,7 +36,7 @@ const WIKI_AXIOS_CONFIG = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json'
     },
-    timeout: 9500 
+    timeout: 8900 
 };
 
 // 🔥 레거시 유명인물 (역사적 레전드 위인) 전용 VIP 풀
