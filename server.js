@@ -113,7 +113,56 @@ function isHumanPhoto(filename, aliases) {
     return true; 
 }
 
+function extractInfoboxImage(html) {
+    const match = html.match(
+        /<table[^>]*class="[^"]*infobox[\s\S]*?<img[^>]+src="([^"]+)"/i
+    );
+
+    if (!match) return null;
+
+    let url = match[1];
+
+    if (url.startsWith("//")) {
+        url = "https:" + url;
+    }
+
+    return url;
+}
+
 async function findAlternativeHumanImage(title, aliases) {
+
+    // ===== 1순위 : 인포박스 이미지 =====
+    try {
+        const htmlRes = await axios.get(
+            "https://ko.wikipedia.org/w/index.php",
+            {
+                ...WIKI_AXIOS_CONFIG,
+                params: {
+                    title,
+                    action: "render"
+                }
+            }
+        );
+
+        const imageUrl = extractInfoboxImage(htmlRes.data);
+
+        if (imageUrl && isValidImageUrl(imageUrl)) {
+            let imageName = imageUrl.toLowerCase();
+
+            try {
+                imageName = decodeURIComponent(imageName);
+            } catch (e) {}
+
+            // 메달, 동상, 지도, 서명 등 인물 사진이 아닌 것 제외
+            if (!/coin|medal|seal|flag|coat_of_arms|emblem|tomb|map|signature|statue|bust/i.test(imageName)) {
+                return imageUrl;
+            }
+        }
+    } catch (e) {
+        console.log(`⚠️ 인포박스 조회 실패: ${title}`);
+    } 
+
+    // ===== 2순위 : 위키백과 문서 내 이미지 목록 검색 =====
     const res = await axios.get("https://ko.wikipedia.org/w/api.php", {
         ...WIKI_AXIOS_CONFIG,
         params: {
@@ -126,27 +175,24 @@ async function findAlternativeHumanImage(title, aliases) {
         }
     });
 
-    const page = Object.values(res.data.query.pages)[0];
+    const page = Object.values(res.data.query?.pages || {})[0];
 
-    if (!page.images) return null;
-
+    if (!page || !page.images) return null;
+   
     const targets = [];
 
     for (const img of page.images) {
         const name = img.title.replace("File:", "");
 
-        if (!isHumanPhoto(name, aliases))
-            continue;
-
-        if (!/\.(jpg|jpeg|png|webp)$/i.test(name))
-            continue;
+        if (!isHumanPhoto(name, aliases)) continue;
+        if (!/\.(jpg|jpeg|png|webp)$/i.test(name)) continue;
 
         targets.push(img.title);
     }
 
-    if (targets.length === 0)
-        return null;
+    if (targets.length === 0) return null;
 
+    // ===== 3순위 : 위키미디어 커먼즈에서 이미지 실제 URL 조회 =====
     const info = await axios.get("https://commons.wikimedia.org/w/api.php", {
         ...WIKI_AXIOS_CONFIG,
         params: {
@@ -159,17 +205,18 @@ async function findAlternativeHumanImage(title, aliases) {
         }
     });
 
-    const pages = Object.values(info.data.query.pages);
+    // [수정] 미선언되었던 pages 변수를 위 결과값에서 추출하여 선언
+    const commonsPages = Object.values(info.data.query?.pages || {});
 
-    for (const file of pages) {
+    for (const file of commonsPages) {
         const url = file.imageinfo?.[0]?.url;
 
-        if (url && isValidImageUrl(url))
-            return url;
+        if (url && isValidImageUrl(url)) return url;
     }
 
     return null;
-}
+} // [수정] 누락되었던 함수 종료 괄호 추가
+
 
 function createMaskedHint(title, extract) {
     let hintText = extract.substring(0, 350);
