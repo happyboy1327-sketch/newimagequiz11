@@ -343,7 +343,8 @@ async function fillCache() {
                                 explaintext: true,
                                 pithumbsize: 800,
                                 format: "json",
-                                origin: "*"
+                                origin: "*",
+                                redirects: 1
                             }
                         });
                     } catch (e) {
