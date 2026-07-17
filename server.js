@@ -503,7 +503,9 @@ console.log(`상세조회(${batch.join(", ")}): ${Date.now() - detailStart}ms / 
                 addedCount++;
             }
         }
-    }}
+    }
+        
+        
 
     console.log(`캐시 적재: ${addedCount}개 / ${Date.now() - batchStart}ms`);
 
