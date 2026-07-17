@@ -395,60 +395,6 @@ try {
 const pages = Object.values(detailRes.data.query?.pages || {});
 console.log(`상세조회(${batch.join(", ")}): ${Date.now() - detailStart}ms / 페이지 ${pages.length}개`);
 
-                
-
-                for (const pageData of pages) {
-                    if (QUIZ_CACHE.length >= CACHE_SIZE) break;
-                    if (!pageData || !pageData.extract || pageData.extract.length < 100) continue;
-                    if (!isLegacyTurn && /(대학교수|명예교수|석좌교수|교수|교육자)/.test(pageData.extract)) continue;
-
-    if (!pageData) {
-        console.log("❌ pageData 없음");
-        continue;
-    }
-
-    if (!pageData.extract || pageData.extract.length < 100) {
-        console.log(`❌ ${pageData.title} → extract 부족`);
-        continue;
-    }
-
-    if (!isLegacyTurn && /(대학교수|명예교수|석좌교수|교수|교육자)/.test(pageData.extract)) {
-        console.log(`❌ ${pageData.title} → 교수 제외`);
-        continue;
-    }
-                    const aliases = makeNameAliases(pageData.title);
-                    console.log(pageData.title, "=>", pageData.pageimage);
-
-                    let imageUrl = pageData.thumbnail?.source;
-
-// 대표 이미지가 아예 없으면 제외
-if (!imageUrl) {
-    console.log(`❌ ${pageData.title} → 썸네일 없음`);
-    continue;
-}
-
-// SVG, 문장, 국기 등인 경우에만 대체 이미지 탐색
-if (!isValidImageUrl(imageUrl)) {
-
-    console.log(`🔍 ${pageData.title} → 대표 이미지 제외, 대체 이미지 탐색`);
-
-    const t1 = Date.now();
-
-    imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
-
-    console.log(`findAlternativeHumanImage: ${Date.now() - t1}ms`);
-
-    if (!imageUrl) {
-        console.log(`❌ ${pageData.title} → 사람사진 없음`);
-        continue;
-    }
-}
-// 대표 이미지는 JPG인데 사람이 아니면 그냥 제외
-else if (!isHumanPhoto(pageData.pageimage || "", aliases)) {
-
-
-            `상세조회(${batch.join(", ")}): ${Date.now() - detailStart}ms / 페이지 ${pages.length}개`
-        );
 
         for (const pageData of pages) {
 
