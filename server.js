@@ -349,29 +349,39 @@ else if (!isHumanPhoto(pageData.pageimage || "", aliases)) {
     continue;
 }
 
-                    if (pageData.thumbnail?.source && isValidImageUrl(pageData.thumbnail.source) && isHumanPhoto(pageData.pageimage || "", aliases)) {
-                        if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) continue;
+                    if (imageUrl) {
 
-                        let rawText = pageData.extract;
-                        const cutIndex = rawText.search(/==\s*(각주|같이 보기|참고 문헌|외부 링크)\s*==/i);
-                        if (cutIndex !== -1) rawText = rawText.substring(0, cutIndex);
+    if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) continue;
 
-                        rawText = rawText.substring(0, 1200).replace(/=+\s*.*?\s*=+/g, " ").replace(/\s+/g, " ").trim();
-                        if (rawText.length < 100) continue;
-                        if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) {
-                        console.log(`중복 제외: ${pageData.title}`);
-                        continue;}
+    let rawText = pageData.extract;
+    const cutIndex = rawText.search(/==\s*(각주|같이 보기|참고 문헌|외부 링크)\s*==/i);
+    if (cutIndex !== -1) rawText = rawText.substring(0, cutIndex);
 
-                        console.log(`추가 후보: ${pageData.title}`);
+    rawText = rawText
+        .substring(0, 1200)
+        .replace(/=+\s*.*?\s*=+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
 
-                        QUIZ_CACHE.push({
-                            name: pageData.title,
-                            image: imageUrl,
-                            hint: createMaskedHint(pageData.title, rawText),
-                            description: rawText.length > 1000 ? rawText.substring(0, 1000) + "..." : rawText
-                        });
+    if (rawText.length < 100) continue;
 
-                        addedCount++;
+    if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) {
+        console.log(`중복 제외: ${pageData.title}`);
+        continue;
+    }
+
+    console.log(`추가 후보: ${pageData.title}`);
+
+    QUIZ_CACHE.push({
+        name: pageData.title,
+        image: imageUrl,
+        hint: createMaskedHint(pageData.title, rawText),
+        description: rawText.length > 1000
+            ? rawText.substring(0, 1000) + "..."
+            : rawText
+    });
+
+    addedCount++;
                     }
                 }}
 
