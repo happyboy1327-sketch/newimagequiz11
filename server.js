@@ -357,21 +357,42 @@ async function fillCache() {
             }
 
             if (targetTitles.length > 0) {
-                const detailStart = Date.now(); 
+                
                 let addedCount = 0; 
                 
                 for (let i = 0; i < targetTitles.length; i += 5) { 
-                    
-                    const batch = targetTitles.slice(i, i + 5); 
-                    
-                    const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", 
-                    { ...WIKI_AXIOS_CONFIG, 
-                     params: { action: "query", titles: batch.join("|"), prop: "extracts|pageimages", explaintext: true, pithumbsize: 800, format: "json", origin: "*" } 
-                    }); 
-                    
+                    const detailStart = Date.now();
 
-                const pages = Object.values(detailRes.data.query?.pages || {});
-                console.log(`상세조회: ${Date.now() - detailStart}ms / 페이지 ${pages.length}개`);
+const batch = targetTitles.slice(i, i + 5);
+
+let detailRes;
+
+try {
+    detailRes = await axios.get(
+        "https://ko.wikipedia.org/w/api.php",
+        {
+            ...WIKI_AXIOS_CONFIG,
+            params: {
+                action: "query",
+                titles: batch.join("|"),
+                prop: "extracts|pageimages",
+                explaintext: true,
+                pithumbsize: 800,
+                format: "json",
+                origin: "*"
+            }
+        }
+    );
+} catch (e) {
+    console.log(`❌ 상세조회 실패 (${Date.now() - detailStart}ms)`);
+    console.log(`배치: ${batch.join(", ")}`);
+    console.log(`코드: ${e.code}`);
+    console.log(`메시지: ${e.message}`);
+    continue;
+}
+
+const pages = Object.values(detailRes.data.query?.pages || {});
+console.log(`상세조회(${batch.join(", ")}): ${Date.now() - detailStart}ms / 페이지 ${pages.length}개`);
 
                 
 
