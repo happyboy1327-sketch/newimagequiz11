@@ -531,7 +531,7 @@ console.log(`상세조회(${batch.join(", ")}): ${Date.now() - detailStart}ms / 
 }
 
 console.log(`루프 1회 종료: ${Date.now() - loopStart}ms / 현재 캐시 ${QUIZ_CACHE.length}`);
-}
+}}
 
 QUIZ_CACHE = shuffle(QUIZ_CACHE);
 
