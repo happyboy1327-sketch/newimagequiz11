@@ -364,6 +364,9 @@ async function fillCache() {
                             console.log("❌ pageData 없음");
                             continue;
                         }
+                     console.log("제목:", pageData.title);
+                     console.log("extract 길이:", pageData.extract?.length);
+                     console.log("extract:", pageData.extract);
                         if (!pageData.extract || pageData.extract.length < 100) {
                             console.log(`❌ ${pageData.title} → extract 부족`);
                             continue;
