@@ -130,6 +130,8 @@ async function findAlternativeHumanImage(title, aliases) {
 
     if (!page.images) return null;
 
+    const targets = [];
+
     for (const img of page.images) {
         const name = img.title.replace("File:", "");
 
@@ -139,20 +141,27 @@ async function findAlternativeHumanImage(title, aliases) {
         if (!/\.(jpg|jpeg|png|webp)$/i.test(name))
             continue;
 
-        const info = await axios.get("https://commons.wikimedia.org/w/api.php", {
-            ...WIKI_AXIOS_CONFIG,
-            params: {
-                action: "query",
-                titles: img.title,
-                prop: "imageinfo",
-                iiprop: "url",
-                format: "json",
-                origin: "*"
-            }
-        });
+        targets.push(img.title);
+    }
 
-        const file = Object.values(info.data.query.pages)[0];
+    if (targets.length === 0)
+        return null;
 
+    const info = await axios.get("https://commons.wikimedia.org/w/api.php", {
+        ...WIKI_AXIOS_CONFIG,
+        params: {
+            action: "query",
+            titles: targets.join("|"),
+            prop: "imageinfo",
+            iiprop: "url",
+            format: "json",
+            origin: "*"
+        }
+    });
+
+    const pages = Object.values(info.data.query.pages);
+
+    for (const file of pages) {
         const url = file.imageinfo?.[0]?.url;
 
         if (url && isValidImageUrl(url))
@@ -281,7 +290,7 @@ async function fillCache() {
                     
                     const detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", 
                     { ...WIKI_AXIOS_CONFIG, 
-                     params: { action: "query", titles: batch.join("|"), prop: "extracts|pageimages", explaintext: true, pithumbsize: 400, format: "json", origin: "*" } 
+                     params: { action: "query", titles: batch.join("|"), prop: "extracts|pageimages", explaintext: true, pithumbsize: 800, format: "json", origin: "*" } 
                     }); 
                     
 
