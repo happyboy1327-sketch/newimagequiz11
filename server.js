@@ -124,7 +124,7 @@ function extractInfoboxImage(html) {
     return url;
 }
 
-const HUMAN_IMAGE_BLOCKLIST = /coin|medal|seal|flag|coat_of_arms|emblem|tomb|map|signature|statue|bust/i;
+const IMAGE_EXT_RE = /\.(jpg|jpeg|png|webp)$/i;
 const COMMONS_BATCH_SIZE = 12;
 
 async function findAlternativeHumanImage(title, aliases) {
@@ -133,16 +133,23 @@ async function findAlternativeHumanImage(title, aliases) {
         const tInfobox = Date.now();
         const htmlRes = await axios.get("https://ko.wikipedia.org/w/index.php", {
             ...WIKI_AXIOS_CONFIG,
-            params: { title, action: "render" }
+            params: {
+                title,
+                action: "render"
+            }
         });
         console.log(`인포박스: ${Date.now() - tInfobox}ms`);
 
         const imageUrl = extractInfoboxImage(htmlRes.data);
+
         if (imageUrl && isValidImageUrl(imageUrl)) {
             let imageName = imageUrl.toLowerCase();
+
             try {
                 imageName = decodeURIComponent(imageName);
-            } catch (e) {}
+            } catch (e) {
+                // 디코딩 불가 URL은 원본 문자열로 판단
+            }
 
             if (!HUMAN_IMAGE_BLOCKLIST.test(imageName)) {
                 return imageUrl;
@@ -153,78 +160,85 @@ async function findAlternativeHumanImage(title, aliases) {
     }
 
     // ===== 2순위 : 위키백과 문서 내 이미지 목록 검색 =====
-    let res;
-    const tImages = Date.now();
+let res;
+
+const tImages = Date.now();
+
+try {
+    res = await axios.get("https://ko.wikipedia.org/w/api.php", {
+        ...WIKI_AXIOS_CONFIG,
+        params: {
+            action: "query",
+            titles: title,
+            prop: "images",
+            imlimit: 50,
+            format: "json",
+            origin: "*"
+        }
+    });
+
+    console.log(`Images API: ${Date.now() - tImages}ms`);
+
+} catch (e) {
+    console.log(`Images API: ${Date.now() - tImages}ms`);
+    console.log("위키 이미지 검색 오류:", e.code, e.message);
+    throw e;
+}
+
+const page = Object.values(res.data?.query?.pages || {})[0];
+const images = page?.images;
+
+if (!images || images.length === 0) return null;
+    
+    // ===== 3순위 : 위키미디어 커먼즈에서 이미지 실제 URL 조회 =====
+for (let i = 0; i < targets.length; i += COMMONS_BATCH_SIZE) {
+    const batch = targets.slice(i, i + COMMONS_BATCH_SIZE);
+
+    let info;
+
+    const tCommons = Date.now();
+
     try {
-        res = await axios.get("https://ko.wikipedia.org/w/api.php", {
+        info = await axios.get("https://commons.wikimedia.org/w/api.php", {
             ...WIKI_AXIOS_CONFIG,
             params: {
                 action: "query",
-                titles: title,
-                prop: "images",
-                imlimit: 50,
+                titles: batch.join("|"),
+                prop: "imageinfo",
+                iiprop: "url",
                 format: "json",
                 origin: "*"
             }
         });
-        console.log(`Images API: ${Date.now() - tImages}ms`);
+
+        console.log(`Commons API: ${Date.now() - tCommons}ms`);
+
     } catch (e) {
-        console.log(`Images API: ${Date.now() - tImages}ms`);
-        console.log("위키 이미지 검색 오류:", e.code, e.message);
-        throw e;
+        console.log(`Commons API: ${Date.now() - tCommons}ms`);
+        console.log("Commons API 오류:", e.code, e.message);
+        continue;
     }
 
-    const page = Object.values(res.data?.query?.pages || {})[0];
-    const images = page?.images;
-    if (!images || images.length === 0) return null;
-    
-    // 💡 [수정] 누락되었던 targets 배열 정의 추가
-    const targets = images.map(img => img.title);
+    const commonsPages = Object.values(info.data?.query?.pages || {});
+    const urlMap = new Map();
 
-    // ===== 3순위 : 위키미디어 커먼즈에서 이미지 실제 URL 조회 =====
-    for (let i = 0; i < targets.length; i += COMMONS_BATCH_SIZE) {
-        const batch = targets.slice(i, i + COMMONS_BATCH_SIZE);
-        let info;
-        const tCommons = Date.now();
+    for (const file of commonsPages) {
+        const pageTitle = file.title;
+        const url = file.imageinfo?.[0]?.url;
 
-        try {
-            info = await axios.get("https://commons.wikimedia.org/w/api.php", {
-                ...WIKI_AXIOS_CONFIG,
-                params: {
-                    action: "query",
-                    titles: batch.join("|"),
-                    prop: "imageinfo",
-                    iiprop: "url",
-                    format: "json",
-                    origin: "*"
-                }
-            });
-            console.log(`Commons API: ${Date.now() - tCommons}ms`);
-        } catch (e) {
-            console.log(`Commons API: ${Date.now() - tCommons}ms`);
-            console.log("Commons API 오류:", e.code, e.message);
-            continue;
-        }
-
-        const commonsPages = Object.values(info.data?.query?.pages || {});
-        const urlMap = new Map();
-
-        for (const file of commonsPages) {
-            const pageTitle = file.title;
-            const url = file.imageinfo?.[0]?.url;
-            if (url && isValidImageUrl(url)) {
-                urlMap.set(pageTitle, url);
-            }
-        }
-
-        for (const target of batch) {
-            const url = urlMap.get(target);
-            if (url) return url;
+        if (url && isValidImageUrl(url)) {
+            urlMap.set(pageTitle, url);
         }
     }
-    return null;
+
+    for (const target of batch) {
+        const url = urlMap.get(target);
+        if (url) return url;
+    }
 }
 
+return null;
+}
 function createMaskedHint(title, extract) {
     let hintText = extract.substring(0, 350);
     const cleanTitle = title.trim();
@@ -255,7 +269,6 @@ function createMaskedHint(title, extract) {
 
     return hintText.substring(0, 130).trim() + "...";
 }
-
 // =======================================================
 // 5) 투트랙 최적화 캐시 충전
 // =======================================================
