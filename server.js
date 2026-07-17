@@ -113,6 +113,55 @@ function isHumanPhoto(filename, aliases) {
     return true; 
 }
 
+async function findAlternativeHumanImage(title, aliases) {
+    const res = await axios.get("https://ko.wikipedia.org/w/api.php", {
+        ...WIKI_AXIOS_CONFIG,
+        params: {
+            action: "query",
+            titles: title,
+            prop: "images",
+            imlimit: 50,
+            format: "json",
+            origin: "*"
+        }
+    });
+
+    const page = Object.values(res.data.query.pages)[0];
+
+    if (!page.images) return null;
+
+    for (const img of page.images) {
+        const name = img.title.replace("File:", "");
+
+        if (!isHumanPhoto(name, aliases))
+            continue;
+
+        if (!/\.(jpg|jpeg|png|webp)$/i.test(name))
+            continue;
+
+        const info = await axios.get("https://commons.wikimedia.org/w/api.php", {
+            ...WIKI_AXIOS_CONFIG,
+            params: {
+                action: "query",
+                titles: img.title,
+                prop: "imageinfo",
+                iiprop: "url",
+                format: "json",
+                origin: "*"
+            }
+        });
+
+        const file = Object.values(info.data.query.pages)[0];
+
+        const url = file.imageinfo?.[0]?.url;
+
+        if (url && isValidImageUrl(url))
+            return url;
+    }
+
+    return null;
+}
+
 function createMaskedHint(title, extract) {
     let hintText = extract.substring(0, 350);
     const cleanTitle = title.trim();
@@ -263,20 +312,24 @@ async function fillCache() {
                     const aliases = makeNameAliases(pageData.title);
                     console.log(pageData.title, "=>", pageData.pageimage);
 
-                    if (!pageData.thumbnail?.source) {
-        console.log(`❌ ${pageData.title} → 썸네일 없음`);
+                    let imageUrl = pageData.thumbnail?.source;
+
+if (
+    !imageUrl ||
+    !isValidImageUrl(imageUrl) ||
+    !isHumanPhoto(pageData.pageimage || "", aliases)
+) {
+    console.log(`🔍 ${pageData.title} → 대체 이미지 탐색`);
+
+    imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
+
+    if (!imageUrl) {
+        console.log(`❌ ${pageData.title} → 사람사진 없음`);
         continue;
     }
 
-    if (!isValidImageUrl(pageData.thumbnail.source)) {
-        console.log(`❌ ${pageData.title} → 이미지 형식 제외 (${pageData.thumbnail.source})`);
-        continue;
-    }
-
-    if (!isHumanPhoto(pageData.pageimage || "", aliases)) {
-        console.log(`❌ ${pageData.title} → 사람사진 판정 실패 (${pageData.pageimage})`);
-        continue;
-    }
+    console.log(`✅ ${pageData.title} → 대체 사람사진 사용`);
+}
 
                     const imageName = (pageData.pageimage || "").toLowerCase();
  
@@ -304,7 +357,7 @@ async function fillCache() {
 
                         QUIZ_CACHE.push({
                             name: pageData.title,
-                            image: pageData.thumbnail.source,
+                            image: imageUrl,
                             hint: createMaskedHint(pageData.title, rawText),
                             description: rawText.length > 1000 ? rawText.substring(0, 1000) + "..." : rawText
                         });
