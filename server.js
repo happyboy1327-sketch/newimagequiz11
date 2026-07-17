@@ -195,6 +195,7 @@ const page = Object.values(res.data?.query?.pages || {})[0];
 const images = page?.images;
 
 if (!images || images.length === 0) return null;
+    const targets = images.map(img => img.title);
     
     // ===== 3순위 : 위키미디어 커먼즈에서 이미지 실제 URL 조회 =====
 for (let i = 0; i < targets.length; i += COMMONS_BATCH_SIZE) {
@@ -445,46 +446,7 @@ if (!isValidImageUrl(imageUrl)) {
 // 대표 이미지는 JPG인데 사람이 아니면 그냥 제외
 else if (!isHumanPhoto(pageData.pageimage || "", aliases)) {
 
-if (targetTitles.length > 0) {
 
-    const batchStart = Date.now();
-    let addedCount = 0;
-
-    for (let i = 0; i < targetTitles.length; i += 5) {
-
-        const detailStart = Date.now();
-
-        const batch = targetTitles.slice(i, i + 5);
-
-        let detailRes;
-
-        try {
-            detailRes = await axios.get(
-                "https://ko.wikipedia.org/w/api.php",
-                {
-                    ...WIKI_AXIOS_CONFIG,
-                    params: {
-                        action: "query",
-                        titles: batch.join("|"),
-                        prop: "extracts|pageimages",
-                        explaintext: true,
-                        pithumbsize: 800,
-                        format: "json",
-                        origin: "*"
-                    }
-                }
-            );
-        } catch (e) {
-            console.log(`❌ 상세조회 실패 (${Date.now() - detailStart}ms)`);
-            console.log(`배치: ${batch.join(", ")}`);
-            console.log(`코드: ${e.code}`);
-            console.log(`메시지: ${e.message}`);
-            continue;
-        }
-
-        const pages = Object.values(detailRes.data.query?.pages || {});
-
-        console.log(
             `상세조회(${batch.join(", ")}): ${Date.now() - detailStart}ms / 페이지 ${pages.length}개`
         );
 
@@ -551,7 +513,7 @@ if (targetTitles.length > 0) {
                 continue;
             }
 
-            if (imageUrl) {
+                        if (imageUrl) {
 
                 if (LAST_PLAYED.includes(pageData.title)) {
                     console.log(`최근 출제 제외: ${pageData.title}`);
@@ -579,11 +541,6 @@ if (targetTitles.length > 0) {
 
                 if (rawText.length < 100) continue;
 
-                if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) {
-                    console.log(`중복 제외: ${pageData.title}`);
-                    continue;
-                }
-
                 console.log(`추가 후보: ${pageData.title}`);
 
                 QUIZ_CACHE.push({
@@ -609,31 +566,36 @@ if (targetTitles.length > 0) {
 
     console.log(`후보 없음 / ${Date.now() - loopStart}ms`);
 
-                    }
-                
-      catch (e) {
+}
+
+} catch (e) {
+
     console.warn("⚠️ 검색 시도 중 에러");
     console.warn("URL:", e.config?.url);
     console.warn("Params:", e.config?.params);
     console.warn("Message:", e.message);
-          console.error(e.stack);
+    console.error(e.stack);
 
     if (e.response?.status === 429) {
         await new Promise(resolve => setTimeout(resolve, 4500));
     }
 
     continue;
-      }
+}
 
-        console.log(`루프 1회 종료: ${Date.now() - loopStart}ms / 현재 캐시 ${QUIZ_CACHE.length}`);
-    }
+console.log(`루프 1회 종료: ${Date.now() - loopStart}ms / 현재 캐시 ${QUIZ_CACHE.length}`);
+}
 
-    QUIZ_CACHE = shuffle(QUIZ_CACHE);
-    
-    isCaching = false;
-    console.log(`✅ 현재 최종 캐시량: ${QUIZ_CACHE.length}/${CACHE_SIZE} / 총 ${Date.now() - t0}ms`);
+QUIZ_CACHE = shuffle(QUIZ_CACHE);
 
-    if (QUIZ_CACHE.length <= 22) setTimeout(fillCache, 2000);
+isCaching = false;
+
+console.log(
+    `✅ 현재 최종 캐시량: ${QUIZ_CACHE.length}/${CACHE_SIZE} / 총 ${Date.now() - t0}ms`
+);
+
+if (QUIZ_CACHE.length <= 22) {
+    setTimeout(fillCache, 2000);
 }
 
 fillCache();
