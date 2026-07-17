@@ -129,20 +129,20 @@ function extractInfoboxImage(html) {
     return url;
 }
 
-async function findAlternativeHumanImage(title, aliases) {
+const HUMAN_IMAGE_BLOCKLIST = /coin|medal|seal|flag|coat_of_arms|emblem|tomb|map|signature|statue|bust/i;
+const IMAGE_EXT_RE = /\.(jpg|jpeg|png|webp)$/i;
+const COMMONS_BATCH_SIZE = 12;
 
+async function findAlternativeHumanImage(title, aliases) {
     // ===== 1순위 : 인포박스 이미지 =====
     try {
-        const htmlRes = await axios.get(
-            "https://ko.wikipedia.org/w/index.php",
-            {
-                ...WIKI_AXIOS_CONFIG,
-                params: {
-                    title,
-                    action: "render"
-                }
+        const htmlRes = await axios.get("https://ko.wikipedia.org/w/index.php", {
+            ...WIKI_AXIOS_CONFIG,
+            params: {
+                title,
+                action: "render"
             }
-        );
+        });
 
         const imageUrl = extractInfoboxImage(htmlRes.data);
 
@@ -151,16 +151,17 @@ async function findAlternativeHumanImage(title, aliases) {
 
             try {
                 imageName = decodeURIComponent(imageName);
-            } catch (e) {}
+            } catch (e) {
+                // 디코딩 불가 URL은 원본 문자열로 판단
+            }
 
-            // 메달, 동상, 지도, 서명 등 인물 사진이 아닌 것 제외
-            if (!/coin|medal|seal|flag|coat_of_arms|emblem|tomb|map|signature|statue|bust/i.test(imageName)) {
+            if (!HUMAN_IMAGE_BLOCKLIST.test(imageName)) {
                 return imageUrl;
             }
         }
     } catch (e) {
         console.log(`⚠️ 인포박스 조회 실패: ${title}`);
-    } 
+    }
 
     // ===== 2순위 : 위키백과 문서 내 이미지 목록 검색 =====
     const res = await axios.get("https://ko.wikipedia.org/w/api.php", {
@@ -175,17 +176,17 @@ async function findAlternativeHumanImage(title, aliases) {
         }
     });
 
-    const page = Object.values(res.data.query?.pages || {})[0];
+    const page = Object.values(res.data?.query?.pages || {})[0];
+    const images = page?.images;
 
-    if (!page || !page.images) return null;
-   
+    if (!images || images.length === 0) return null;
+
     const targets = [];
+    for (const img of images) {
+        const name = img.title.replace(/^File:/i, "");
 
-    for (const img of page.images) {
-        const name = img.title.replace("File:", "");
-
+        if (!IMAGE_EXT_RE.test(name)) continue;
         if (!isHumanPhoto(name, aliases)) continue;
-        if (!/\.(jpg|jpeg|png|webp)$/i.test(name)) continue;
 
         targets.push(img.title);
     }
@@ -193,29 +194,41 @@ async function findAlternativeHumanImage(title, aliases) {
     if (targets.length === 0) return null;
 
     // ===== 3순위 : 위키미디어 커먼즈에서 이미지 실제 URL 조회 =====
-    const info = await axios.get("https://commons.wikimedia.org/w/api.php", {
-        ...WIKI_AXIOS_CONFIG,
-        params: {
-            action: "query",
-            titles: targets.join("|"),
-            prop: "imageinfo",
-            iiprop: "url",
-            format: "json",
-            origin: "*"
+    for (let i = 0; i < targets.length; i += COMMONS_BATCH_SIZE) {
+        const batch = targets.slice(i, i + COMMONS_BATCH_SIZE);
+
+        const info = await axios.get("https://commons.wikimedia.org/w/api.php", {
+            ...WIKI_AXIOS_CONFIG,
+            params: {
+                action: "query",
+                titles: batch.join("|"),
+                prop: "imageinfo",
+                iiprop: "url",
+                format: "json",
+                origin: "*"
+            }
+        });
+
+        const commonsPages = Object.values(info.data?.query?.pages || {});
+        const urlMap = new Map();
+
+        for (const file of commonsPages) {
+            const pageTitle = file.title;
+            const url = file.imageinfo?.[0]?.url;
+
+            if (url && isValidImageUrl(url)) {
+                urlMap.set(pageTitle, url);
+            }
         }
-    });
 
-    // [수정] 미선언되었던 pages 변수를 위 결과값에서 추출하여 선언
-    const commonsPages = Object.values(info.data.query?.pages || {});
-
-    for (const file of commonsPages) {
-        const url = file.imageinfo?.[0]?.url;
-
-        if (url && isValidImageUrl(url)) return url;
+        for (const target of batch) {
+            const url = urlMap.get(target);
+            if (url) return url;
+        }
     }
 
     return null;
-} // [수정] 누락되었던 함수 종료 괄호 추가
+}
 
 
 function createMaskedHint(title, extract) {
