@@ -434,7 +434,15 @@ else if (!isHumanPhoto(pageData.pageimage || "", aliases)) {
 
                     if (imageUrl) {
 
-    if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) continue;
+    if (LAST_PLAYED.includes(pageData.title)) {
+        console.log(`최근 출제 제외: ${pageData.title}`);
+        continue;
+    }
+
+    if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) {
+        console.log(`중복 제외: ${pageData.title}`);
+        continue;
+    }
 
     let rawText = pageData.extract;
     const cutIndex = rawText.search(/==\s*(각주|같이 보기|참고 문헌|외부 링크)\s*==/i);
