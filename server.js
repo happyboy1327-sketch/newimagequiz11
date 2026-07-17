@@ -508,16 +508,10 @@ console.log(`상세조회(${batch.join(", ")}): ${Date.now() - detailStart}ms / 
     console.log(`캐시 적재: ${addedCount}개 / ${Date.now() - batchStart}ms`);
 
     await new Promise(resolve => setTimeout(resolve, 350));
-
 } else {
-
-    console.log(`후보 없음 / ${Date.now() - loopStart}ms`);
-
+console.log(`후보 없음 / ${Date.now() - loopStart}ms`);
 }
-    
-
-} catch (e) {
-
+    } catch (e) {
     console.warn("⚠️ 검색 시도 중 에러");
     console.warn("URL:", e.config?.url);
     console.warn("Params:", e.config?.params);
