@@ -261,6 +261,7 @@ async function fillCache() {
         continue;
     }
                     const aliases = makeNameAliases(pageData.title);
+                    console.log(pageData.title, "=>", pageData.pageimage);
 
                     if (!pageData.thumbnail?.source) {
         console.log(`❌ ${pageData.title} → 썸네일 없음`);
