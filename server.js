@@ -322,6 +322,7 @@ async function fillCache() {
                     name => !QUIZ_CACHE.some(c => c.name.includes(name)) && !LAST_PLAYED.some(lp => lp.includes(name))
                 );
                 console.log(`VIP 후보선정: ${Date.now() - vipStart}ms`);
+                await new Promise(resolve => setTimeout(resolve, 1500));
             } else {
                 // 양방향 근사치 탐색: baseYear 기준으로
                 // baseYear, -1/+1, -2/+2 ... 순서로 찾고, 900~2000 범위 안에서만 조회
@@ -395,12 +396,17 @@ async function fillCache() {
                             }
                         );
                     } catch (e) {
-                        console.log(`❌ 상세조회 실패 (${Date.now() - detailStart}ms)`);
-                        console.log(`배치: ${batch.join(", ")}`);
-                        console.log(`코드: ${e.code}`);
-                        console.log(`메시지: ${e.message}`);
-                        continue;
-                    }
+    console.log(`❌ 상세조회 실패 (${Date.now() - detailStart}ms)`);
+    console.log(`배치: ${batch.join(", ")}`);
+    console.log(`코드: ${e.code}`);
+    console.log(`메시지: ${e.message}`);
+
+    if (e.response?.status === 429 || e.code === "ECONNABORTED") {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+
+    continue;
+}
 
                     const pages = Object.values(detailRes.data.query?.pages || {});
                     console.log(`상세조회(${batch.join(", ")}): ${Date.now() - detailStart}ms / 페이지 ${pages.length}개`);
