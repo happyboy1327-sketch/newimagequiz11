@@ -514,7 +514,7 @@ async function fillCache() {
                     }
                 }
                 console.log(`캐시 적재: ${addedCount}개 / ${Date.now() - batchStart}ms`);
-                await new Promise(resolve => setTimeout(resolve, 350));
+                await new Promise(resolve => setTimeout(resolve, 800));
             } else {
                 console.log(`후보 없음 / ${Date.now() - loopStart}ms`);
             }
@@ -526,8 +526,8 @@ async function fillCache() {
             console.error(e.stack);
 
             if (e.response?.status === 429) {
-    console.log("🚫 위키 429 발생, 30초 대기");
-    await new Promise(resolve => setTimeout(resolve, 30000));
+    console.log("🚫 위키 429 발생, 10초 대기");
+    await new Promise(resolve => setTimeout(resolve, 10000));
     break;
 }
         }
