@@ -310,7 +310,8 @@ async function fillCache()
         randomSearchAttempts++;
 
         const loopStart = Date.now();
-
+        
+          try{
             let targetTitles = [];
 
 // 1) VIP 후보
