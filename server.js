@@ -432,6 +432,13 @@ console.log(
                     console.log(`상세조회(${batch.join(", ")}): ${Date.now() - detailStart}ms / 페이지 ${pages.length}개`);
 
                     for (const pageData of normalizedPages) {
+                        console.log({
+        title: pageData.title,
+        keys: Object.keys(pageData),
+        hasExtract: "extract" in pageData,
+        extractType: typeof pageData.extract
+    });
+                        console.log("----------------");
                         console.log("TITLE:", pageData.title);
 console.log("EXTRACT:", pageData.extract);
 console.log("EXTRACT LEN:", pageData.extract?.length);
