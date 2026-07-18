@@ -312,9 +312,7 @@ async function fillCache() {
         const loopStart = Date.now();
 
         try {
-            const isLegacyTurn = QUIZ_CACHE.length < 10
-            ? false
-            : Math.random() < 0.55;
+            const isLegacyTurn = Math.random() < 0.32;
             
             let targetTitles = [];
 
