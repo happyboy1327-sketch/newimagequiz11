@@ -373,9 +373,9 @@ async function fillCache() {
                 const batchStart = Date.now();
                 let addedCount = 0;
                 
-                for (let i = 0; i < targetTitles.length; i += 5) { 
+                for (let i = 0; i < targetTitles.length; i += 3) { 
                     const detailStart = Date.now();
-                    const batch = targetTitles.slice(i, i + 5);
+                    const batch = targetTitles.slice(i, i + 3);
                     let detailRes;
 
                     try {
