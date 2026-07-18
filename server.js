@@ -431,13 +431,7 @@ console.log(
         continue;
     }
 
-    let rawText = pageData.extract || "";
 
-if (rawText.length < 100) {
-    console.log(`⚠️ ${pageData.title} → 설명 부족, 기본 설명 사용`);
-
-    rawText = `${pageData.title}에 대한 인물 정보입니다.`;
-}
 
     if (/(대학교수|명예교수|석좌교수|교수|교육자)/.test(pageData.extract)) {
         console.log(`❌ ${pageData.title} → 교수 제외`);
