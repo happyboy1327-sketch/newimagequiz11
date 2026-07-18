@@ -408,14 +408,6 @@ console.log(
                                 }
                             }
                         );
-                        console.log(
-    pages.map(p => ({
-        title:p.title,
-        missing:p.missing,
-        extract:!!p.extract,
-        image:!!p.thumbnail
-    }))
-);
                     } catch (e) {
     console.log(`❌ 상세조회 실패 (${Date.now() - detailStart}ms)`);
     console.log(`배치: ${batch.join(", ")}`);
@@ -430,6 +422,13 @@ console.log(
 }
 
                     const pages = Object.values(detailRes.data.query?.pages || {});
+                    console.log(
+    pages.map(p => ({
+        title: p.title,
+        extract: !!p.extract,
+        thumb: !!p.thumbnail
+    }))
+);
                     const normalizedPages = pages.filter(p => !p.missing);
                     console.log(`상세조회(${batch.join(", ")}): ${Date.now() - detailStart}ms / 페이지 ${pages.length}개`);
 
