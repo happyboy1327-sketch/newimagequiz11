@@ -346,7 +346,7 @@ async function fillCache() {
                                 action: "query",
                                 list: "categorymembers",
                                 cmtitle: `분류:${year}년_출생`,
-                                cmlimit: 90,
+                                cmlimit: 50,
                                 cmtype: "page",
                                 format: "json",
                                 origin: "*"
