@@ -294,7 +294,7 @@ function createMaskedHint(title, extract) {
 // =======================================================
 // 5) 투트랙 최적화 캐시 충전
 // =======================================================
-async function fillCache()
+async function fillCache() {
     if (isCaching) return;
     if (QUIZ_CACHE.length >= CACHE_SIZE) return;
 
@@ -551,6 +551,7 @@ console.log(
     if (QUIZ_CACHE.length <= 22) {
         setTimeout(fillCache, 4000);
     }
+}
 
 
 fillCache();
