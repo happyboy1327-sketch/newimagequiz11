@@ -400,6 +400,7 @@ console.log(
                                     action: "query",
                                     titles: batch.join("|"),
                                     prop: "extracts|pageimages",
+                                    redirects: 1,
                                     explaintext: true,
                                     pithumbsize: 800,
                                     format: "json",
@@ -407,7 +408,14 @@ console.log(
                                 }
                             }
                         );
-                        console.log(JSON.stringify(detailRes.data.query.pages, null, 2));
+                        console.log(
+    pages.map(p => ({
+        title:p.title,
+        missing:p.missing,
+        extract:!!p.extract,
+        image:!!p.thumbnail
+    }))
+);
                     } catch (e) {
     console.log(`❌ 상세조회 실패 (${Date.now() - detailStart}ms)`);
     console.log(`배치: ${batch.join(", ")}`);
@@ -422,9 +430,10 @@ console.log(
 }
 
                     const pages = Object.values(detailRes.data.query?.pages || {});
+                    const normalizedPages = pages.filter(p => !p.missing);
                     console.log(`상세조회(${batch.join(", ")}): ${Date.now() - detailStart}ms / 페이지 ${pages.length}개`);
 
-                    for (const pageData of pages) {
+                    for (const pageData of normalizedPages) {
                         console.log("TITLE:", pageData.title);
 console.log("EXTRACT:", pageData.extract);
 console.log("EXTRACT LEN:", pageData.extract?.length);
