@@ -312,12 +312,12 @@ async function fillCache() {
         const loopStart = Date.now();
 
         try {
-            const isLegacyTurn = Math.random() < 0.6;
+            const isLegacyTurn = Math.random() < 0.5;
             let targetTitles = [];
 
             if (isLegacyTurn) {
                 const vipStart = Date.now();
-                const shuffledVips = shuffle(LEGACY_VIP_LIST).slice(0, 12);
+                const shuffledVips = shuffle(LEGACY_VIP_LIST).slice(0, 14);
                 targetTitles = shuffledVips.filter(
                     name => !QUIZ_CACHE.some(c => c.name.includes(name)) && !LAST_PLAYED.some(lp => lp.includes(name))
                 );
@@ -346,7 +346,7 @@ async function fillCache() {
                                 action: "query",
                                 list: "categorymembers",
                                 cmtitle: `분류:${year}년_출생`,
-                                cmlimit: 60,
+                                cmlimit: 90,
                                 cmtype: "page",
                                 format: "json",
                                 origin: "*"
