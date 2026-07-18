@@ -450,7 +450,7 @@ console.log("----------------");
         continue;
     }
 
-    if (!pageData.extract || pageData.extract.length < 100) {
+    if (!pageData.extract || pageData.extract.length < 10) {
         console.log(`❌ ${pageData.title} → extract 부족`);
         continue;
     }
