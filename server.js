@@ -312,7 +312,7 @@ async function fillCache() {
         const loopStart = Date.now();
 
         try {
-            const isLegacyTurn = Math.random() < 0.5;
+            const isLegacyTurn = Math.random() < 0.35;
             let targetTitles = [];
 
             if (isLegacyTurn) {
@@ -346,7 +346,7 @@ async function fillCache() {
                                 action: "query",
                                 list: "categorymembers",
                                 cmtitle: `분류:${year}년_출생`,
-                                cmlimit: 33,
+                                cmlimit: 45,
                                 cmtype: "page",
                                 format: "json",
                                 origin: "*"
