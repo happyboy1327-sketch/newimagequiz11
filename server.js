@@ -550,24 +550,30 @@ fillCache();
 
 // --- API ---
 app.get("/api/quiz", async (req, res) => {
-    try {
-        const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`; 
+  try {
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 
-        if (QUIZ_CACHE.length === 0) {
-            if (!isCaching) {
-        fillCache();
+    let attempts = 0;
+
+    if (QUIZ_CACHE.length === 0) {
+        if (!isCaching) {
+            fillCache();
+        }
+
+        while (QUIZ_CACHE.length === 0 && attempts < 15) {
+            await new Promise(resolve => setTimeout(resolve, 400));
+            attempts++;
+        }
     }
-            while (QUIZ_CACHE.length === 0 && attempts < 15) { 
-                await new Promise(resolve => setTimeout(resolve, 400));
-                attempts++;
-            }
-        }
-      
-        const item = QUIZ_CACHE.shift();
-      
-        if (!item) {
-            return res.status(503).json({ error: "데이터 준비 중입니다. 잠시 후 새로고침 해주세요.", requestId });
-        }
+
+    const item = QUIZ_CACHE.shift();
+
+    if (!item) {
+        return res.status(503).json({
+            error: "데이터 준비 중입니다. 잠시 후 새로고침 해주세요.",
+            requestId
+        });
+    }
 
         // 캐시가 5개 이하로 떨어지면 백그라운드 자동 충전
         if (QUIZ_CACHE.length <= 30) fillCache(); 
