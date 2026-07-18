@@ -89,7 +89,7 @@ function isHumanPhoto(filename, aliases) {
     // 동상(위인들)은 허용하되, 글씨만 있는 비석/충렬비 등은 빡세게 컷
     const BLACKLIST = [
         "svg", "gif", "coat of arms", "coat_of_arms", "coa", "stone", "tomb", "_tomb",
-        "arms", "emblem", "insignia", "flag", "standard", "banner", "seal", "stamp",
+        "arms", "emblem", "insignia", "flag", "standard", "banner", "seal", "stamp", "Pommernwappen",
         "icon", "logo", "symbol", "map", "chart", "diagram", "signature", "sign",
         "grave", "monument", "book", "cover", "coin", "currency", "memorial", "plaque", "grave", 
         "calligraphy", "handwriting", "manuscript", "document", "letter", "rubbing",
@@ -481,7 +481,7 @@ console.log(
 
     if (
         imageUrl === pageData.thumbnail?.source &&
-        /coin|medal|seal|flag|coat_of_arms|emblem|tomb|map|signature|statue|bust/i.test(imageName)
+        /coin|medal|seal|flag|coat_of_arms|emblem|tomb|map|signature|statue|bust|비문|bimun/i.test(imageName)
     ) {
         console.log(`⛔ 사람 사진 없음으로 제외: ${pageData.title}`);
         continue;
