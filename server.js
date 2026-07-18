@@ -407,6 +407,7 @@ console.log(
                                 }
                             }
                         );
+                        console.log(JSON.stringify(detailRes.data.query.pages, null, 2));
                     } catch (e) {
     console.log(`❌ 상세조회 실패 (${Date.now() - detailStart}ms)`);
     console.log(`배치: ${batch.join(", ")}`);
