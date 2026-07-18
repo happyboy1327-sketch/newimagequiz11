@@ -551,7 +551,7 @@ console.log(
     if (QUIZ_CACHE.length <= 22) {
         setTimeout(fillCache, 4000);
     }
-}
+
 
 fillCache();
 
