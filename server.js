@@ -431,13 +431,15 @@ console.log(
         continue;
     }
 
-
+    if (!pageData.extract || pageData.extract.length < 100) {
+        console.log(`❌ ${pageData.title} → extract 부족`);
+        continue;
+    }
 
     if (/(대학교수|명예교수|석좌교수|교수|교육자)/.test(pageData.extract)) {
         console.log(`❌ ${pageData.title} → 교수 제외`);
         continue;
     }
-
     const aliases = makeNameAliases(pageData.title);
     console.log(pageData.title, "=>", pageData.pageimage);
 
