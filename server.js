@@ -36,7 +36,7 @@ const WIKI_AXIOS_CONFIG = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json'
     },
-    timeout: 8400 
+    timeout: 10000 
 };
 
 // 🔥 레거시 유명인물 (역사적 레전드 위인) 전용 VIP 풀
@@ -305,7 +305,7 @@ async function fillCache() {
 
     let randomSearchAttempts = 0;
 
-    while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 30) {
+    while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 20) {
         if (QUIZ_CACHE.length >= CACHE_SIZE) break;
         randomSearchAttempts++;
 
@@ -317,7 +317,7 @@ async function fillCache() {
 
             if (isLegacyTurn) {
                 const vipStart = Date.now();
-                const shuffledVips = shuffle(LEGACY_VIP_LIST).slice(0, 16);
+                const shuffledVips = shuffle(LEGACY_VIP_LIST).slice(0, 12);
                 targetTitles = shuffledVips.filter(
                     name => !QUIZ_CACHE.some(c => c.name.includes(name)) && !LAST_PLAYED.some(lp => lp.includes(name))
                 );
