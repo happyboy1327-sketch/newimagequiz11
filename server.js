@@ -397,14 +397,15 @@ console.log(
                             {
                                 ...WIKI_AXIOS_CONFIG,
                                 params: {
-                                    action: "query",
-                                    titles: batch.join("|"),
-                                    prop: "extracts|pageimages",
-                                    redirects: 1,
-                                    pithumbsize: 800,
-                                    explaintext: true,
-                                    format: "json",
-                                    origin: "*"
+                                action: "query",
+                               titles: batch.join("|"),
+                                prop: "extracts|pageimages",
+                               redirects: 1,
+                              pithumbsize: 800,
+                                exintro: 1,
+                              explaintext: 1,
+                             format: "json",
+                              origin: "*"
                                 }
                             }
                         );
