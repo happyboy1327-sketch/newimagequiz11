@@ -428,8 +428,6 @@ console.log(
 
                         if (!pageData || !pageData.extract || pageData.extract.length < 100) continue;
 
-                        if (/(대학교수|명예교수|석좌교수|교수|교육자)/.test(pageData.extract)) continue;
-
                         if (!pageData) {
                             console.log("❌ pageData 없음");
                             continue;
@@ -539,7 +537,7 @@ console.log(
             if (e.response?.status === 429) {
     console.log("🚫 위키 429 발생, 10초 대기");
     await new Promise(resolve => setTimeout(resolve, 10000));
-    break;
+    continue;
 }
         }
 
