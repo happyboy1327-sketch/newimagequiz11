@@ -402,6 +402,7 @@ console.log(
                                     prop: "extracts|pageimages",
                                     redirects: 1,
                                     pithumbsize: 800,
+                                    explaintext: true,
                                     format: "json",
                                     origin: "*"
                                 }
