@@ -294,7 +294,7 @@ function createMaskedHint(title, extract) {
 // =======================================================
 // 5) 투트랙 최적화 캐시 충전
 // =======================================================
-async function fillCache() {
+async function fillCache()
     if (isCaching) return;
     if (QUIZ_CACHE.length >= CACHE_SIZE) return;
 
@@ -312,64 +312,75 @@ async function fillCache() {
         const loopStart = Date.now();
 
         try {
-            const isLegacyTurn = Math.random() < 0.32;
-            
             let targetTitles = [];
 
-            if (isLegacyTurn) {
-                const vipStart = Date.now();
-                const shuffledVips = shuffle(LEGACY_VIP_LIST).slice(0, 14);
-                targetTitles = shuffledVips.filter(
-                    name => !QUIZ_CACHE.some(c => c.name.includes(name)) && !LAST_PLAYED.some(lp => lp.includes(name))
-                );
-                console.log(`VIP 후보선정: ${Date.now() - vipStart}ms`);
-                await new Promise(resolve => setTimeout(resolve, 1500));
-            } else {
-                // 양방향 근사치 탐색: baseYear 기준으로
-                // baseYear, -1/+1, -2/+2 ... 순서로 찾고, 900~2000 범위 안에서만 조회
-                const baseYear = Math.floor(Math.random() * (2000 - 900 + 1)) + 900;
-                const MAX_OFFSET = 10;
+// 1) VIP 후보
+const vipTitles = shuffle(LEGACY_VIP_LIST)
+    .filter(name =>
+        !QUIZ_CACHE.some(c => c.name.includes(name)) &&
+        !LAST_PLAYED.some(lp => lp.includes(name))
+    )
+    .slice(0, 8);
 
-                let candidates = [];
+// 2) 신규 후보
+const baseYear = Math.floor(Math.random() * (2000 - 900 + 1)) + 900;
+const MAX_OFFSET = 10;
 
-                for (let offset = 0; offset <= MAX_OFFSET && candidates.length === 0; offset++) {
-                    const years = offset === 0
-                        ? [baseYear]
-                        : [baseYear - offset, baseYear + offset];
+let candidates = [];
 
-                    for (const year of years) {
-                        if (year < 900 || year > 2000) continue;
+for (let offset = 0; offset <= MAX_OFFSET && candidates.length === 0; offset++) {
+    const years = offset === 0
+        ? [baseYear]
+        : [baseYear - offset, baseYear + offset];
 
-                        const listStart = Date.now();
-                        const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                            ...WIKI_AXIOS_CONFIG,
-                            params: {
-                                action: "query",
-                                list: "categorymembers",
-                                cmtitle: `분류:${year}년_출생`,
-                                cmlimit: 48,
-                                cmtype: "page",
-                                format: "json",
-                                origin: "*"
-                            }
-                        });
+    for (const year of years) {
+        if (year < 900 || year > 2000) continue;
 
-                        candidates = listRes.data.query?.categorymembers || [];
-                        console.log(`📅 ${year}년_출생 조회: ${Date.now() - listStart}ms / ${candidates.length}명`);
+        const listStart = Date.now();
 
-                        if (candidates.length > 0) break;
-                    }
-                }
-
-                targetTitles = candidates
-                    .filter(cand => !cand.title.includes(":") && !QUIZ_CACHE.some(c => c.name === cand.title) && !LAST_PLAYED.includes(cand.title))
-                    .filter(cand => !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title))
-                    .sort(() => Math.random() - 0.5)
-                    .map(c => c.title)
-                    .slice(0, 6);
-
-                console.log(`연도 후보선정: baseYear=${baseYear}, 후보 ${targetTitles.length}개`);
+        const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
+            ...WIKI_AXIOS_CONFIG,
+            params: {
+                action: "query",
+                list: "categorymembers",
+                cmtitle: `분류:${year}년_출생`,
+                cmlimit: 48,
+                cmtype: "page",
+                format: "json",
+                origin: "*"
             }
+        });
+
+        candidates = listRes.data.query?.categorymembers || [];
+
+        console.log(`📅 ${year}년_출생 조회: ${Date.now() - listStart}ms / ${candidates.length}명`);
+
+        if (candidates.length > 0) break;
+    }
+}
+
+const newTitles = candidates
+    .filter(cand =>
+        !cand.title.includes(":") &&
+        !QUIZ_CACHE.some(c => c.name === cand.title) &&
+        !LAST_PLAYED.includes(cand.title)
+    )
+    .filter(cand =>
+        !/\(.*\)|선수|음악|기업|영화|배우|가수/.test(cand.title)
+    )
+    .sort(() => Math.random() - 0.5)
+    .map(c => c.title)
+    .slice(0, 8);
+
+// 3) VIP + 신규 혼합
+targetTitles = shuffle([
+    ...vipTitles,
+    ...newTitles
+]);
+
+console.log(
+    `혼합 후보선정: VIP ${vipTitles.length}개 / 신규 ${newTitles.length}개 / 총 ${targetTitles.length}개`
+);
 
             if (targetTitles.length > 0) {
                 const batchStart = Date.now();
@@ -417,7 +428,7 @@ async function fillCache() {
 
                         if (!pageData || !pageData.extract || pageData.extract.length < 100) continue;
 
-                        if (!isLegacyTurn && /(대학교수|명예교수|석좌교수|교수|교육자)/.test(pageData.extract)) continue;
+                        if (/(대학교수|명예교수|석좌교수|교수|교육자)/.test(pageData.extract)) continue;
 
                         if (!pageData) {
                             console.log("❌ pageData 없음");
@@ -429,7 +440,7 @@ async function fillCache() {
                             continue;
                         }
 
-                        if (!isLegacyTurn && /(대학교수|명예교수|석좌교수|교수|교육자)/.test(pageData.extract)) {
+                        if (/(대학교수|명예교수|석좌교수|교수|교육자)/.test(pageData.extract)) {
                             console.log(`❌ ${pageData.title} → 교수 제외`);
                             continue;
                         }
