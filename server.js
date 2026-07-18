@@ -36,7 +36,7 @@ const WIKI_AXIOS_CONFIG = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json'
     },
-    timeout: 10000 
+    timeout: 13000 
 };
 
 // 🔥 레거시 유명인물 (역사적 레전드 위인) 전용 VIP 풀
@@ -346,7 +346,7 @@ async function fillCache() {
                                 action: "query",
                                 list: "categorymembers",
                                 cmtitle: `분류:${year}년_출생`,
-                                cmlimit: 50,
+                                cmlimit: 33,
                                 cmtype: "page",
                                 format: "json",
                                 origin: "*"
@@ -554,8 +554,9 @@ app.get("/api/quiz", async (req, res) => {
         const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`; 
 
         if (QUIZ_CACHE.length === 0) {
-            fillCache(); 
-            let attempts = 0;
+            if (!isCaching) {
+        fillCache();
+    }
             while (QUIZ_CACHE.length === 0 && attempts < 15) { 
                 await new Promise(resolve => setTimeout(resolve, 400));
                 attempts++;
