@@ -312,7 +312,10 @@ async function fillCache() {
         const loopStart = Date.now();
 
         try {
-            const isLegacyTurn = Math.random() < 0.35;
+            const isLegacyTurn = QUIZ_CACHE.length < 10
+            ? false
+            : Math.random() < 0.4;
+            
             let targetTitles = [];
 
             if (isLegacyTurn) {
@@ -346,7 +349,7 @@ async function fillCache() {
                                 action: "query",
                                 list: "categorymembers",
                                 cmtitle: `분류:${year}년_출생`,
-                                cmlimit: 45,
+                                cmlimit: 48,
                                 cmtype: "page",
                                 format: "json",
                                 origin: "*"
@@ -365,7 +368,7 @@ async function fillCache() {
                     .filter(cand => !/\(.*\)|선수|음악|작가|기업|수학|과학|독립운동|미술|의사|간호사|영화/.test(cand.title))
                     .sort(() => Math.random() - 0.5)
                     .map(c => c.title)
-                    .slice(0, 15);
+                    .slice(0, 6);
 
                 console.log(`연도 후보선정: baseYear=${baseYear}, 후보 ${targetTitles.length}개`);
             }
