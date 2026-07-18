@@ -569,10 +569,10 @@ app.get("/api/quiz", async (req, res) => {
         }
 
         // 캐시가 5개 이하로 떨어지면 백그라운드 자동 충전
-        if (QUIZ_CACHE.length <= 22) fillCache(); 
+        if (QUIZ_CACHE.length <= 30) fillCache(); 
 
         LAST_PLAYED.push(item.name);
-        if (LAST_PLAYED.length > 15) LAST_PLAYED.shift(); 
+        if (LAST_PLAYED.length > 16) LAST_PLAYED.shift(); 
 
         res.json({ ...item, imageUrl: item.image, requestId });
 
