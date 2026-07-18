@@ -519,10 +519,10 @@ async function fillCache() {
             console.error(e.stack);
 
             if (e.response?.status === 429) {
-                await new Promise(resolve => setTimeout(resolve, 4500));
-            }
-
-            continue;
+    console.log("🚫 위키 429 발생, 30초 대기");
+    await new Promise(resolve => setTimeout(resolve, 30000));
+    break;
+}
         }
 
         console.log(`루프 1회 종료: ${Date.now() - loopStart}ms / 현재 캐시 ${QUIZ_CACHE.length}`);
@@ -536,7 +536,7 @@ async function fillCache() {
     );
 
     if (QUIZ_CACHE.length <= 22) {
-        setTimeout(fillCache, 2000);
+        setTimeout(fillCache, 4000);
     }
 }
 
