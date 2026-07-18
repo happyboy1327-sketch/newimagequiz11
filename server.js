@@ -519,6 +519,7 @@ console.log(
         addedCount++;
     }
 }
+                }
                 console.log(`캐시 적재: ${addedCount}개 / ${Date.now() - batchStart}ms`);
                 await new Promise(resolve => setTimeout(resolve, 800));
             } else {
