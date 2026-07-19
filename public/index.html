@@ -109,15 +109,13 @@ function resetQuestionUI() {
   setButtons(true);
 }
 
-let isQuizLoading = false;
-
 async function loadQuiz() {
-  // ★ 연타했을 때 문구 띄우고 바로 함수 종료
-  if (isQuizLoading) {
+  // ★ 함수 자체의 속성을 체크 (스코프 오염 방지)
+  if (loadQuiz.isProcessing) {
     els.hint.textContent = "이미 처리 중입니다. 잠시만 기다려주세요.";
     return; 
   }
-  isQuizLoading = true;
+  loadQuiz.isProcessing = true; // ★ 락 걸기
 
   const loadId = ++activeLoadId;
 
@@ -140,7 +138,7 @@ async function loadQuiz() {
 
     if (res.status === 503) {
       els.hint.textContent = "적절한 이미지 찾는 중... 잠시 후 '다음 문제'를 눌러주세요.";
-      isQuizLoading = false; 
+      loadQuiz.isProcessing = false; // ★ 503 에러 시 락 해제
       setButtons(false);
       return;
     }
@@ -172,7 +170,7 @@ async function loadQuiz() {
       els.img.classList.remove('is-loading');
 
       retryCount = 0;
-      isQuizLoading = false; 
+      loadQuiz.isProcessing = false; // ★ 성공 시 락 해제
       setButtons(false);
       startTimer();
     };
@@ -185,14 +183,14 @@ async function loadQuiz() {
       retryCount += 1;
       if (retryCount > MAX_RETRY) {
         els.hint.textContent = "이미지 불안정으로 로드 실패. 다시 시도해주세요.";
-        isQuizLoading = false; 
+        loadQuiz.isProcessing = false; // ★ 실패 시 락 해제
         setButtons(false);
         return;
       }
 
       retryTimer = setTimeout(() => {
         if (loadId === activeLoadId) {
-          isQuizLoading = false; 
+          loadQuiz.isProcessing = false; // ★ 재시도 진입 전 해제
           loadQuiz();
         }
       }, RETRY_DELAY_MS);
@@ -215,7 +213,7 @@ async function loadQuiz() {
 
     if (loadId !== activeLoadId) return;
     els.hint.textContent = "오류가 발생했습니다.";
-    isQuizLoading = false; 
+    loadQuiz.isProcessing = false; // ★ 에러 발생 시 락 해제
     setButtons(false);
   }
 }
