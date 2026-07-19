@@ -143,16 +143,30 @@ export function buildDescription(
 
     if (!intro && !body) return "";
 
+    // 지정된 maxLength 내에서 마지막 온점(.)을 찾아 깔끔하게 문장을 마감하는 함수
+    const cleanSlice = (text) => {
+        if (text.length <= maxLength) return text;
+        
+        const sliced = text.slice(0, maxLength);
+        const lastPeriod = sliced.lastIndexOf(".");
+        
+        // 온점이 글자 제한의 60% 이후 시점에 존재하면 그 온점까지만 자름
+        if (lastPeriod > maxLength * 0.6) {
+            return sliced.slice(0, lastPeriod + 1).trim();
+        }
+        return sliced; // 온점이 너무 앞에 있으면 그냥 글자수대로 자름
+    };
+
     if (!intro) {
         const fallback = extractImportantSentences(body, "", aliases, extraCount);
-        return normalizeSpace(fallback).slice(0, maxLength);
+        return cleanSlice(normalizeSpace(fallback));
     }
 
     if (intro.length >= introThreshold) {
-        return intro.slice(0, maxLength);
+        return cleanSlice(intro);
     }
 
     const extra = extractImportantSentences(body || intro, intro, aliases, extraCount);
     const merged = normalizeSpace([intro, extra].filter(Boolean).join(" "));
-    return merged.slice(0, maxLength);
+    return cleanSlice(merged);
 }
