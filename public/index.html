@@ -109,7 +109,16 @@ function resetQuestionUI() {
   setButtons(true);
 }
 
+let isQuizLoading = false;
+
 async function loadQuiz() {
+  // ★ 연타했을 때 문구 띄우고 바로 함수 종료
+  if (isQuizLoading) {
+    els.hint.textContent = "이미 처리 중입니다. 잠시만 기다려주세요.";
+    return; 
+  }
+  isQuizLoading = true;
+
   const loadId = ++activeLoadId;
 
   if (activeAbortController) {
@@ -118,6 +127,7 @@ async function loadQuiz() {
   activeAbortController = new AbortController();
 
   resetQuestionUI();
+  setButtons(true); 
   els.hint.textContent = "최적의 이미지를 선별하고 있습니다...";
 
   try {
@@ -130,6 +140,7 @@ async function loadQuiz() {
 
     if (res.status === 503) {
       els.hint.textContent = "적절한 이미지 찾는 중... 잠시 후 '다음 문제'를 눌러주세요.";
+      isQuizLoading = false; 
       setButtons(false);
       return;
     }
@@ -161,6 +172,7 @@ async function loadQuiz() {
       els.img.classList.remove('is-loading');
 
       retryCount = 0;
+      isQuizLoading = false; 
       setButtons(false);
       startTimer();
     };
@@ -173,12 +185,16 @@ async function loadQuiz() {
       retryCount += 1;
       if (retryCount > MAX_RETRY) {
         els.hint.textContent = "이미지 불안정으로 로드 실패. 다시 시도해주세요.";
+        isQuizLoading = false; 
         setButtons(false);
         return;
       }
 
       retryTimer = setTimeout(() => {
-        if (loadId === activeLoadId) loadQuiz();
+        if (loadId === activeLoadId) {
+          isQuizLoading = false; 
+          loadQuiz();
+        }
       }, RETRY_DELAY_MS);
     };
 
@@ -199,6 +215,7 @@ async function loadQuiz() {
 
     if (loadId !== activeLoadId) return;
     els.hint.textContent = "오류가 발생했습니다.";
+    isQuizLoading = false; 
     setButtons(false);
   }
 }
