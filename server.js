@@ -284,7 +284,6 @@ async function fillCache() {
                                 titles: batch.join("|"),
                                 prop: "extracts|pageimages",
                                 explaintext: 1,   
-                                exchars: 1400,     
                                 redirects: 1,
                                 pithumbsize: 800,
                                 format: "json",
