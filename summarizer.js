@@ -11,7 +11,6 @@ const IMPORTANT_KEYWORDS = [
     "발명",
     "발견",
     "폐지",
-    "도입",
     "수상",
     "노벨",
     "대표",
@@ -92,7 +91,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         let score = 0;
 
         // [고영양가 핵심 키워드 점수]
-        const nutritionRegex = /(전투|전사|왕위|즉위|폐위|살해|통치|재위|업적|개혁|혁명|조약|발명|발견|창시|수립|기여|작품)/;
+        const nutritionRegex = /(전투|전사|왕위|즉위|폐위|살해|통치|재위|업적|개혁|혁명|조약|발명|발견|창시|수립|기여|작품|정책|주의)/;
         if (nutritionRegex.test(processedSentence)) {
             score += 15; 
         }
