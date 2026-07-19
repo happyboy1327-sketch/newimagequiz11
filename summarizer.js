@@ -19,6 +19,7 @@ const IMPORTANT_KEYWORDS = [
     "독립",
     "혁명",
     "연구",
+    "증명",
     "설립",
     "창립",
     "개발",
@@ -29,8 +30,7 @@ const IMPORTANT_KEYWORDS = [
     "졸업",
     "임명",
     "취임",
-    "서훈",
-    "대상"
+    "부정"
 ];
 
 function normalizeSpace(text = "") {
@@ -79,70 +79,87 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
     const introWords = new Set(tokenize(introText));
 
-    const candidates = sentences.filter((sentence) => {
-        const words = tokenize(sentence);
-        if (words.length === 0) return false;
+    // 1. 모든 문장에 대해 점수 계산 및 지시어(이 작품은 등) 문맥 보정 진행
+    const scored = sentences.map((sentence, index) => {
+        let processedSentence = sentence.trim();
+        let score = 0;
+
+        // 🌟 [문맥 보정 로직] 대명사가 외롭게 남는 현상 방지
+        const targetRegex = /(이|그)\s+(작품|조각|그림|회화|동상|건축물|벽화|서적|책|화풍|시리즈)/;
+        if (targetRegex.test(processedSentence)) {
+            let foundTitle = null;
+            
+            // 현재 문장 바로 앞 구역부터 역순으로 올라가며 가장 가까운 겹화살괄호 《 》 나 〈 〉 검색
+            for (let j = index - 1; j >= 0; j--) {
+                const match = sentences[j].match(/《([^》]+)》/) || sentences[j].match(/〈([^〉]+)〉/);
+                if (match) {
+                    foundTitle = match[0]; // 예: "《다비드》" 획득
+                    break;
+                }
+            }
+            
+            // 문맥에 맞는 작품명을 찾았다면 "이 작품" -> "《다비드》 작품" 형태로 자연스럽게 치환
+            if (foundTitle) {
+                processedSentence = processedSentence.replace(
+                    /(이|그)\s+(작품|조각|그림|회화|동상|건축물|벽화|서적|책|화풍|시리즈)/g, 
+                    `${foundTitle} $2`
+                );
+            }
+        }
+
+        // 2. 필터 조건 사전 체크 (글자 수가 없거나 서론과 55% 이상 겹치면 탈락)
+        const words = tokenize(processedSentence);
+        if (words.length === 0) return { sentence: processedSentence, index, score: -100 };
 
         let overlap = 0;
         for (const word of words) {
             if (introWords.has(word)) overlap++;
         }
-
         const overlapRate = overlap / Math.max(words.length, 1);
-        return overlapRate < 0.55;
-    });
+        if (overlapRate >= 0.55) return { sentence: processedSentence, index, score: -100 };
 
-    if (candidates.length === 0) return "";
-
-    // 1. 점수 매기기 (구역 편중을 유발하는 index 보너스 제거)
-    const scored = candidates.map((sentence, index) => {
-        let score = 0;
-
+        // 3. 본격적인 가산점 스코어링 (보정된 processedSentence 기준)
         for (const alias of aliases) {
-            if (alias && sentence.includes(alias)) score += 10;
+            if (alias && processedSentence.includes(alias)) score += 10;
         }
 
-        // 주어가 생략되는 본문 중후반부를 위해 대명사 가산점 추가
-        if (/(그는|그의|그를|작가는|이후|말년에)/.test(sentence)) score += 5;
+        if (/(그는|그의|그를|작가는|이후|말년에)/.test(processedSentence)) score += 5;
 
         for (const keyword of IMPORTANT_KEYWORDS) {
-            if (sentence.includes(keyword)) score += 6;
+            if (processedSentence.includes(keyword)) score += 6;
         }
 
-        if (/\d{3,4}년/.test(sentence)) score += 5;
+        if (/\d{3,4}년/.test(processedSentence)) score += 5;
+        if (/[<>\u226A\u226B]/.test(processedSentence)) score += 4;
 
-        // 예술가 퀴즈인 경우 작품명(《 》 또는 < >)이 들어간 문장 가산점
-        if (/[<>\u226A\u226B]/.test(sentence)) score += 4;
+        if (processedSentence.length > 180) score -= 6;
+        if (processedSentence.length < 30) score -= 4;
 
-        // 💡 감점 기준 완화 (핵심 문장이 탈락하는 것 방지)
-        if (sentence.length > 180) score -= 6;
-        if (sentence.length < 30) score -= 4;
-
-        return { sentence, index, score };
+        return { sentence: processedSentence, index, score };
     });
 
-    // 2. ★ 핵심: 훑는 범위를 전범위로 넓히기 위한 구역별(Zone) 샘플링 기법
-    const totalCandidates = scored.length;
+    // 필터 탈락 대상(-100점) 제외시키기
+    const validCandidates = scored.filter(item => item.score > -100);
+    if (validCandidates.length === 0) return "";
+
+    // 4. 구역별(Zone) 균등 샘플링 진행 (초/중/후반 분산 추출)
+    const totalCandidates = validCandidates.length;
     const selectedItems = [];
 
     if (totalCandidates <= count) {
-        // 후보가 몇 개 없다면 그냥 점수 순으로 정렬해서 내보냄
-        return scored
+        return validCandidates
             .sort((a, b) => b.score - a.score)
             .map(item => item.sentence)
             .join(" ");
     } else {
-        // 후보군을 3개의 구역(초/중/후반)으로 균등하게 분할
         const zoneSize = Math.floor(totalCandidates / count);
 
         for (let i = 0; i < count; i++) {
             const startIdx = i * zoneSize;
-            // 마지막 구역은 배열 끝까지 포함
             const endIdx = (i === count - 1) ? totalCandidates : (i + 1) * zoneSize;
             
-            const zoneCandidates = scored.slice(startIdx, endIdx);
+            const zoneCandidates = validCandidates.slice(startIdx, endIdx);
             
-            // 해당 구역에서 가장 점수가 높은 문장 1개 추출
             if (zoneCandidates.length > 0) {
                 zoneCandidates.sort((a, b) => b.score - a.score);
                 selectedItems.push(zoneCandidates[0]);
@@ -150,7 +167,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         }
     }
 
-    // 3. 최종 선택된 문장들을 원래 본문 순서(index)대로 다시 정렬해서 합침
+    // 5. 뽑힌 문장들을 원본 순서(index)대로 최종 재정렬 후 병합
     return selectedItems
         .sort((a, b) => a.index - b.index)
         .map(item => item.sentence)
