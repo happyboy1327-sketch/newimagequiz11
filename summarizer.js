@@ -189,35 +189,60 @@ export function buildDescription(
     aliases = [],
     extraCount = 3,
     introThreshold = 150,
-    maxLength = 1100
+    maxLength = 1000
 ) {
     const intro = normalizeSpace(introText || "");
-    const body = normalizeSpace(bodyText || "");
+    let body = normalizeSpace(bodyText || "");
 
     if (!intro && !body) return "";
 
-    // 1. 위키 첫 문장은 인물의 정체성(이름, 직업 등)을 나타내므로 무조건 첫 줄로 확보
+    const cleanSlice = (text) => {
+        if (text.length <= maxLength) return text;
+        const sliced = text.slice(0, maxLength);
+        const lastPeriod = sliced.lastIndexOf(".");
+        if (lastPeriod > maxLength * 0.5) {
+            return sliced.slice(0, lastPeriod + 1).trim();
+        }
+        return sliced;
+    };
+
+    // 🌟 1. [본문 영어 미리 제거] 서문을 제외한 본문 속 영어/알파벳 괄호 전면 제거
+    if (body) {
+        body = body.replace(/\([^)]*[a-zA-Z][^)]*\)/g, "");
+        body = body.replace(/[a-zA-Z]/g, "");
+        body = body.replace(/,\s*,/g, ",").replace(/\s+/g, " ").trim();
+        if (body.endsWith(",")) body = body.slice(0, -1) + ".";
+    }
+
+    // 🌟 2. [토막글/짧은 문서 구제 로직]
+    // 서론과 본문을 합친 총 글자 수가 350자 미만이면, 복잡한 필터를 타지 않고
+    // 있는 그대로 합쳐서 가독성 좋게 출력합니다.
+    const totalLength = intro.length + body.length;
+    if (totalLength < 350) {
+        const combined = normalizeSpace([intro, body].filter(Boolean).join(" "));
+        return cleanSlice(combined);
+    }
+
+    // --- 이하 문서 분량이 충분할 때 돌아가는 정상 요약 로직 ---
+
     const introSentences = intro.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
     const firstSentence = introSentences[0] || "";
 
-    // 2. 무조건 서론만 리턴하던 기존 버그 조건문 제거!!
-    // 첫 문장을 제외한 서론의 나머지 문장들과 본문을 하나로 합쳐 후보군 생성
-    const remainingIntro = introSentences.slice(1).join(" ");
-    const combinedCandidateText = [remainingIntro, body].filter(Boolean).join(" ");
-
-    // 3. 합쳐진 전체 텍스트에서 스코어링 알고리즘(extractImportantSentences)을 돌려 알짜배기 문장만 추출
-    const extra = extractImportantSentences(combinedCandidateText, firstSentence, aliases, extraCount);
-
-    // 4. [정체성 첫 문장 + 엄선된 핵심 문장들] 병합
-    const merged = normalizeSpace([firstSentence, extra].filter(Boolean).join(" "));
-
-    // 5. 최종 글자 수 제한 내에서 온점(.) 마감 처리
-    if (merged.length <= maxLength) return merged;
-    const sliced = merged.slice(0, maxLength);
-    const lastPeriod = sliced.lastIndexOf(".");
-    
-    if (lastPeriod > maxLength * 0.5) {
-        return sliced.slice(0, lastPeriod + 1).trim();
+    // 본문에서 요약문 추출
+    let extra = "";
+    if (body && body.length > 40) {
+        extra = extractImportantSentences(body, intro, aliases, extraCount);
     }
-    return sliced;
+
+    // 본문에서 건질 문장이 없다면 서론의 나머지 문장들을 활용
+    if (!extra) {
+        const remainingIntro = introSentences.slice(1).join(" ");
+        if (remainingIntro) {
+            extra = extractImportantSentences(remainingIntro, firstSentence, aliases, extraCount);
+        }
+    }
+
+    // [첫 문장 + 엄선된 요약문] 결합
+    const merged = normalizeSpace([firstSentence, extra].filter(Boolean).join(" "));
+    return cleanSlice(merged);
 }
