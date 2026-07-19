@@ -36,12 +36,10 @@ function normalizeSpace(text = "") {
 
 function splitSentences(text) {
     const normalized = normalizeSpace(text).replace(/\n+/g, " ");
-    // Replace lookbehind with a capturing group that matches the punctuation + whitespace
     const sentences = normalized
         .split(/([.!?。！？])\s+/)
         .reduce((acc, part, i, arr) => {
             if (i % 2 === 0 && part.length > 0) {
-                // This is a sentence part
                 const nextPart = arr[i + 1];
                 const sentence = nextPart ? part + nextPart : part;
                 acc.push(sentence);
