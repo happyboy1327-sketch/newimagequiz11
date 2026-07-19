@@ -79,35 +79,32 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
     const introWords = new Set(tokenize(introText));
 
-    // 1. 모든 문장에 대해 점수 계산 및 지시어(이 작품은 등) 문맥 보정 진행
     const scored = sentences.map((sentence, index) => {
         let processedSentence = sentence.trim();
         let score = 0;
 
-        // 🌟 [문맥 보정 로직] 대명사가 외롭게 남는 현상 방지
+        // [고영양가 핵심 키워드 점수]
+        const nutritionRegex = /(전투|전사|왕위|즉위|폐위|살해|통치|재위|업적|개혁|혁명|조약|발명|발견|창시|수립|기여|작품)/;
+        if (nutritionRegex.test(processedSentence)) {
+            score += 15; 
+        }
+
+        // 지시어 문맥 보정 (이 작품은 -> 《작품명》 작품은)
         const targetRegex = /(이|그)\s+(작품|조각|그림|회화|동상|건축물|벽화|서적|책|화풍|시리즈)/;
         if (targetRegex.test(processedSentence)) {
             let foundTitle = null;
-            
-            // 현재 문장 바로 앞 구역부터 역순으로 올라가며 가장 가까운 겹화살괄호 《 》 나 〈 〉 검색
             for (let j = index - 1; j >= 0; j--) {
                 const match = sentences[j].match(/《([^》]+)》/) || sentences[j].match(/〈([^〉]+)〉/);
                 if (match) {
-                    foundTitle = match[0]; // 예: "《다비드》" 획득
+                    foundTitle = match[0];
                     break;
                 }
             }
-            
-            // 문맥에 맞는 작품명을 찾았다면 "이 작품" -> "《다비드》 작품" 형태로 자연스럽게 치환
             if (foundTitle) {
-                processedSentence = processedSentence.replace(
-                    /(이|그)\s+(작품|조각|그림|회화|동상|건축물|벽화|서적|책|화풍|시리즈)/g, 
-                    `${foundTitle} $2`
-                );
+                processedSentence = processedSentence.replace(targetRegex, `${foundTitle} $2`);
             }
         }
 
-        // 2. 필터 조건 사전 체크 (글자 수가 없거나 서론과 55% 이상 겹치면 탈락)
         const words = tokenize(processedSentence);
         if (words.length === 0) return { sentence: processedSentence, index, score: -100 };
 
@@ -118,56 +115,48 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         const overlapRate = overlap / Math.max(words.length, 1);
         if (overlapRate >= 0.55) return { sentence: processedSentence, index, score: -100 };
 
-        // 3. 본격적인 가산점 스코어링 (보정된 processedSentence 기준)
         for (const alias of aliases) {
-            if (alias && processedSentence.includes(alias)) score += 10;
+            if (alias && processedSentence.includes(alias)) score += 8;
         }
 
-        if (/(그는|그의|그를|작가는|이후|말년에)/.test(processedSentence)) score += 5;
-
         for (const keyword of IMPORTANT_KEYWORDS) {
-            if (processedSentence.includes(keyword)) score += 6;
+            if (processedSentence.includes(keyword)) score += 5;
         }
 
         if (/\d{3,4}년/.test(processedSentence)) score += 5;
-        if (/[<>\u226A\u226B]/.test(processedSentence)) score += 4;
 
         if (processedSentence.length > 180) score -= 6;
-        if (processedSentence.length < 30) score -= 4;
+        if (processedSentence.length < 35) score -= 15; 
 
         return { sentence: processedSentence, index, score };
     });
 
-    // 필터 탈락 대상(-100점) 제외시키기
-    const validCandidates = scored.filter(item => item.score > -100);
+    const validCandidates = scored.filter(item => item.score > 0 && item.sentence.length >= 25);
     if (validCandidates.length === 0) return "";
 
-    // 4. 구역별(Zone) 균등 샘플링 진행 (초/중/후반 분산 추출)
-    const totalCandidates = validCandidates.length;
-    const selectedItems = [];
-
-    if (totalCandidates <= count) {
+    // 데이터가 적을 때는 순수 최고 점수 추출
+    if (validCandidates.length <= count) {
         return validCandidates
             .sort((a, b) => b.score - a.score)
             .map(item => item.sentence)
             .join(" ");
-    } else {
-        const zoneSize = Math.floor(totalCandidates / count);
+    }
 
-        for (let i = 0; i < count; i++) {
-            const startIdx = i * zoneSize;
-            const endIdx = (i === count - 1) ? totalCandidates : (i + 1) * zoneSize;
-            
-            const zoneCandidates = validCandidates.slice(startIdx, endIdx);
-            
-            if (zoneCandidates.length > 0) {
-                zoneCandidates.sort((a, b) => b.score - a.score);
-                selectedItems.push(zoneCandidates[0]);
-            }
+    // 데이터가 충분할 때만 구역별 분산 샘플링
+    const selectedItems = [];
+    const zoneSize = Math.floor(validCandidates.length / count);
+
+    for (let i = 0; i < count; i++) {
+        const startIdx = i * zoneSize;
+        const endIdx = (i === count - 1) ? validCandidates.length : (i + 1) * zoneSize;
+        const zoneCandidates = validCandidates.slice(startIdx, endIdx);
+        
+        if (zoneCandidates.length > 0) {
+            zoneCandidates.sort((a, b) => b.score - a.score);
+            selectedItems.push(zoneCandidates[0]);
         }
     }
 
-    // 5. 뽑힌 문장들을 원본 순서(index)대로 최종 재정렬 후 병합
     return selectedItems
         .sort((a, b) => a.index - b.index)
         .map(item => item.sentence)
@@ -192,7 +181,7 @@ export function buildDescription(
     maxLength = 1000
 ) {
     const intro = normalizeSpace(introText || "");
-    let body = normalizeSpace(bodyText || "");
+    const body = normalizeSpace(bodyText || "");
 
     if (!intro && !body) return "";
 
@@ -206,24 +195,12 @@ export function buildDescription(
         return sliced;
     };
 
-    // 🌟 1. [본문 영어 미리 제거] 서문을 제외한 본문 속 영어/알파벳 괄호 전면 제거
-    if (body) {
-        body = body.replace(/\([^)]*[a-zA-Z][^)]*\)/g, "");
-        body = body.replace(/[a-zA-Z]/g, "");
-        body = body.replace(/,\s*,/g, ",").replace(/\s+/g, " ").trim();
-        if (body.endsWith(",")) body = body.slice(0, -1) + ".";
-    }
-
-    // 🌟 2. [토막글/짧은 문서 구제 로직]
-    // 서론과 본문을 합친 총 글자 수가 350자 미만이면, 복잡한 필터를 타지 않고
-    // 있는 그대로 합쳐서 가독성 좋게 출력합니다.
+    // [토막글 예외 처리] 총 글자 수가 짧으면 필터 없이 바로 합침
     const totalLength = intro.length + body.length;
     if (totalLength < 350) {
         const combined = normalizeSpace([intro, body].filter(Boolean).join(" "));
         return cleanSlice(combined);
     }
-
-    // --- 이하 문서 분량이 충분할 때 돌아가는 정상 요약 로직 ---
 
     const introSentences = intro.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
     const firstSentence = introSentences[0] || "";
@@ -234,7 +211,7 @@ export function buildDescription(
         extra = extractImportantSentences(body, intro, aliases, extraCount);
     }
 
-    // 본문에서 건질 문장이 없다면 서론의 나머지 문장들을 활용
+    // 건질 본문이 없다면 서론의 나머지 문장 활용
     if (!extra) {
         const remainingIntro = introSentences.slice(1).join(" ");
         if (remainingIntro) {
@@ -242,7 +219,6 @@ export function buildDescription(
         }
     }
 
-    // [첫 문장 + 엄선된 요약문] 결합
     const merged = normalizeSpace([firstSentence, extra].filter(Boolean).join(" "));
     return cleanSlice(merged);
 }
