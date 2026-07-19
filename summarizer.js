@@ -83,15 +83,15 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
     const scored = sentences.map((sentence, index) => {
         let processedSentence = sentence.trim();
         
-        // 🌟 [추출 제외 키워드 필터] 영어 이름 나열 및 가족 관계 문장 원천 차단
+        // [추출 제외 키워드 필터]
         if (/(칭했다|두었다|슬하)/.test(processedSentence)) {
             return { sentence: processedSentence, index, score: -100 };
         }
 
         let score = 0;
 
-        // [고영양가 핵심 키워드 점수]
-        const nutritionRegex = /(전투|전사|왕위|즉위|폐위|살해|통치|재위|업적|개혁|혁명|조약|발명|발견|창시|수립|기여|작품|정책|주의)/;
+        // 🌟 1. [초고영양가 키워드 격상] '독립', '운동', '투쟁', '해방' 추가 (+15점)
+        const nutritionRegex = /(독립|운동|투쟁|해방|전투|전사|왕위|즉위|폐위|살해|통치|재위|업적|개혁|혁명|조약|발명|발견|창시|수립|기여|작품|주의)/;
         if (nutritionRegex.test(processedSentence)) {
             score += 15; 
         }
@@ -120,9 +120,13 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
             if (introWords.has(word)) overlap++;
         }
         
-        // 💡 스티브 잡스 등 핵심 문장 누락 방지를 위해 0.75로 유지
         const overlapRate = overlap / Math.max(words.length, 1);
-        if (overlapRate >= 0.75) return { sentence: processedSentence, index, score: -100 };
+        
+        // 🌟 2. [중복도 필터 안전장치 추가]
+        // 독립, 혁명, 운동 등 역사를 바꾼 초핵심 단어가 들어간 문장은 
+        // 서론과 단어가 많이 겹치더라도 버려지지 않도록 커트라인을 0.88로 대폭 완화합니다.
+        const maxOverlapLimit = /(독립|혁명|운동|투쟁|해방)/.test(processedSentence) ? 0.88 : 0.75;
+        if (overlapRate >= maxOverlapLimit) return { sentence: processedSentence, index, score: -100 };
 
         for (const alias of aliases) {
             if (alias && processedSentence.includes(alias)) score += 8;
@@ -140,7 +144,6 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         return { sentence: processedSentence, index, score };
     });
 
-    // score가 0보다 크고 길이가 25자 이상인 유효 후보만 필터링 (제외 키워드는 -100점이라 자동 탈락)
     const validCandidates = scored.filter(item => item.score > 0 && item.sentence.length >= 25);
     if (validCandidates.length === 0) return "";
 
