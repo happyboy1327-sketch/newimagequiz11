@@ -81,6 +81,12 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
     const scored = sentences.map((sentence, index) => {
         let processedSentence = sentence.trim();
+        
+        // 🌟 [추출 제외 키워드 필터] 영어 이름 나열 및 가족 관계 문장 원천 차단
+        if (/(칭했다|두었다|슬하)/.test(processedSentence)) {
+            return { sentence: processedSentence, index, score: -100 };
+        }
+
         let score = 0;
 
         // [고영양가 핵심 키워드 점수]
@@ -112,6 +118,8 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         for (const word of words) {
             if (introWords.has(word)) overlap++;
         }
+        
+        // 💡 스티브 잡스 등 핵심 문장 누락 방지를 위해 0.75로 유지
         const overlapRate = overlap / Math.max(words.length, 1);
         if (overlapRate >= 0.75) return { sentence: processedSentence, index, score: -100 };
 
@@ -131,6 +139,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         return { sentence: processedSentence, index, score };
     });
 
+    // score가 0보다 크고 길이가 25자 이상인 유효 후보만 필터링 (제외 키워드는 -100점이라 자동 탈락)
     const validCandidates = scored.filter(item => item.score > 0 && item.sentence.length >= 25);
     if (validCandidates.length === 0) return "";
 
