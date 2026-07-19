@@ -357,7 +357,7 @@ async function fillCache() {
                                 aliases, 
                                 3,   
                                 150, 
-                                260  
+                                1100  
                             );
 
                             if (finalDescription) {
