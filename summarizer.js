@@ -113,7 +113,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
             if (introWords.has(word)) overlap++;
         }
         const overlapRate = overlap / Math.max(words.length, 1);
-        if (overlapRate >= 0.55) return { sentence: processedSentence, index, score: -100 };
+        if (overlapRate >= 0.75) return { sentence: processedSentence, index, score: -100 };
 
         for (const alias of aliases) {
             if (alias && processedSentence.includes(alias)) score += 8;
@@ -178,7 +178,7 @@ export function buildDescription(
     aliases = [],
     extraCount = 3,
     introThreshold = 150,
-    maxLength = 1000
+    maxLength = 1100
 ) {
     const intro = normalizeSpace(introText || "");
     const body = normalizeSpace(bodyText || "");
