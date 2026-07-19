@@ -109,13 +109,17 @@ function resetQuestionUI() {
   setButtons(true);
 }
 
-async function loadQuiz() {
-  // ★ 함수 자체의 속성을 체크 (스코프 오염 방지)
-  if (loadQuiz.isProcessing) {
+// ★ 함수 매개변수에 isRetry = false 추가 (재시도 호출인지 유저 클릭인지 구분)
+async function loadQuiz(isRetry = false) {
+  
+  // ★ 1. 유저가 직접 누른 건데 이미 로딩 중이면 문구 띄우고 커트
+  if (!isRetry && isLoading) {
     els.hint.textContent = "이미 처리 중입니다. 잠시만 기다려주세요.";
-    return; 
+    return;
   }
-  loadQuiz.isProcessing = true; // ★ 락 걸기
+
+  // ★ 2. 시작하자마자 버튼을 잠그고 isLoading을 true로 변경
+  setButtons(true);
 
   const loadId = ++activeLoadId;
 
@@ -125,7 +129,6 @@ async function loadQuiz() {
   activeAbortController = new AbortController();
 
   resetQuestionUI();
-  setButtons(true); 
   els.hint.textContent = "최적의 이미지를 선별하고 있습니다...";
 
   try {
@@ -138,8 +141,7 @@ async function loadQuiz() {
 
     if (res.status === 503) {
       els.hint.textContent = "적절한 이미지 찾는 중... 잠시 후 '다음 문제'를 눌러주세요.";
-      loadQuiz.isProcessing = false; // ★ 503 에러 시 락 해제
-      setButtons(false);
+      setButtons(false); // 여기서 버튼 풀리고 isLoading = false 됨
       return;
     }
 
@@ -170,8 +172,7 @@ async function loadQuiz() {
       els.img.classList.remove('is-loading');
 
       retryCount = 0;
-      loadQuiz.isProcessing = false; // ★ 성공 시 락 해제
-      setButtons(false);
+      setButtons(false); // 성공했으니 잠금 해제
       startTimer();
     };
 
@@ -183,16 +184,13 @@ async function loadQuiz() {
       retryCount += 1;
       if (retryCount > MAX_RETRY) {
         els.hint.textContent = "이미지 불안정으로 로드 실패. 다시 시도해주세요.";
-        loadQuiz.isProcessing = false; // ★ 실패 시 락 해제
-        setButtons(false);
+        setButtons(false); // 완전히 실패했으니 잠금 해제
         return;
       }
 
       retryTimer = setTimeout(() => {
-        if (loadId === activeLoadId) {
-          loadQuiz.isProcessing = false; // ★ 재시도 진입 전 해제
-          loadQuiz();
-        }
+        // ★ 3. 시스템이 자동으로 재시도할 때는 true를 넘겨서 위의 연타 락을 우회함
+        if (loadId === activeLoadId) loadQuiz(true); 
       }, RETRY_DELAY_MS);
     };
 
@@ -213,8 +211,7 @@ async function loadQuiz() {
 
     if (loadId !== activeLoadId) return;
     els.hint.textContent = "오류가 발생했습니다.";
-    loadQuiz.isProcessing = false; // ★ 에러 발생 시 락 해제
-    setButtons(false);
+    setButtons(false); // 에러 났으니 다시 누를 수 있게 잠금 해제
   }
 }
 
