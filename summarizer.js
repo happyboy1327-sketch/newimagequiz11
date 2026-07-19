@@ -41,7 +41,7 @@ function normalizeSpace(text = "") {
 function splitSentences(text) {
     const normalized = normalizeSpace(text).replace(/\n+/g, " ");
     const sentences = normalized
-        .split(/([.!?。！？])\s+/)
+        .split(/(?<!\b[a-zA-Z])([.!?。！？])\s+/)
         .reduce((acc, part, i, arr) => {
             if (i % 2 === 0 && part.length > 0) {
                 const nextPart = arr[i + 1];
@@ -218,7 +218,14 @@ export function buildDescription(
         return cleanSlice(combined);
     }
 
-    const introSentences = intro.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
+    // buildDescription 함수 내부의 introSentence 분리 부분
+const introSentences = intro.split(/(?<!\b[a-zA-Z])([.!?。！？])\s+/).reduce((acc, part, i, arr) => {
+    if (i % 2 === 0 && part.length > 0) {
+        const nextPart = arr[i + 1];
+        acc.push(nextPart ? part + nextPart : part);
+    }
+    return acc;
+}, []).map(s => s.trim()).filter(Boolean);
     const firstSentence = introSentences[0] || "";
 
     // 본문에서 요약문 추출
