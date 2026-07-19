@@ -83,20 +83,25 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
     const scored = sentences.map((sentence, index) => {
         let processedSentence = sentence.trim();
         
-        // [추출 제외 키워드 필터]
-        if (/(칭했다|두었다|슬하)/.test(processedSentence)) {
+        // 🌟 [추출 제외 필터 강화] 
+        // 1. 금지 단어(칭했다, 두었다, 슬하)가 포함된 경우
+        // 2. 문장 시작점에 앞 맥락이 필수적인 지시어(이때, 그때, 이 무렵, 당시, 그해)가 오는 경우 원천 차단
+        if (
+            /(칭했다|두었다|슬하)/.test(processedSentence) || 
+            /^(이때|그때|이 무렵|당시|그해)\s+/.test(processedSentence)
+        ) {
             return { sentence: processedSentence, index, score: -100 };
         }
 
         let score = 0;
 
-        // 🌟 1. [초고영양가 키워드 격상] '독립', '운동', '투쟁', '해방' 추가 (+15점)
+        // [고영양가 핵심 키워드 점수]
         const nutritionRegex = /(독립|운동|투쟁|해방|전투|전사|왕위|즉위|폐위|살해|통치|재위|업적|개혁|혁명|조약|발명|발견|창시|수립|기여|작품|주의)/;
         if (nutritionRegex.test(processedSentence)) {
             score += 15; 
         }
 
-        // 지시어 문맥 보정 (이 작품은 -> 《작품명》 작품은)
+        // 명사형 지시어 문맥 보정 (이 작품은 -> 《작품명》 작품은)
         const targetRegex = /(이|그)\s+(작품|조각|그림|회화|동상|건축물|벽화|서적|책|화풍|시리즈)/;
         if (targetRegex.test(processedSentence)) {
             let foundTitle = null;
@@ -122,10 +127,8 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         
         const overlapRate = overlap / Math.max(words.length, 1);
         
-        // 🌟 2. [중복도 필터 안전장치 추가]
-        // 독립, 혁명, 운동 등 역사를 바꾼 초핵심 단어가 들어간 문장은 
-        // 서론과 단어가 많이 겹치더라도 버려지지 않도록 커트라인을 0.88로 대폭 완화합니다.
-        const maxOverlapLimit = /(독립|혁명|운동|투쟁|해방|주의)/.test(processedSentence) ? 0.88 : 0.75;
+        // 중복도 필터 안전장치
+        const maxOverlapLimit = /(독립|혁명|운동|투쟁|해방)/.test(processedSentence) ? 0.88 : 0.75;
         if (overlapRate >= maxOverlapLimit) return { sentence: processedSentence, index, score: -100 };
 
         for (const alias of aliases) {
