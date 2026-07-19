@@ -92,25 +92,27 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
     if (candidates.length === 0) return "";
 
     const scored = candidates.map((sentence, index) => {
-        let score = 0;
+    let score = 0;
 
-        for (const alias of aliases) {
-            if (alias && sentence.includes(alias)) score += 10;
-        }
+    for (const alias of aliases) {
+        if (alias && sentence.includes(alias)) score += 10;
+    }
 
-        for (const keyword of IMPORTANT_KEYWORDS) {
-            if (sentence.includes(keyword)) score += 6;
-        }
+    for (const keyword of IMPORTANT_KEYWORDS) {
+        if (sentence.includes(keyword)) score += 6;
+    }
 
-        if (/\d{3,4}년/.test(sentence)) score += 5;
+    if (/\d{3,4}년/.test(sentence)) score += 5;
 
-        if (sentence.length > 140) score -= 6;
-        if (sentence.length < 25) score -= 4;
+    // 💡 수정: 위키 문장은 기므로 감점 기준을 180자로 완화합니다.
+    if (sentence.length > 180) score -= 6; 
+    if (sentence.length < 30) score -= 4; // 너무 짧은 쓰레기 문장 감점
 
-        score += Math.max(0, 4 - index);
+    // 초반 인덱스 가산점을 2점 정도로 낮춰서 뒤쪽의 핵심 문장도 기회를 줍니다.
+    score += Math.max(0, 2 - index); 
 
-        return { sentence, index, score };
-    });
+    return { sentence, index, score };
+});
 
     return scored
         .sort((a, b) => b.score - a.score)
@@ -143,30 +145,28 @@ export function buildDescription(
 
     if (!intro && !body) return "";
 
-    // 지정된 maxLength 내에서 마지막 온점(.)을 찾아 깔끔하게 문장을 마감하는 함수
-    const cleanSlice = (text) => {
-        if (text.length <= maxLength) return text;
-        
-        const sliced = text.slice(0, maxLength);
-        const lastPeriod = sliced.lastIndexOf(".");
-        
-        // 온점이 글자 제한의 60% 이후 시점에 존재하면 그 온점까지만 자름
-        if (lastPeriod > maxLength * 0.6) {
-            return sliced.slice(0, lastPeriod + 1).trim();
-        }
-        return sliced; // 온점이 너무 앞에 있으면 그냥 글자수대로 자름
-    };
+    // 1. 위키 첫 문장은 인물의 정체성(이름, 직업 등)을 나타내므로 무조건 첫 줄로 확보
+    const introSentences = intro.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
+    const firstSentence = introSentences[0] || "";
 
-    if (!intro) {
-        const fallback = extractImportantSentences(body, "", aliases, extraCount);
-        return cleanSlice(normalizeSpace(fallback));
+    // 2. 무조건 서론만 리턴하던 기존 버그 조건문 제거!!
+    // 첫 문장을 제외한 서론의 나머지 문장들과 본문을 하나로 합쳐 후보군 생성
+    const remainingIntro = introSentences.slice(1).join(" ");
+    const combinedCandidateText = [remainingIntro, body].filter(Boolean).join(" ");
+
+    // 3. 합쳐진 전체 텍스트에서 스코어링 알고리즘(extractImportantSentences)을 돌려 알짜배기 문장만 추출
+    const extra = extractImportantSentences(combinedCandidateText, firstSentence, aliases, extraCount);
+
+    // 4. [정체성 첫 문장 + 엄선된 핵심 문장들] 병합
+    const merged = normalizeSpace([firstSentence, extra].filter(Boolean).join(" "));
+
+    // 5. 최종 글자 수 제한 내에서 온점(.) 마감 처리
+    if (merged.length <= maxLength) return merged;
+    const sliced = merged.slice(0, maxLength);
+    const lastPeriod = sliced.lastIndexOf(".");
+    
+    if (lastPeriod > maxLength * 0.5) {
+        return sliced.slice(0, lastPeriod + 1).trim();
     }
-
-    if (intro.length >= introThreshold) {
-        return cleanSlice(intro);
-    }
-
-    const extra = extractImportantSentences(body || intro, intro, aliases, extraCount);
-    const merged = normalizeSpace([intro, extra].filter(Boolean).join(" "));
-    return cleanSlice(merged);
+    return sliced;
 }
