@@ -3,7 +3,7 @@ import path from "path";
 import axios from "axios";
 import dotenv from "dotenv";
 // 🌟 새롭게 작성한 서론 보강 함수 가져오기
-import { buildDescription } from "./summarizer.js" with { type: 'json' };
+import { buildDescription } from "./summarizer.js";
 
 dotenv.config();
 const app = express();
