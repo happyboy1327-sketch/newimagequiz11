@@ -91,37 +91,68 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
     if (candidates.length === 0) return "";
 
+    // 1. 점수 매기기 (구역 편중을 유발하는 index 보너스 제거)
     const scored = candidates.map((sentence, index) => {
-    let score = 0;
+        let score = 0;
 
-    for (const alias of aliases) {
-        if (alias && sentence.includes(alias)) score += 10;
+        for (const alias of aliases) {
+            if (alias && sentence.includes(alias)) score += 10;
+        }
+
+        // 주어가 생략되는 본문 중후반부를 위해 대명사 가산점 추가
+        if (/(그는|그의|그를|작가는|이후|말년에)/.test(sentence)) score += 5;
+
+        for (const keyword of IMPORTANT_KEYWORDS) {
+            if (sentence.includes(keyword)) score += 6;
+        }
+
+        if (/\d{3,4}년/.test(sentence)) score += 5;
+
+        // 예술가 퀴즈인 경우 작품명(《 》 또는 < >)이 들어간 문장 가산점
+        if (/[<>\u226A\u226B]/.test(sentence)) score += 4;
+
+        // 💡 감점 기준 완화 (핵심 문장이 탈락하는 것 방지)
+        if (sentence.length > 180) score -= 6;
+        if (sentence.length < 30) score -= 4;
+
+        return { sentence, index, score };
+    });
+
+    // 2. ★ 핵심: 훑는 범위를 전범위로 넓히기 위한 구역별(Zone) 샘플링 기법
+    const totalCandidates = scored.length;
+    const selectedItems = [];
+
+    if (totalCandidates <= count) {
+        // 후보가 몇 개 없다면 그냥 점수 순으로 정렬해서 내보냄
+        return scored
+            .sort((a, b) => b.score - a.score)
+            .map(item => item.sentence)
+            .join(" ");
+    } else {
+        // 후보군을 3개의 구역(초/중/후반)으로 균등하게 분할
+        const zoneSize = Math.floor(totalCandidates / count);
+
+        for (let i = 0; i < count; i++) {
+            const startIdx = i * zoneSize;
+            // 마지막 구역은 배열 끝까지 포함
+            const endIdx = (i === count - 1) ? totalCandidates : (i + 1) * zoneSize;
+            
+            const zoneCandidates = scored.slice(startIdx, endIdx);
+            
+            // 해당 구역에서 가장 점수가 높은 문장 1개 추출
+            if (zoneCandidates.length > 0) {
+                zoneCandidates.sort((a, b) => b.score - a.score);
+                selectedItems.push(zoneCandidates[0]);
+            }
+        }
     }
 
-    for (const keyword of IMPORTANT_KEYWORDS) {
-        if (sentence.includes(keyword)) score += 6;
-    }
-
-    if (/\d{3,4}년/.test(sentence)) score += 5;
-
-    // 💡 수정: 위키 문장은 기므로 감점 기준을 180자로 완화합니다.
-    if (sentence.length > 180) score -= 6; 
-    if (sentence.length < 30) score -= 4; // 너무 짧은 쓰레기 문장 감점
-
-    // 초반 인덱스 가산점을 2점 정도로 낮춰서 뒤쪽의 핵심 문장도 기회를 줍니다.
-    score += Math.max(0, 2 - index); 
-
-    return { sentence, index, score };
-});
-
-    return scored
-        .sort((a, b) => b.score - a.score)
-        .slice(0, count)
+    // 3. 최종 선택된 문장들을 원래 본문 순서(index)대로 다시 정렬해서 합침
+    return selectedItems
         .sort((a, b) => a.index - b.index)
         .map(item => item.sentence)
         .join(" ");
 }
-
 /**
  * exintro가 짧을 때만 본문 핵심 문장을 보강해서 최종 설명을 만든다.
  * @param {string} introText 기존 exintro
@@ -138,7 +169,7 @@ export function buildDescription(
     aliases = [],
     extraCount = 3,
     introThreshold = 150,
-    maxLength = 1000
+    maxLength = 1100
 ) {
     const intro = normalizeSpace(introText || "");
     const body = normalizeSpace(bodyText || "");
