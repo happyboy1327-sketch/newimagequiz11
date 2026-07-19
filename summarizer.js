@@ -125,7 +125,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         // 🌟 2. [중복도 필터 안전장치 추가]
         // 독립, 혁명, 운동 등 역사를 바꾼 초핵심 단어가 들어간 문장은 
         // 서론과 단어가 많이 겹치더라도 버려지지 않도록 커트라인을 0.88로 대폭 완화합니다.
-        const maxOverlapLimit = /(독립|혁명|운동|투쟁|해방)/.test(processedSentence) ? 0.88 : 0.75;
+        const maxOverlapLimit = /(독립|혁명|운동|투쟁|해방|주의)/.test(processedSentence) ? 0.88 : 0.75;
         if (overlapRate >= maxOverlapLimit) return { sentence: processedSentence, index, score: -100 };
 
         for (const alias of aliases) {
