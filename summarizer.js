@@ -122,7 +122,7 @@ function calculateBasicNutritionScore(sentence) {
     return score;
 }
 
-export function extractImportantSentences(bodyText, count = 2) {
+export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 2) {
     if (!bodyText || typeof bodyText !== "string") return "";
 
     const rawSentences = splitSentences(bodyText);
@@ -206,7 +206,7 @@ export function buildDescription(
     introText,
     bodyText,
     aliases = [],
-    extraCount = 2,
+    extraCount = 3,
     introThreshold = 150,
     maxLength = 1100
 ) {
