@@ -347,7 +347,7 @@ async function fillCache() {
     const pageImageName = (pageData.pageimage || "").toLowerCase();
 
     // 🌟 사당/건물/숫자 파일명 잡는 정규식 (함수 대신 패턴 변수 하나만 선언)
-    const badImgRegex = /(sa|won|gung|neung|reung|myo|bi|jeon|gak|ru|ji|shrine|tomb|statue|park|site|사|원|궁|능|묘|비|전|각|루|지)\.[a-z]+$/i;
+    const badImgRegex = /(sa|won|gung|neung|reung|myo|bi|jeon|gak|ru|si|ji|shrine|tomb|statue|park|site|사|원|궁|능|묘|비|전|각|루|지)\.[a-z]+$/i;
 
     let imageUrl = pageData.thumbnail?.source;
 
