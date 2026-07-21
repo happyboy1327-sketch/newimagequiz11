@@ -466,7 +466,6 @@ app.get("/api/quiz", async (req, res) => {
             return res.status(503).json({ error: "데이터 준비 중입니다. 잠시 후 새로고침 해주세요.", requestId });
         }
 
-        if (QUIZ_CACHE.length <= 30) fillCache(); 
 
         LAST_PLAYED.push(item.name);
         if (LAST_PLAYED.length > 16) LAST_PLAYED.shift(); 
