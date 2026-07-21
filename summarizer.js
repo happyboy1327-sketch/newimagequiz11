@@ -73,7 +73,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
     
     // 🌟 [맥락 파괴 접속사 감지 정규식] 단독 추출 시 맥락이 끊기는 문장 강력 차단
     const contextBreakRegex = /^(그러자|이에|그러나|또한|이후|그 뒤|한편|그러던 중|그리하여|따라서|때문에|이때|그때|이 무렵|당시|그해)\b/;
-    const relativeSubjectRegex = /^(어머니|아버지|남동생|여동생|형|오빠|누나|언니|아들|딸|부인|아내|남편|할아버지|할머니)\s+/;
+    const relativeSubjectRegex = /^(어머니|아버지|남동생|여동생|형|오빠|누나|언니|아들|딸|부인|아내|남편|할아버지|할머니|손자|손녀)\s+/;
     const deathPattern = /(사망|별세|서거|타계|전사|시해|사사|병사|죽음|숨졌|세상을\s+떠났|생을\s+마감|사사되었|목숨을\s+잃었)/;
 
     const scored = sentences.map((sentence, index) => {
