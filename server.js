@@ -296,8 +296,8 @@ async function fillCache() {
             targetTitles = shuffle([...vipTitles, ...newTitles]);
 
             if (targetTitles.length > 0) {
-                for (let i = 0; i < targetTitles.length; i += 4) { 
-                    const batch = targetTitles.slice(i, i + 4);
+                for (let i = 0; i < targetTitles.length; i += 3) { 
+                    const batch = targetTitles.slice(i, i + 3);
                     let detailRes;
 
                     try {
@@ -325,9 +325,13 @@ async function fillCache() {
                     const normalizedPages = pages.filter(p => !p.missing);
 
                     for (const pageData of normalizedPages) {
+                        
     if (QUIZ_CACHE.length >= CACHE_SIZE) break;
-
-    if (!pageData.extract || pageData.extract.length < 60) continue;
+         console.log("후보:", pageData.title);
+    if (!pageData.extract || pageData.extract.length < 60) {
+        console.log("탈락: extract 부족", pageData.title, pageData.extract?.length);
+        continue;
+    }
     if (/(선수|축구|야구|농구|배구|골프|테니스|수영|양궁|유도|체육|올림픽|프로게이머|대학교수|명예교수|교수)/.test(pageData.extract)) continue;
 
     const aliases = makeNameAliases(pageData.title);
@@ -350,6 +354,7 @@ async function fillCache() {
 
                           // 2. 최종 이미지 검사 (없거나, 사적지/숫자 사진이거나, 유효하지 않으면 건너뜀)
                           if (!imageUrl || !isValidImageUrl(imageUrl) || badImgRegex.test(imageUrl.split('?')[0])) {
+                              console.log("최종탈락 이미지", pageData.title);
                            continue;
                          }
 
