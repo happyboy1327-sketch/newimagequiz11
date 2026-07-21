@@ -323,10 +323,6 @@ async function fillCache() {
                             if (!imageUrl || !isValidImageUrl(imageUrl)) continue;
                         }
 
-                        if (!isHumanPhoto(pageData.pageimage || "", aliases, imageUrl)) {
-                            imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
-                            if (!imageUrl || !isValidImageUrl(imageUrl)) continue;
-                        }
 
                         if (imageUrl) {
                             console.log("PAGE =", pageData.title);
