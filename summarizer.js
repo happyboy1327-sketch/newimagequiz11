@@ -20,12 +20,20 @@ function cleanWikiText(text) {
         .trim();
 }
 
-// 🌟 [보완] 사망 외에 처형, 전사, 살해 및 중간 조사/동사 삽입 문장까지 감지
+// 🌟 [신규] 온전한 종결 어미(~다, ~이다, ~했다 등)로 끝나지 않은 짤린 찌꺼기 문장 감지
+function isIncompleteSentence(sentence) {
+    if (!sentence) return true;
+    const text = sentence.trim();
+    
+    // 한국어 정상 문장 종결 패턴 (마침표 유무 상관없이 종결 어미 체크)
+    const validEndingRegex = /(다|냐|까|요|죠|자|라|며|음|임|함|됨|성|상|위|중)\.?$/;
+    return !validEndingRegex.test(text);
+}
+
 function filterOtherPersonDeath(text, aliases = []) {
     if (!text) return "";
     const sentences = text.split(/(?<=[.!?])\s+/);
     const cleanSentences = sentences.filter(sentence => {
-        // 1. "OO이/가/은/는 (중간 단어) 사망/처형/살해/전사..." 패턴 감지
         const match = sentence.match(/([가-힣\s]{2,12})(?:이|가|은|는).*?(?:사망|별세|서거|타계|전사|시해|사사|병사|처형|살해|숨졌|목숨을\s*잃)/);
         if (match) {
             const subjectName = match[1].trim();
@@ -35,10 +43,9 @@ function filterOtherPersonDeath(text, aliases = []) {
                 const cleanSubject = subjectName.replace(/[\s\_\-]/g, "");
                 return cleanSubject.includes(cleanAlias) || cleanAlias.includes(cleanSubject);
             });
-            if (!isSelf) return false; // 본인이 아니면 제외
+            if (!isSelf) return false;
         }
 
-        // 2. "관계자 + 의 + 사망/처형/별세" 패턴 감지 (예: "친구의 처형으로", "스승의 사망 이후")
         const possessiveDeathRegex = /(아버지|부친|어머니|모친|아내|부인|남편|아들|딸|형|동생|스승|친구|동료|통역가)의\s*(사망|별세|서거|타계|처형|죽음)/;
         if (possessiveDeathRegex.test(sentence)) return false;
 
@@ -49,6 +56,8 @@ function filterOtherPersonDeath(text, aliases = []) {
 
 function splitSentences(text) {
     const normalized = normalizeSpace(text).replace(/\n+/g, " ");
+    
+    // 마침표가 없더라도 짤린 단락을 분리해내기 위한 처리 포함
     return normalized
         .split(/(?<!\b[a-zA-Z])([.!?。！？])\s+/)
         .reduce((acc, part, i, arr) => {
@@ -83,25 +92,25 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
     const relativeSubjectRegex = /^(어머니|아버지|남동생|여동생|형|오빠|누나|언니|아들|딸|부인|아내|남편|할아버지|할머니|손자|손녀)\s+/;
     const deathPattern = /(사망|별세|서거|타계|전사|시해|사사|병사|죽음|숨졌|세상을\s+떠났|생을\s+마감|사사되었|목숨을\s+잃었)/;
 
-    // 🌟 [신규 추가] 맥락 결여 시작어 및 상대적 시점 정규식
     const vagueStartRegex = /^(단편\s*중|작품\s*중|이\s*중|그\s*중|일부|두\s*작품|한\s*작품)\s+/;
     const relativeTimeRegex = /(지난해|올해|지난달|내년|그해|당해|최근에|얼마\s*전)/;
 
     const scored = sentences.map((sentence, index) => {
         let processedSentence = sentence.trim();
         
-        // 1. [맥락 파괴 / 지칭 생략 / 상대 시점 문장 원천 제외]
+        // 1. [맥락 파괴 / 짤린 미완성 문장 / 지칭 생략 / 상대 시점 문장 원천 제외]
         if (
             contextBreakRegex.test(processedSentence) ||
             vagueStartRegex.test(processedSentence) ||
             relativeTimeRegex.test(processedSentence) ||
+            isIncompleteSentence(processedSentence) || // 🌟 종결어미가 없는 짤린 문장 감지시 점수 몰수
             /(칭했다|두었다|슬하|고 한다|라 한다)\.?$/.test(processedSentence) ||
             /^(이|그)\s+([가-힣]+)(이|가|은|는)\s+/.test(processedSentence)
         ) {
             return { sentence: processedSentence, index, score: -100 };
         }
 
-        // 2. [타인 주어 검증] 주인공(aliases)이 아닌 타인이 주어인 문장 제외
+        // 2. [타인 주어 검증]
         if (aliases.length > 0) {
             const subjectMatch = processedSentence.match(/^([가-힣]{2,10})(?:은|는|이|가)\s+/);
             if (subjectMatch) {
@@ -114,7 +123,6 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
                 });
                 const hasMainAliasInSentence = aliases.some(alias => alias && processedSentence.includes(alias));
 
-                // 문장의 첫 주어가 주인공이 아니고, 문장 내에 주인공 이름도 없으면 제3자 중심 문장으로 판단
                 if (!isMainSubject && !hasMainAliasInSentence) {
                     return { sentence: processedSentence, index, score: -100 };
                 }
@@ -263,7 +271,9 @@ export function buildDescription(
         .map(s => s.trim())
         .filter(Boolean);
 
-    const firstSentence = introSentences[0] || "";
+    // 🌟 서두 문장 역시 짤린 문장이 들어오지 않도록 검증
+    const validIntroSentences = introSentences.filter(s => !isIncompleteSentence(s));
+    const firstSentence = validIntroSentences[0] || introSentences[0] || "";
 
     let extra = "";
     if (body && body.length > 40) {
