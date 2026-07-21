@@ -409,7 +409,7 @@ app.get("/api/quiz", async (req, res) => {
                 attempts++;
             }
         }
-
+        console.log("캐시:", QUIZ_CACHE.length);
         const item = QUIZ_CACHE.shift();
         if (!item) {
             return res.status(503).json({ error: "데이터 준비 중입니다. 잠시 후 새로고침 해주세요.", requestId });
