@@ -82,10 +82,53 @@ function isValidImageUrl(url) {
     return /\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(url);
 }
 
-function isHumanPhoto(filename, aliases) {
-    if (!filename || typeof filename !== "string") return false;
-    const n = filename.toLowerCase();
+// 🌟 [통합 완료] isHumanPhoto + isStrictHumanImage 정밀 통합 판별 함수
+function isHumanPhoto(fileInput, aliases = [], fullUrl = "", extmetadata = {}) {
+    if (!fileInput) return false;
 
+    let filename = "";
+    let url = fullUrl;
+    let metaData = extmetadata;
+
+    // 객체형 입력(fileData)과 단일 문자열(filename) 입력 모두 지원
+    if (typeof fileInput === "object") {
+        filename = fileInput.title || fileInput.filename || "";
+        url = fileInput.url || fileInput.imageinfo?.[0]?.url || fullUrl;
+        metaData = fileInput.extmetadata || fileInput.imageinfo?.[0]?.extmetadata || extmetadata;
+    } else {
+        filename = String(fileInput);
+    }
+
+    filename = filename.replace(/^File:/i, "");
+
+    let rawString = `${filename} ${url}`.toLowerCase();
+    try { rawString = decodeURIComponent(rawString); } catch (e) {}
+
+    const categories = (metaData.Categories?.value || "").toLowerCase();
+    const description = (metaData.ImageDescription?.value || "").toLowerCase();
+    const combinedMeta = `${categories} ${description}`;
+
+    // 1. 유적지/장소 접미사 및 키워드 차단 (예: 고간원지, 생가터, 충렬비 등)
+    const siteSuffixRegex = /(지|터|비|각|당|원|사|적|릉|묘|전|궁|탑|교)\.(jpg|jpeg|png|webp)$/i;
+    if (siteSuffixRegex.test(rawString) && !/(가지|이지|유지)\./i.test(rawString)) {
+        if (/(고간원지|유허비|생가터|기념비|사적비|비각|정려각|사당|전경|사적|유적)/i.test(rawString)) {
+            return false;
+        }
+    }
+
+    // 2. 파일명 끝 숫자 감지 (예: Queen_Sohye2.jpg -> 초상화 키워드가 없는 부가 유적 사진 차단)
+    const hasPortraitKeyword = /(portrait|photo|face|profile|painting|oil|canvas|illustration|hyakunin|초상|어진|영정|그림)/i.test(rawString);
+    if (/\d+\.(jpg|jpeg|png|webp)$/i.test(rawString) && !hasPortraitKeyword) {
+        return false;
+    }
+
+    // 3. 메타데이터(카테고리/설명) 내 무덤, 유적지, 건물 관련 차단 (Beethoven.jpg 통과 / Queen_Sohye2.jpg 차단)
+    const BAD_META_REGEX = /(tomb|grave|gyeongneung|seooreung|samneung|monument|cemetery|historical site|shrine|palace|building|경릉|서오릉|왕릉|묘소|사적|유적|능침|봉분|석물|정자각)/i;
+    if (BAD_META_REGEX.test(combinedMeta)) {
+        return false;
+    }
+
+    // 4. 블랙리스트 단어 통합 검사 (파일명, URL, 메타데이터)
     const BLACKLIST = [
         "svg", "gif", "coat of arms", "coat_of_arms", "coa", "stone", "tomb", "_tomb",
         "arms", "emblem", "insignia", "flag", "standard", "banner", "seal", "stamp",
@@ -93,21 +136,14 @@ function isHumanPhoto(filename, aliases) {
         "grave", "monument", "book", "cover", "coin", "currency", "memorial", "plaque", 
         "calligraphy", "handwriting", "manuscript", "document", "letter", "rubbing",
         "필적", "글씨", "서체", "문서", "편지", "탁본", "서간", "의궤", "집자", "현판", "비석", "묘", 
-        "충렬비", "기념비", "비각", "정려각", "사당", "전경", "생가", "현충사", "사적비", "정려", "탑", "릉"
+        "충렬비", "기념비", "비각", "정려각", "사당", "전경", "생가", "현충사", "사적비", "정려", "탑", "릉",
+        "statue", "bust"
     ];
 
     for (const badWord of BLACKLIST) {
-        if (n.includes(badWord)) return false;
+        if (rawString.includes(badWord) || combinedMeta.includes(badWord)) return false;
     }
-    
-    if (/(portrait|photo|face|profile|bust|painting|oil|canvas|illustration|hyakunin|statue)/i.test(n)) return true;
 
-    for (const a of aliases) {
-        if (!a) continue;
-        const cleanName = a.replace(/[\s\-\_]/g, "");
-        const cleanFile = n.replace(/[\s\-\_]/g, "");
-        if (cleanFile.includes(cleanName)) return true;
-    }
     return true; 
 }
 
@@ -133,7 +169,9 @@ async function findAlternativeHumanImage(title, aliases) {
         if (imageUrl && isValidImageUrl(imageUrl)) {
             let imageName = imageUrl.toLowerCase();
             try { imageName = decodeURIComponent(imageName); } catch (e) {}
-            if (!HUMAN_IMAGE_BLOCKLIST.test(imageName)) return imageUrl;
+            if (!HUMAN_IMAGE_BLOCKLIST.test(imageName) && isHumanPhoto(imageName, aliases, imageUrl)) {
+                return imageUrl;
+            }
         }
     } catch (e) {
         console.log(`⚠️ 인포박스 조회 실패: ${title}`);
@@ -167,9 +205,10 @@ async function findAlternativeHumanImage(title, aliases) {
         const batch = targets.slice(i, i + COMMONS_BATCH_SIZE);
         let info;
         try {
+            // 🌟 iiprop에 extmetadata 추가 (카테고리/설명 메타데이터 동시 수신)
             info = await axios.get("https://commons.wikimedia.org/w/api.php", {
                 ...WIKI_AXIOS_CONFIG,
-                params: { action: "query", titles: batch.join("|"), prop: "imageinfo", iiprop: "url", format: "json", origin: "*" }
+                params: { action: "query", titles: batch.join("|"), prop: "imageinfo", iiprop: "url|extmetadata", format: "json", origin: "*" }
             });
         } catch (e) { continue; }
 
@@ -177,9 +216,10 @@ async function findAlternativeHumanImage(title, aliases) {
         const urlMap = new Map();
 
         for (const file of commonsPages) {
-            const pageTitle = file.title;
             const url = file.imageinfo?.[0]?.url;
-            if (url && isValidImageUrl(url)) urlMap.set(pageTitle, url);
+            if (url && isValidImageUrl(url) && isHumanPhoto(file, aliases)) {
+                urlMap.set(file.title, url);
+            }
         }
 
         for (const target of batch) {
@@ -311,16 +351,9 @@ async function fillCache() {
 
                         if (!imageUrl) continue;
 
-                        if (!isValidImageUrl(imageUrl)) {
+                        if (!isValidImageUrl(imageUrl) || !isHumanPhoto(pageData.pageimage || "", aliases, imageUrl)) {
                             imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
                             if (!imageUrl) continue;
-                        } else if (!isHumanPhoto(pageData.pageimage || "", aliases)) {
-                            continue;
-                        }
-
-                        const imageName = (pageData.pageimage || "").toLowerCase();
-                        if (imageUrl === pageData.thumbnail?.source && /coin|medal|seal|flag|coat_of_arms|emblem|tomb|map|signature|statue|bust/i.test(imageName)) {
-                            continue;
                         }
 
                         if (imageUrl) {
@@ -350,7 +383,6 @@ async function fillCache() {
 
                             let cleanIntro = exintro.replace(/\s+/g, " ").trim();
 
-                            // 🌟 새로 정의된 알고리즘 함수로 최종 설명 조립 (최대 260자 커팅)
                             const finalDescription = buildDescription(
                                 cleanIntro, 
                                 cleanExtract, 
