@@ -257,7 +257,7 @@ async function fillCache() {
 
     let randomSearchAttempts = 0;
 
-    while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 30) {
+    while (QUIZ_CACHE.length < 20 && randomSearchAttempts < 20) {
         console.log(
   "충전 루프",
   randomSearchAttempts,
@@ -445,7 +445,6 @@ if (badImgRegex.test(imageUrl.split('?')[0])) {
     }
 }
 
-fillCache();
 
 // --- API ---
 app.get("/api/quiz", async (req, res) => {
