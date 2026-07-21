@@ -331,7 +331,6 @@ async function fillCache() {
                            continue;
                          }
 
-                        /
 
                         if (LAST_PLAYED.includes(pageData.title)) continue;
                         if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) continue;
