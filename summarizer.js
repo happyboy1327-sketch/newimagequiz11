@@ -5,6 +5,12 @@ const IMPORTANT_KEYWORDS = [
     "임명", "취임", "부정"
 ];
 
+// 단순 족보/가족관계 나열 전용 감지 정규식
+const GENEALOGY_REGEX = /(의\s*(아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|차녀|장녀)(이다|이었다|이며|이고|\s|\.))|(슬하에)|(결혼하(여|였|고))|(출생하|태어났)/;
+
+// 영양가(업적/사건 등) 감지 정규식
+const NUTRITION_REGEX = /(독립|전투|운동|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|승리|패배|결성|폐지|창립|설립|의병|관찰사|벼슬|임진왜란)/;
+
 function normalizeSpace(text = "") {
     return String(text).replace(/\s+/g, " ").trim();
 }
@@ -13,7 +19,7 @@ function cleanWikiText(text) {
     if (!text) return "";
     return text
         .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
-        .replace(/\((첫\vert{}두\vert{}세\vert{}네\vert{}다섯\vert{}\d+)\s*번째\)/g, "")
+        .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "")
         .replace(/\(\s*\)/g, "")
         .replace(/\s+/g, " ")
         .replace(/\s+\./g, ".")
@@ -102,8 +108,7 @@ function matchesAlias(word, alias) {
 
 function calculateBasicNutritionScore(sentence) {
     let score = 0;
-    const nutritionRegex = /(독립|전투|운동|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|승리|패배|결성|폐지|창립|설립)/;
-    if (nutritionRegex.test(sentence)) score += 20;
+    if (NUTRITION_REGEX.test(sentence)) score += 20;
 
     IMPORTANT_KEYWORDS.forEach(kw => {
         if (sentence.includes(kw)) score += 5;
@@ -111,18 +116,11 @@ function calculateBasicNutritionScore(sentence) {
     return score;
 }
 
-/**
- * 본문에서 알짜 문장을 추출.
- * 💡 알짜 문장(15점 이상)이 단 하나도 없는 토막글/족보 문서라면 "" (빈값) 반환!
- */
 export function extractImportantSentences(bodyText, count = 2) {
     if (!bodyText || typeof bodyText !== "string") return "";
 
     const rawSentences = splitSentences(bodyText);
     const cleanedSentences = [];
-
-    // 1. 단순 족보/가족관계 나열 전용 감지 정규식
-    const genealogyRegex = /(의\s*(아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|차녀|장녀)(이다|이었다|이며|이고|\s|\.))|(슬하에)|(결혼하(여|였|고))|(출생하|태어났)/;
 
     rawSentences.forEach((sentence, index) => {
         let text = cleanWikiText(sentence);
@@ -149,13 +147,11 @@ export function extractImportantSentences(bodyText, count = 2) {
 
     if (cleanedSentences.length === 0) return "";
 
-    // 2. 문장별 점수 계산
     const candidates = cleanedSentences.map(({ original, index }) => {
         let score = calculateBasicNutritionScore(original);
 
-        // 단순 가족나열/족보 문장은 감점 (-100)
-        const hasNutrition = /(독립|전투|운동|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|승리|패배|결성|폐지|창립|설립)/.test(original);
-        if (!hasNutrition && genealogyRegex.test(original)) {
+        const hasNutrition = NUTRITION_REGEX.test(original);
+        if (!hasNutrition && GENEALOGY_REGEX.test(original)) {
             score -= 100;
         }
 
@@ -164,13 +160,11 @@ export function extractImportantSentences(bodyText, count = 2) {
         return { sentence: original, index, score };
     });
 
-    // 3. 유효 점수(0점 초과) 문장 필터링
     const validCandidates = candidates.filter(item => item.score > 0);
 
-    // 🌟 핵심 검증: 알짜 정보(15점 이상)를 담은 문장이 '최소 1개'도 없다면 이 본문은 문제 출제 불가능(탈락) 처리!
     const highQualityCandidates = validCandidates.filter(item => item.score >= 15);
     if (highQualityCandidates.length === 0) {
-        return ""; // 출제 불가 (스킵)
+        return "";
     }
 
     validCandidates.sort((a, b) => b.score - a.score);
@@ -181,15 +175,6 @@ export function extractImportantSentences(bodyText, count = 2) {
     return selected.map(item => item.sentence).join(" ");
 }
 
-/**
- * 최종 지문 구성 함수
- * 💡 문제 출제에 적합하지 않은 토막글/가족 나열글이면 "" (빈값) 반환!
- */
-
-const GENEALOGY_REGEX = /(의\s*(아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|차녀|장녀)(이다|이었다|이며|이고|\s|\.))|(슬하에)|(결혼하(여|였|고))|(출생하|태어났)/;
-
-// 영양가(업적/사건 등) 감지 정규식
-const NUTRITION_REGEX = /(독립|전투|운동|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|승리|패배|결성|폐지|창립|설립|의병|관찰사|벼슬|임진왜란)/;
 export function buildDescription(
     introText,
     bodyText,
@@ -198,25 +183,42 @@ export function buildDescription(
     introThreshold = 150,
     maxLength = 1100
 ) {
-    let intro = cleanWikiText(firstSentence);
+    let intro = cleanWikiText(introText);
+    let body = cleanWikiText(bodyText);
 
-    // 서두 개요 청소
     if (intro && aliases.length > 0) {
         intro = filterOtherPersonDeath(intro, aliases);
     }
-
-    // 본문에서 알짜 문장 추출
-    const extra = extractImportantSentences(bodyText, bodySentencesCount);
-
-    // 🌟 최종 탈락 판정:
-    // 본문에서 알짜 문장이 전혀 추출되지 않았고(extra === ""), 서두 역시 주요 업적 키워드가 없거나 지나치게 짧다면
-    // 문제 출제 지문으로서 '탈락' 처리하여 빈 문자열("")을 반환합니다.
-    const introHasNutrition = /(독립|전투|운동|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|승리|패배|결성|폐지|창립|설립)/.test(intro);
-    
-    if (!extra && !introHasNutrition) {
-        return ""; // ❌ 문제 생성 대상에서 탈락!
+    if (body && aliases.length > 0) {
+        body = filterOtherPersonDeath(body, aliases);
     }
 
-    const combined = [intro, extra].filter(Boolean).join(" ");
-    return cleanWikiText(combined);
+    intro = normalizeSpace(intro || "");
+    body = normalizeSpace(body || "");
+
+    if (!intro && !body) return "";
+
+    // 본문에서 알짜 문장 추출
+    const extra = extractImportantSentences(body, extraCount);
+
+    const introHasNutrition = NUTRITION_REGEX.test(intro);
+    const bodyHasNutrition = NUTRITION_REGEX.test(extra);
+    const isGenealogyOnly = GENEALOGY_REGEX.test(intro) && !introHasNutrition;
+
+    // 업적 키워드가 없고 족보만 있는 토막글이면 탈락 ("" 반환)
+    if ((!extra || !bodyHasNutrition) && (!introHasNutrition || isGenealogyOnly)) {
+        return "";
+    }
+
+    let merged = normalizeSpace([intro, extra].filter(Boolean).join(" "));
+
+    if (merged.length > maxLength) {
+        merged = merged.slice(0, maxLength);
+        const lastPeriod = merged.lastIndexOf(".");
+        if (lastPeriod > maxLength * 0.5) {
+            merged = merged.slice(0, lastPeriod + 1).trim();
+        }
+    }
+
+    return merged;
 }
