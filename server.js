@@ -82,7 +82,7 @@ function isValidImageUrl(url) {
     return /\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(url);
 }
 
-// 🌟 [통합 완료] isHumanPhoto + isStrictHumanImage 정밀 통합 판별 함수
+// 🌟 [엄격 강화] 인물 사진 판별 함수 (동상, 조각, 부조, 유물 완벽 차단)
 function isHumanPhoto(fileInput, aliases = [], fullUrl = "", extmetadata = {}) {
     if (!fileInput) return false;
 
@@ -90,7 +90,6 @@ function isHumanPhoto(fileInput, aliases = [], fullUrl = "", extmetadata = {}) {
     let url = fullUrl;
     let metaData = extmetadata;
 
-    // 객체형 입력(fileData)과 단일 문자열(filename) 입력 모두 지원
     if (typeof fileInput === "object") {
         filename = fileInput.title || fileInput.filename || "";
         url = fileInput.url || fileInput.imageinfo?.[0]?.url || fullUrl;
@@ -108,7 +107,7 @@ function isHumanPhoto(fileInput, aliases = [], fullUrl = "", extmetadata = {}) {
     const description = (metaData.ImageDescription?.value || "").toLowerCase();
     const combinedMeta = `${categories} ${description}`;
 
-    // 1. 유적지/장소 접미사 및 키워드 차단 (예: 고간원지, 생가터, 충렬비 등)
+    // 1. 유적지/장소 접미사 및 키워드 차단
     const siteSuffixRegex = /(지|터|비|각|당|원|사|적|릉|묘|전|궁|탑|교)\.(jpg|jpeg|png|webp)$/i;
     if (siteSuffixRegex.test(rawString) && !/(가지|이지|유지)\./i.test(rawString)) {
         if (/(고간원지|유허비|생가터|기념비|사적비|비각|정려각|사당|전경|사적|유적)/i.test(rawString)) {
@@ -116,19 +115,19 @@ function isHumanPhoto(fileInput, aliases = [], fullUrl = "", extmetadata = {}) {
         }
     }
 
-    // 2. 파일명 끝 숫자 감지 (예: Queen_Sohye2.jpg -> 초상화 키워드가 없는 부가 유적 사진 차단)
+    // 2. 파일명 끝 숫자 감지 (초상화 키워드가 없는 경우 차단)
     const hasPortraitKeyword = /(portrait|photo|face|profile|painting|oil|canvas|illustration|hyakunin|초상|어진|영정|그림)/i.test(rawString);
     if (/\d+\.(jpg|jpeg|png|webp)$/i.test(rawString) && !hasPortraitKeyword) {
         return false;
     }
 
-    // 3. 메타데이터(카테고리/설명) 내 무덤, 유적지, 건물 관련 차단 (Beethoven.jpg 통과 / Queen_Sohye2.jpg 차단)
+    // 3. 메타데이터 내 무덤, 유적지, 건물 관련 차단
     const BAD_META_REGEX = /(tomb|grave|gyeongneung|seooreung|samneung|monument|cemetery|historical site|shrine|palace|building|경릉|서오릉|왕릉|묘소|사적|유적|능침|봉분|석물|정자각)/i;
     if (BAD_META_REGEX.test(combinedMeta)) {
         return false;
     }
 
-    // 4. 블랙리스트 단어 통합 검사 (파일명, URL, 메타데이터)
+    // 4. 확장된 블랙리스트 검사 (조각, 동상, 부조, 유물, 상징물 등 철저 차단)
     const BLACKLIST = [
         "svg", "gif", "coat of arms", "coat_of_arms", "coa", "stone", "tomb", "_tomb",
         "arms", "emblem", "insignia", "flag", "standard", "banner", "seal", "stamp",
@@ -137,7 +136,8 @@ function isHumanPhoto(fileInput, aliases = [], fullUrl = "", extmetadata = {}) {
         "calligraphy", "handwriting", "manuscript", "document", "letter", "rubbing",
         "필적", "글씨", "서체", "문서", "편지", "탁본", "서간", "의궤", "집자", "현판", "비석", "묘", 
         "충렬비", "기념비", "비각", "정려각", "사당", "전경", "생가", "현충사", "사적비", "정려", "탑", "릉",
-        "statue", "bust"
+        "statue", "bust", "sculpture", "relief", "bronze", "marble", "carving", "mural", "fresco", "mosaic", "artifact", "head",
+        "조각", "동상", "부조", "석상", "벽화", "유물", "묘비", "사당", "현판", "흉상", "전신상"
     ];
 
     for (const badWord of BLACKLIST) {
@@ -155,7 +155,8 @@ function extractInfoboxImage(html) {
     return url;
 }
 
-const HUMAN_IMAGE_BLOCKLIST = /coin|medal|seal|flag|coat_of_arms|emblem|tomb|map|signature|statue|bust/i;
+// 🌟 인포박스 및 검색 블랙리스트도 강력하게 확장
+const HUMAN_IMAGE_BLOCKLIST = /coin|medal|seal|flag|coat_of_arms|emblem|tomb|map|signature|statue|bust|sculpture|relief|bronze|marble|carving|mural|fresco|mosaic|artifact|조각|동상|부조|흉상/i;
 const IMAGE_EXT_RE = /\.(jpg|jpeg|png|webp)$/i;
 const COMMONS_BATCH_SIZE = 12;
 
@@ -205,7 +206,6 @@ async function findAlternativeHumanImage(title, aliases) {
         const batch = targets.slice(i, i + COMMONS_BATCH_SIZE);
         let info;
         try {
-            // 🌟 iiprop에 extmetadata 추가 (카테고리/설명 메타데이터 동시 수신)
             info = await axios.get("https://commons.wikimedia.org/w/api.php", {
                 ...WIKI_AXIOS_CONFIG,
                 params: { action: "query", titles: batch.join("|"), prop: "imageinfo", iiprop: "url|extmetadata", format: "json", origin: "*" }
@@ -259,7 +259,7 @@ function createMaskedHint(title, extract) {
     });
 
     return hintText.substring(0, 130).trim() + "...";
-}
+} 
 
 // =======================================================
 // 캐시 충전 및 데이터 가공 로직
