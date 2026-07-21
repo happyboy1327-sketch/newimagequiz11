@@ -241,7 +241,12 @@ async function fillCache() {
 
     let randomSearchAttempts = 0;
 
-    while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 20) {
+    while (QUIZ_CACHE.length < CACHE_SIZE && randomSearchAttempts < 30) {
+        console.log(
+  "충전 루프",
+  randomSearchAttempts,
+  QUIZ_CACHE.length
+);
         if (QUIZ_CACHE.length >= CACHE_SIZE) break;
         randomSearchAttempts++;
 
