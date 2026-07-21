@@ -387,6 +387,7 @@ async function fillCache() {
     }
 
     QUIZ_CACHE = shuffle(QUIZ_CACHE);
+    console.log("fillCache 종료", QUIZ_CACHE.length);
     isCaching = false;
 
     if (QUIZ_CACHE.length <= 22) {
