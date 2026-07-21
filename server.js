@@ -38,7 +38,7 @@ const WIKI_AXIOS_CONFIG = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json'
     },
-    timeout: 32000 
+    timeout: 20000 
 };
 
 // VIP 풀
@@ -49,7 +49,7 @@ const LEGACY_VIP_LIST = [
     "레오나르도 다 빈치", "윌리엄 셰익스피어", "아이작 뉴턴", "갈릴레오 갈릴레이", "니콜라 테슬라", "윈스턴 처칠", "진 시황제", "곽재우",
     "헬렌 켈러", "잔 다르크", "조지 워싱턴", "크리스토퍼 콜럼버스", "찰스 다윈", "넬슨 만델라", "을지문덕",
     "마틴 루터 킹 주니어", "어니스트 헤밍웨이", "안네 프랑크", "쇼팽", "클레오파트라 7세", "칭기즈 칸",
-    "알렉산드로스 대왕", "율리우스 카이사르", "마더 테레사", "체 게바라", "오드리 헵번"
+    "알렉산드로스 대왕", "율리우스 카이사르", "마더 테레사", "체 게바라", "오드리 헾번"
 ];
 
 function shuffle(array) {
@@ -82,52 +82,10 @@ function isValidImageUrl(url) {
     return /\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(url);
 }
 
-// 🌟 [엄격 강화] 인물 사진 판별 함수 (동상, 조각, 부조, 유물 완벽 차단)
-function isHumanPhoto(fileInput, aliases = [], fullUrl = "", extmetadata = {}) {
-    if (!fileInput) return false;
+function isHumanPhoto(filename, aliases) {
+    if (!filename || typeof filename !== "string") return false;
+    const n = filename.toLowerCase();
 
-    let filename = "";
-    let url = fullUrl;
-    let metaData = extmetadata;
-
-    if (typeof fileInput === "object") {
-        filename = fileInput.title || fileInput.filename || "";
-        url = fileInput.url || fileInput.imageinfo?.[0]?.url || fullUrl;
-        metaData = fileInput.extmetadata || fileInput.imageinfo?.[0]?.extmetadata || extmetadata;
-    } else {
-        filename = String(fileInput);
-    }
-
-    filename = filename.replace(/^File:/i, "");
-
-    let rawString = `${filename} ${url}`.toLowerCase();
-    try { rawString = decodeURIComponent(rawString); } catch (e) {}
-
-    const categories = (metaData.Categories?.value || "").toLowerCase();
-    const description = (metaData.ImageDescription?.value || "").toLowerCase();
-    const combinedMeta = `${categories} ${description}`;
-
-    // 1. 유적지/장소 접미사 및 키워드 차단
-    const siteSuffixRegex = /(지|터|비|각|당|원|사|적|릉|묘|전|궁|탑|교)\.(jpg|jpeg|png|webp)$/i;
-    if (siteSuffixRegex.test(rawString) && !/(가지|이지|유지)\./i.test(rawString)) {
-        if (/(고간원지|유허비|생가터|기념비|사적비|비각|정려각|사당|전경|사적|유적)/i.test(rawString)) {
-            return false;
-        }
-    }
-
-    // 2. 파일명 끝 숫자 감지 (초상화 키워드가 없는 경우 차단)
-    const hasPortraitKeyword = /(portrait|photo|face|profile|painting|oil|canvas|illustration|hyakunin|초상|어진|영정|그림)/i.test(rawString);
-    if (/\d+\.(jpg|jpeg|png|webp)$/i.test(rawString) && !hasPortraitKeyword) {
-        return false;
-    }
-
-    // 3. 메타데이터 내 무덤, 유적지, 건물 관련 차단
-    const BAD_META_REGEX = /(tomb|grave|gyeongneung|seooreung|samneung|monument|cemetery|historical site|shrine|palace|building|경릉|서오릉|왕릉|묘소|사적|유적|능침|봉분|석물|정자각)/i;
-    if (BAD_META_REGEX.test(combinedMeta)) {
-        return false;
-    }
-
-    // 4. 확장된 블랙리스트 검사 (조각, 동상, 부조, 유물, 상징물 등 철저 차단)
     const BLACKLIST = [
         "svg", "gif", "coat of arms", "coat_of_arms", "coa", "stone", "tomb", "_tomb",
         "arms", "emblem", "insignia", "flag", "standard", "banner", "seal", "stamp",
@@ -135,129 +93,22 @@ function isHumanPhoto(fileInput, aliases = [], fullUrl = "", extmetadata = {}) {
         "grave", "monument", "book", "cover", "coin", "currency", "memorial", "plaque", 
         "calligraphy", "handwriting", "manuscript", "document", "letter", "rubbing",
         "필적", "글씨", "서체", "문서", "편지", "탁본", "서간", "의궤", "집자", "현판", "비석", "묘", 
-        "충렬비", "기념비", "비각", "정려각", "사당", "전경", "생가", "현충사", "사적비", "정려", "탑", "릉",
-        "statue", "bust", "sculpture", "relief", "bronze", "marble", "carving", "mural", "fresco", "mosaic", "artifact", "head",
-        "조각", "동상", "부조", "석상", "벽화", "유물", "묘비", "사당", "현판", "흉상", "전신상"
+        "충렬비", "기념비", "비각", "정려각", "사당", "전경", "생가", "현충사", "사적비", "정려", "탑", "릉"
     ];
 
     for (const badWord of BLACKLIST) {
-        if (rawString.includes(badWord) || combinedMeta.includes(badWord)) return false;
+        if (n.includes(badWord)) return false;
     }
+    
+    if (/(portrait|photo|face|profile|bust|painting|oil|canvas|illustration|hyakunin|statue)/i.test(n)) return true;
 
+    for (const a of aliases) {
+        if (!a) continue;
+        const cleanName = a.replace(/[\s\-\_]/g, "");
+        const cleanFile = n.replace(/[\s\-\_]/g, "");
+        if (cleanFile.includes(cleanName)) return true;
+    }
     return true; 
-}
-
-function extractInfoboxImage(html) {
-    const match = html.match(/<table[^>]*class="[^"]*infobox[\s\S]*?<img[^>]+src="([^"]+)"/i);
-    if (!match) return null;
-    let url = match[1];
-    if (url.startsWith("//")) url = "https:" + url;
-    return url;
-}
-
-// 🌟 인포박스 및 검색 블랙리스트도 강력하게 확장
-const HUMAN_IMAGE_BLOCKLIST = /coin|medal|seal|flag|coat_of_arms|emblem|tomb|map|signature|statue|bust|sculpture|relief|bronze|marble|carving|mural|fresco|mosaic|artifact|조각|동상|부조|흉상/i;
-const IMAGE_EXT_RE = /\.(jpg|jpeg|png|webp)$/i;
-const COMMONS_BATCH_SIZE = 12;
-
-async function findAlternativeHumanImage(title, aliases) {
-    try {
-        const htmlRes = await axios.get("https://ko.wikipedia.org/w/index.php", {
-            ...WIKI_AXIOS_CONFIG,
-            params: { title, action: "render" }
-        });
-        const imageUrl = extractInfoboxImage(htmlRes.data);
-        if (imageUrl && isValidImageUrl(imageUrl)) {
-            let imageName = imageUrl.toLowerCase();
-            try { imageName = decodeURIComponent(imageName); } catch (e) {}
-            if (!HUMAN_IMAGE_BLOCKLIST.test(imageName) && isHumanPhoto(imageName, aliases, imageUrl)) {
-                return imageUrl;
-            }
-        }
-    } catch (e) {
-        console.log(`⚠️ 인포박스 조회 실패: ${title}`);
-    }
-
-    let res;
-    try {
-        res = await axios.get("https://ko.wikipedia.org/w/api.php", {
-            ...WIKI_AXIOS_CONFIG,
-            params: { action: "query", titles: title, prop: "images", imlimit: 50, format: "json", origin: "*" }
-        });
-    } catch (e) {
-        return null;
-    }
-
-    const page = Object.values(res.data?.query?.pages || {})[0];
-    const images = page?.images;
-    if (!images || images.length === 0) return null;
-    const targets = [];
-
-    for (const img of images) {
-        const name = img.title.replace(/^File:/i, "");
-        if (!IMAGE_EXT_RE.test(name)) continue;
-        if (!isHumanPhoto(name, aliases)) continue;
-        targets.push(img.title);
-    }
-
-    if (targets.length === 0) return null;
-    
-    for (let i = 0; i < targets.length; i += COMMONS_BATCH_SIZE) {
-        const batch = targets.slice(i, i + COMMONS_BATCH_SIZE);
-        let info;
-        try {
-            info = await axios.get("https://commons.wikimedia.org/w/api.php", {
-                ...WIKI_AXIOS_CONFIG,
-                params: { action: "query", titles: batch.join("|"), prop: "imageinfo", iiprop: "url|extmetadata", format: "json", origin: "*" }
-            });
-        } catch (e) { continue; }
-
-        const commonsPages = Object.values(info.data?.query?.pages || {});
-        const urlMap = new Map();
-
-        for (const file of commonsPages) {
-            const url = file.imageinfo?.[0]?.url;
-            if (url && isValidImageUrl(url) && isHumanPhoto(file, aliases)) {
-                urlMap.set(file.title, url);
-            }
-        }
-
-        for (const target of batch) {
-            const url = urlMap.get(target);
-            if (url) return url;
-        }
-    }
-    return null;
-}
-
-function createMaskedHint(title, extract) {
-    let hintText = extract.substring(0, 350);
-    const cleanTitle = title.trim();
-    
-    const parenMatch = cleanTitle.match(/\((.*?)\)/);
-    if (parenMatch) {
-        parenMatch[1].split(/[\s\.\,\-]+/).forEach(part => {
-            if (part.length > 1) hintText = hintText.replace(new RegExp(part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), "OOO");
-        });
-    }
-
-    const baseName = cleanTitle.replace(/\s*\(.*?\)\s*/g, ''); 
-    baseName.split(' ').forEach(word => {
-        if (word.length >= 2) {
-            hintText = hintText.replace(new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), "OOO");
-            if (word.length >= 3 && !/\s/.test(word)) { 
-                for(let i = 0; i <= word.length - 2; i++) {
-                    hintText = hintText.replace(new RegExp(word.substring(i, i + 2).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), "OOO");
-                }
-            }
-        }
-    });
-
-    hintText = hintText.replace(/([a-zA-Z\d\.\,\:\-\s'\[\]\/\(\)ˌˈɛɔ]+)/g, (match, p1) => {
-        const cleanedMatch = p1.trim();
-        return (cleanedMatch.length > 1 && /[a-zA-Z]/.test(cleanedMatch)) ? "OOO" : match; 
-    });
-
     return hintText.substring(0, 130).trim() + "...";
 } 
 
