@@ -9,7 +9,6 @@ function normalizeSpace(text = "") {
     return String(text).replace(/\s+/g, " ").trim();
 }
 
-// 1. 위키백과 특수문자/주석 제거
 function cleanWikiText(text) {
     if (!text) return "";
     return text
@@ -22,7 +21,6 @@ function cleanWikiText(text) {
         .trim();
 }
 
-// 2. 타인 사망 문장 제거
 function filterOtherPersonDeath(text, aliases = []) {
     if (!text) return "";
     const sentences = text.split(/(?<=[.!?])\s+/);
@@ -73,45 +71,21 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
     const introWords = new Set(tokenize(introText));
     const nutritionRegex = /(독립|운동|투쟁|해방|전투|전사|왕위|즉위|폐위|살해|통치|재위|업적|개혁|혁명|조약|발명|발견|창시|수립|기여|작품|주의|성선설|사단|사덕|측은|수오|사양|시비|오륜|부자유친|민본주의|인정|왕도|역성혁명|천명관)/;
-    const fullStructureRegex = /^(이|그)\s+([가-힣]+)(이|가|은|는)\s+/;
+    
+    // 🌟 [맥락 파괴 접속사 감지 정규식] 단독 추출 시 맥락이 끊기는 문장 강력 차단
+    const contextBreakRegex = /^(그러자|이에|그러나|또한|이후|그 뒤|한편|그러던 중|그리하여|따라서|때문에|이때|그때|이 무렵|당시|그해)\b/;
     const relativeSubjectRegex = /^(어머니|아버지|남동생|여동생|형|오빠|누나|언니|아들|딸|부인|아내|남편|할아버지|할머니)\s+/;
 
     const scored = sentences.map((sentence, index) => {
         let processedSentence = sentence.trim();
         
+        // 1. [맥락 파괴 문장 원천 제외] (그러자, 이때, 서술형 찌꺼기 등)
         if (
-            /(칭했다|두었다|슬하)/.test(processedSentence) ||
-            /^(이때|그때|이 무렵|당시|그해)\s+/.test(processedSentence)
+            contextBreakRegex.test(processedSentence) ||
+            /(칭했다|두었다|슬하|고 한다|라 한다)\.?$/.test(processedSentence) ||
+            /^(이|그)\s+([가-힣]+)(이|가|은|는)\s+/.test(processedSentence)
         ) {
             return { sentence: processedSentence, index, score: -100 };
-        }
-
-        if (fullStructureRegex.test(processedSentence)) {
-            if (nutritionRegex.test(processedSentence)) {
-                if (index > 0) {
-                    const prevSentence = sentences[index - 1].trim();
-                    processedSentence = `${prevSentence} ${processedSentence}`;
-                } else {
-                    processedSentence = processedSentence.replace(/^(이|그)\s+/, "");
-                }
-            } else {
-                return { sentence: processedSentence, index, score: -100 };
-            }
-        }
-
-        const targetRegex = /(이|그)\s+(작품|조각|그림|회화|동상|건축물|벽화|서적|책|화풍|시리즈)/;
-        if (targetRegex.test(processedSentence)) {
-            let foundTitle = null;
-            for (let j = index - 1; j >= 0; j--) {
-                const match = sentences[j].match(/《([^》]+)》/) || sentences[j].match(/〈([^〉]+)〉/);
-                if (match) {
-                    foundTitle = match[0];
-                    break;
-                }
-            }
-            if (foundTitle) {
-                processedSentence = processedSentence.replace(targetRegex, `${foundTitle} $2`);
-            }
         }
 
         let score = 0;
@@ -214,7 +188,6 @@ export function buildDescription(
     introThreshold = 150,
     maxLength = 1100
 ) {
-    // 🌟 진입하자마자 특수문자 제거 및 타인 사망 문장 필터링 자동 실행
     const rawIntro = filterOtherPersonDeath(cleanWikiText(introText), aliases);
     const rawBody = filterOtherPersonDeath(cleanWikiText(bodyText), aliases);
 
@@ -267,4 +240,4 @@ export function buildDescription(
 
     const merged = normalizeSpace([firstSentence, extra].filter(Boolean).join(" "));
     return cleanSlice(merged);
-            }
+}
