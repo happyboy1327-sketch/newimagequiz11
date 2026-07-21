@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import axios from "axios";
 import dotenv from "dotenv";
+// 🌟 새롭게 작성한 서론 보강 함수 가져오기
 import { buildDescription } from "./summarizer.js";
 
 dotenv.config();
@@ -81,6 +82,7 @@ function isValidImageUrl(url) {
     return /\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(url);
 }
 
+// 🌟 [통합 완료] isHumanPhoto + isStrictHumanImage 정밀 통합 판별 함수
 function isHumanPhoto(fileInput, aliases = [], fullUrl = "", extmetadata = {}) {
     if (!fileInput) return false;
 
@@ -88,6 +90,7 @@ function isHumanPhoto(fileInput, aliases = [], fullUrl = "", extmetadata = {}) {
     let url = fullUrl;
     let metaData = extmetadata;
 
+    // 객체형 입력(fileData)과 단일 문자열(filename) 입력 모두 지원
     if (typeof fileInput === "object") {
         filename = fileInput.title || fileInput.filename || "";
         url = fileInput.url || fileInput.imageinfo?.[0]?.url || fullUrl;
@@ -105,6 +108,7 @@ function isHumanPhoto(fileInput, aliases = [], fullUrl = "", extmetadata = {}) {
     const description = (metaData.ImageDescription?.value || "").toLowerCase();
     const combinedMeta = `${categories} ${description}`;
 
+    // 1. 유적지/장소 접미사 및 키워드 차단 (예: 고간원지, 생가터, 충렬비 등)
     const siteSuffixRegex = /(지|터|비|각|당|원|사|적|릉|묘|전|궁|탑|교)\.(jpg|jpeg|png|webp)$/i;
     if (siteSuffixRegex.test(rawString) && !/(가지|이지|유지)\./i.test(rawString)) {
         if (/(고간원지|유허비|생가터|기념비|사적비|비각|정려각|사당|전경|사적|유적)/i.test(rawString)) {
@@ -112,16 +116,19 @@ function isHumanPhoto(fileInput, aliases = [], fullUrl = "", extmetadata = {}) {
         }
     }
 
+    // 2. 파일명 끝 숫자 감지 (예: Queen_Sohye2.jpg -> 초상화 키워드가 없는 부가 유적 사진 차단)
     const hasPortraitKeyword = /(portrait|photo|face|profile|painting|oil|canvas|illustration|hyakunin|초상|어진|영정|그림)/i.test(rawString);
     if (/\d+\.(jpg|jpeg|png|webp)$/i.test(rawString) && !hasPortraitKeyword) {
         return false;
     }
 
+    // 3. 메타데이터(카테고리/설명) 내 무덤, 유적지, 건물 관련 차단 (Beethoven.jpg 통과 / Queen_Sohye2.jpg 차단)
     const BAD_META_REGEX = /(tomb|grave|gyeongneung|seooreung|samneung|monument|cemetery|historical site|shrine|palace|building|경릉|서오릉|왕릉|묘소|사적|유적|능침|봉분|석물|정자각)/i;
     if (BAD_META_REGEX.test(combinedMeta)) {
         return false;
     }
 
+    // 4. 블랙리스트 단어 통합 검사 (파일명, URL, 메타데이터)
     const BLACKLIST = [
         "svg", "gif", "coat of arms", "coat_of_arms", "coa", "stone", "tomb", "_tomb",
         "arms", "emblem", "insignia", "flag", "standard", "banner", "seal", "stamp",
@@ -198,6 +205,7 @@ async function findAlternativeHumanImage(title, aliases) {
         const batch = targets.slice(i, i + COMMONS_BATCH_SIZE);
         let info;
         try {
+            // 🌟 iiprop에 extmetadata 추가 (카테고리/설명 메타데이터 동시 수신)
             info = await axios.get("https://commons.wikimedia.org/w/api.php", {
                 ...WIKI_AXIOS_CONFIG,
                 params: { action: "query", titles: batch.join("|"), prop: "imageinfo", iiprop: "url|extmetadata", format: "json", origin: "*" }
@@ -228,7 +236,7 @@ function createMaskedHint(title, extract) {
     
     const parenMatch = cleanTitle.match(/\((.*?)\)/);
     if (parenMatch) {
-        parenMatch[1].split(/[\s\,\-]+/).forEach(part => {
+        parenMatch[1].split(/[\s\.\,\-]+/).forEach(part => {
             if (part.length > 1) hintText = hintText.replace(new RegExp(part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), "OOO");
         });
     }
@@ -253,6 +261,9 @@ function createMaskedHint(title, extract) {
     return hintText.substring(0, 130).trim() + "...";
 }
 
+// =======================================================
+// 캐시 충전 및 데이터 가공 로직
+// =======================================================
 async function fillCache() {
     if (isCaching) return;
     if (QUIZ_CACHE.length >= CACHE_SIZE) return;
@@ -269,10 +280,12 @@ async function fillCache() {
         try {
             let targetTitles = [];
 
+            // 1) VIP 후보
             const vipTitles = shuffle(LEGACY_VIP_LIST)
                 .filter(name => !QUIZ_CACHE.some(c => c.name.includes(name)) && !LAST_PLAYED.some(lp => lp.includes(name)))
                 .slice(0, 8);
 
+            // 2) 신규 인물 후보
             const baseYear = Math.floor(Math.random() * (2000 - 900 + 1)) + 900;
             let candidates = [];
 
@@ -347,7 +360,7 @@ async function fillCache() {
                             if (LAST_PLAYED.includes(pageData.title)) continue;
                             if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) continue;
 
-                            const fullExtract = pageData.extract; 
+                            const fullExtract = pageData.extract;
                             const firstHeaderIndex = fullExtract.search(/==+/);
                             
                             let exintro = fullExtract;
@@ -370,12 +383,11 @@ async function fillCache() {
 
                             let cleanIntro = exintro.replace(/\s+/g, " ").trim();
 
-                            // 🌟 buildDescription 호출 하나로 텍스트 정제 및 타인 사망 제거까지 통합 실행됨
                             const finalDescription = buildDescription(
                                 cleanIntro, 
                                 cleanExtract, 
                                 aliases, 
-                                2,   
+                                3,   
                                 150, 
                                 1100  
                             );
