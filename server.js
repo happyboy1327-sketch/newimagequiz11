@@ -314,7 +314,9 @@ async function fillCache() {
                         const aliases = makeNameAliases(pageData.title);
                         
                         let imageUrl = pageData.thumbnail?.source;
+                        console.log("chatgpt 병신");
                         console.log("thumbnail =", imageUrl);
+                        console.log("isValid =", isValidImageUrl(imageUrl));
 
                         // 🌟 여기서부터 썸네일이 SVG이거나 아예 없으면 즉시 대체 이미지 탐색 + 철저한 검증
                         if (!imageUrl || !isValidImageUrl(imageUrl)) {
