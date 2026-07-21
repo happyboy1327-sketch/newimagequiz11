@@ -210,7 +210,7 @@ export function buildDescription(
     introText,
     bodyText,
     aliases = [],
-    extraCount = 3,
+    extraCount = 2,
     introThreshold = 150,
     maxLength = 1100
 ) {
