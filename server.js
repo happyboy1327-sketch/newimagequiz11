@@ -231,6 +231,7 @@ function createMaskedHint(title, extract) {
 // 캐시 충전 및 데이터 가공 로직
 // =======================================================
 async function fillCache() {
+    console.log("PID:", process.pid);
     if (isCaching) return;
     if (QUIZ_CACHE.length >= CACHE_SIZE) return;
 
