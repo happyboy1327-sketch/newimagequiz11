@@ -248,6 +248,25 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
  * @param {number} maxLength 최종 최대 길이
  * @returns {string}
  */
+function filterOtherPersonDeath(text, aliases = []) {
+    if (!text) return "";
+    const sentences = text.split(/(?<=[.!?])\s+/);
+    const cleanSentences = sentences.filter(sentence => {
+        const match = sentence.match(/([가-힣\s]{2,12})(?:이|가)\s*(?:사망|별세|서거)/);
+        if (match) {
+            const subjectName = match[1].trim();
+            const isSelf = aliases.some(alias => {
+                const cleanAlias = alias.replace(/[\s\_\-]/g, "");
+                const cleanSubject = subjectName.replace(/[\s\_\-]/g, "");
+                return cleanSubject.includes(cleanAlias) || cleanAlias.includes(cleanSubject);
+            });
+            if (!isSelf) return false; 
+        }
+        return true;
+    });
+    return cleanSentences.join(" ");
+}
+
 export function buildDescription(
     introText,
     bodyText,
