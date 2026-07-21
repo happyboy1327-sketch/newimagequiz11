@@ -122,7 +122,7 @@ function calculateBasicNutritionScore(sentence) {
     return score;
 }
 
-export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 2) {
+export function extractImportantSentences(bodyText, count = 2) {
     if (!bodyText || typeof bodyText !== "string") return "";
 
     const rawSentences = splitSentences(bodyText);
@@ -138,7 +138,6 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         let processedText = text;
         let targetIndex = index;
 
-        // 지시어 문장인 경우 앞 문장과 결합 (최소 10글자 이상인 온전한 문장만 허용)
         if (DANGLING_START_REGEX.test(processedText) && index > 0) {
             const prevText = cleanWikiText(rawSentences[index - 1]);
             if (prevText && !isIncompleteSentence(prevText) && prevText.length >= 10 && prevText.length <= 150) {
@@ -166,11 +165,15 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
     if (cleanedSentences.length === 0) return "";
 
     const candidates = cleanedSentences.map(({ original, index }) => {
-        let score = calculateBasicNutritionScore(original);
+        let score = 10;
+        
+        if (NUTRITION_REGEX.test(original)) score += 20;
+        IMPORTANT_KEYWORDS.forEach(kw => {
+            if (original.includes(kw)) score += 5;
+        });
 
-        const hasNutrition = NUTRITION_REGEX.test(original);
-        if (!hasNutrition && GENEALOGY_REGEX.test(original)) {
-            score -= 100;
+        if (!NUTRITION_REGEX.test(original) && GENEALOGY_REGEX.test(original)) {
+            score -= 50;
         }
 
         if (MINOR_TMI_REGEX.test(original)) {
@@ -182,17 +185,22 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         return { sentence: original, index, score };
     });
 
-    const validCandidates = candidates.filter(item => item.score > 0);
-    if (validCandidates.length === 0) return "";
-
-    validCandidates.sort((a, b) => b.score - a.score);
-    const selected = validCandidates.slice(0, count);
+    candidates.sort((a, b) => b.score - a.score);
     
-    selected.sort((a, b) => a.index - b.index);
+    const seen = new Set();
+    const uniqueCandidates = [];
+    for (const item of candidates) {
+        if (!seen.has(item.sentence)) {
+            seen.add(item.sentence);
+            uniqueCandidates.push(item);
+            if (uniqueCandidates.length >= count) break;
+        }
+    }
 
-    return selected.map(item => item.sentence).join(" ");
+    uniqueCandidates.sort((a, b) => a.index - b.index);
+
+    return uniqueCandidates.map(item => item.sentence).join(" ");
 }
-
 
 export function buildDescription(
     introText,
@@ -204,19 +212,6 @@ export function buildDescription(
 ) {
     let intro = cleanWikiText(introText);
     let body = cleanWikiText(bodyText);
-
-    if (!body && intro.includes('.')) {
-        const allSentences = splitSentences(intro);
-        if (allSentences.length > 1) {
-            intro = allSentences[0];
-            if (intro.length < 50 && allSentences.length > 1) {
-                intro = `${allSentences[0]} ${allSentences[1]}`;
-                body = allSentences.slice(2).join(" ");
-            } else {
-                body = allSentences.slice(1).join(" ");
-            }
-        }
-    }
 
     if (intro && aliases.length > 0) {
         intro = filterOtherPersonDeath(intro, aliases);
@@ -230,25 +225,36 @@ export function buildDescription(
 
     if (!intro && !body) return "";
 
-    const extra = extractImportantSentences(body, extraCount);
-
-    const introHasNutrition = NUTRITION_REGEX.test(intro);
-    const bodyHasNutrition = NUTRITION_REGEX.test(extra);
-    const isGenealogyOnly = GENEALOGY_REGEX.test(intro) && !introHasNutrition;
-
-    if ((!extra || !bodyHasNutrition) && (!introHasNutrition || isGenealogyOnly)) {
-        return intro || "";
-    }
-
-    let merged = normalizeSpace([intro, extra].filter(Boolean).join(" "));
-
-    if (merged.length > maxLength) {
-        merged = merged.slice(0, maxLength);
-        const lastPeriod = merged.lastIndexOf(".");
+    const cleanSlice = (text) => {
+        if (text.length <= maxLength) return text;
+        const sliced = text.slice(0, maxLength);
+        const lastPeriod = sliced.lastIndexOf(".");
         if (lastPeriod > maxLength * 0.5) {
-            merged = merged.slice(0, lastPeriod + 1).trim();
+            return sliced.slice(0, lastPeriod + 1).trim();
         }
+        return sliced;
+    };
+
+    const totalLength = intro.length + body.length;
+    if (totalLength < 350) {
+        const combined = normalizeSpace([intro, body].filter(Boolean).join(" "));
+        return cleanSlice(combined);
     }
 
-    return merged;
+    const introSentences = splitSentences(intro);
+    let firstSentence = introSentences[0] || "";
+    if (firstSentence.length < 50 && introSentences.length > 1) {
+        firstSentence = `${introSentences[0]} ${introSentences[1]}`;
+    }
+
+    let extra = "";
+    const remainingIntro = introSentences.slice(firstSentence.includes(introSentences[1] || "") ? 2 : 1).join(" ");
+    const targetBody = normalizeSpace([remainingIntro, body].filter(Boolean).join(" "));
+
+    if (targetBody && targetBody.length > 20) {
+        extra = extractImportantSentences(targetBody, extraCount);
+    }
+
+    const merged = normalizeSpace([firstSentence, extra].filter(Boolean).join(" "));
+    return cleanSlice(merged);
 }
