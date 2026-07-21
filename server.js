@@ -121,6 +121,7 @@ function extractInfoboxImage(html) {
 }
 
 async function findAlternativeHumanImage(title, aliases) {
+    console.time(`🖼️ 이미지 탐색 ${title}`);
     try {
         const htmlRes = await axios.get("https://ko.wikipedia.org/w/index.php", {
             ...WIKI_AXIOS_CONFIG,
@@ -130,7 +131,10 @@ async function findAlternativeHumanImage(title, aliases) {
         if (imageUrl && isValidImageUrl(imageUrl)) {
             let imageName = imageUrl.toLowerCase();
             try { imageName = decodeURIComponent(imageName); } catch (e) {}
-            if (!HUMAN_IMAGE_BLOCKLIST.test(imageName)) return imageUrl;
+            if (!HUMAN_IMAGE_BLOCKLIST.test(imageName)) {
+    console.timeEnd(`🖼️ 이미지 탐색 ${title}`);
+    return imageUrl;
+            }
         }
     } catch (e) {
         console.log(`⚠️ 인포박스 조회 실패: ${title}`);
@@ -182,9 +186,13 @@ async function findAlternativeHumanImage(title, aliases) {
 
         for (const target of batch) {
             const url = urlMap.get(target);
-            if (url) return url; // 🌟 ReferenceError 원인이던 console.log 삭제 처리
+            if (url) {
+    console.timeEnd(`🖼️ 이미지 탐색 ${title}`);
+    return url;
+}
         }
     }
+    console.timeEnd(`🖼️ 이미지 탐색 ${title}`);
     return null;
 }
 
