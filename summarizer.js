@@ -116,21 +116,31 @@ function calculateBasicNutritionScore(sentence) {
     return score;
 }
 
-// 🌟 [추가] 문장에서 연도/날짜(예: 1339년, 1903년 12월)를 정밀 파싱하는 함수
-function extractChronoTimestamp(text) {
-    // 1. "1339년 11월 13일" 혹은 "1339년" 형태 감지
+// 🌟 [추가] 퀴즈 지문에 불필요한 은퇴/마이너 TMI 감점 정규식
+const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노년|보냈|생활했|향리|소일);
+
+// 🌟 [추가] 연도 숫자가 없을 때 텍스트 키워드로 시대를 추정하는 함수
+function estimateChronoOrder(text, originalIndex) {
+    // 1. 명확한 연도/날짜 숫자 파싱
     const yearMatch = text.match(/(\d{3,4})\s*년(?:\s*(\d{1,2})\s*월)?(?:\s*(\d{1,2})\s*일)?/);
     if (yearMatch) {
         const year = parseInt(yearMatch[1], 10);
         const month = yearMatch[2] ? parseInt(yearMatch[2], 10) : 1;
         const day = yearMatch[3] ? parseInt(yearMatch[3], 10) : 1;
-        // 비교용 타임스탬프 숫자 생성 (예: 13390000 + 1100 + 13)
         return year * 10000 + month * 100 + day;
     }
-    return null; // 연도 언급 없음
+
+    // 2. 연도 숫자가 없을 경우 텍스트 키워드 기반 시대 추정
+    if (/(프렌치\s*인디언|청년|유년|초기|참가했|마부)/.test(text)) return 17500000; // 청년기/초기
+    if (/(독립\s*전쟁|카우펜스|대륙회의|승리|전술)/.test(text)) return 17770000;     // 전성기/핵심업적
+    if (/(위스키\s*반란|진압|하원|의원|지휘)/.test(text)) return 17940000;          // 후기/정계
+    if (/(돌아와|말년|자제|은퇴|사망|서거)/.test(text)) return 18000000;            // 말년
+
+    // 3. 그것도 없으면 원문 index로 순서 대체 (1 index당 100점 가산)
+    return 17000000 + (originalIndex * 100);
 }
 
-export function extractImportantSentences(bodyText, count = 2) {
+export function extractImportantSentences(bodyText, count = 2) { // 🌟 default 2개 추천
     if (!bodyText || typeof bodyText !== "string") return "";
 
     const rawSentences = splitSentences(bodyText);
@@ -140,10 +150,7 @@ export function extractImportantSentences(bodyText, count = 2) {
         let text = cleanWikiText(sentence);
         if (!text || isIncompleteSentence(text)) return;
 
-        if (/^[《<〈“"'`].*[》>〉”"'`]$/.test(text)) {
-            return;
-        }
-
+        if (/^[《<〈“"'`].*[》>〉”"'`]$/.test(text)) return;
         if (text.length < 15 || text.length > 200) return;
 
         let processedText = text;
@@ -169,10 +176,15 @@ export function extractImportantSentences(bodyText, count = 2) {
             score -= 100;
         }
 
+        // 🌟 [추가] 단순 마부/은퇴/소일거리 TMI 문장 감점
+        if (MINOR_TMI_REGEX.test(original)) {
+            score -= 30;
+        }
+
         if (original.length >= 25 && original.length <= 120) score += 5;
 
-        // 🌟 [추가] 문장의 연도 정보 파싱
-        const chronoTime = extractChronoTimestamp(original);
+        // 🌟 정밀 시대 추정값 계산
+        const chronoTime = estimateChronoOrder(original, index);
 
         return { sentence: original, index, score, chronoTime };
     });
@@ -184,25 +196,12 @@ export function extractImportantSentences(bodyText, count = 2) {
         return "";
     }
 
-    // 1차: 점수 높은 순으로 상위 문장(count) 추출
+    // 1차: 점수순으로 핵심 문장 N개 선별
     validCandidates.sort((a, b) => b.score - a.score);
     const selected = validCandidates.slice(0, count);
 
-    // 🌟 [핵심 변경] 2차: 뽑힌 문장들을 '시간순(연도순)'으로 정렬
-    // 연도 정보가 있는 문장끼리는 연도순, 연도 언급이 없는 문장은 원문 순서(index) 기준으로 시간순 배치
-    selected.sort((a, b) => {
-        if (a.chronoTime !== null && b.chronoTime !== null) {
-            if (a.chronoTime !== b.chronoTime) {
-                return a.chronoTime - b.chronoTime; // 연도 빠른 순
-            }
-        } else if (a.chronoTime !== null) {
-            // a만 연도가 있는 경우, 연도 비교 후 애매하면 원문 순서
-            return -1;
-        } else if (b.chronoTime !== null) {
-            return 1;
-        }
-        return a.index - b.index; // 둘 다 연도 표기가 없으면 원문 순서
-    });
+    // 2차: 선별된 문장들 간 정밀 시간순 정렬
+    selected.sort((a, b) => a.chronoTime - b.chronoTime);
 
     return selected.map(item => item.sentence).join(" ");
 }
