@@ -2,7 +2,6 @@ import express from "express";
 import path from "path";
 import axios from "axios";
 import dotenv from "dotenv";
-// 🌟 새롭게 작성한 서론 보강 함수 가져오기
 import { buildDescription } from "./summarizer.js";
 
 dotenv.config();
@@ -52,6 +51,11 @@ const LEGACY_VIP_LIST = [
     "알렉산드로스 대왕", "율리우스 카이사르", "마더 테레사", "체 게바라", "오드리 헵번"
 ];
 
+// 🌟 사물, 무기, 계급장, 상징물 차단 키워드 강화
+const HUMAN_IMAGE_BLOCKLIST = /coin|medal|seal|flag|coat_of_arms|emblem|tomb|grave|map|signature|statue|bust|sword|sabre|weapon|feather|quill|pen|symbol|icon|picto|insignia|rank|military|ribbon|award|shield/i;
+const IMAGE_EXT_RE = /\.(jpg|jpeg|png|webp)$/i;
+const COMMONS_BATCH_SIZE = 12;
+
 function shuffle(array) {
     const arr = [...array];
     for (let i = arr.length - 1; i > 0; i--) {
@@ -76,43 +80,23 @@ function makeNameAliases(title) {
 
 function isValidImageUrl(url) {
     if (!url || typeof url !== "string") return false;
-
     const lowerUrl = url.toLowerCase();
 
-    // Picto, SVG 아이콘 차단
-    if (
-        lowerUrl.includes(".svg") ||
-        lowerUrl.includes("picto")
-    ) {
-        return false;
-    }
-
-    if (
-        lowerUrl.includes("coat_of_arms") ||
-        lowerUrl.includes("emblem") ||
-        lowerUrl.includes("flag") ||
-        lowerUrl.includes("icon") ||
-        lowerUrl.includes("grave") ||
-        lowerUrl.includes("tomb")
-    ) {
+    // SVG 및 차단 키워드 포함 시 배제
+    if (lowerUrl.includes(".svg") || HUMAN_IMAGE_BLOCKLIST.test(lowerUrl)) {
         return false;
     }
 
     return /\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(lowerUrl);
 }
 
-
-    function extractInfoboxImage(html) {
+function extractInfoboxImage(html) {
     const match = html.match(/<table[^>]*class="[^"]*infobox[\s\S]*?<img[^>]+src="([^"]+)"/i);
     if (!match) return null;
     let url = match[1];
     if (url.startsWith("//")) url = "https:" + url;
     return url;
 }
-
-const HUMAN_IMAGE_BLOCKLIST = /coin|medal|seal|flag|coat_of_arms|emblem|tomb|map|signature|statue|bust/i;
-const IMAGE_EXT_RE = /\.(jpg|jpeg|png|webp)$/i;
-const COMMONS_BATCH_SIZE = 12;
 
 async function findAlternativeHumanImage(title, aliases) {
     try {
@@ -147,7 +131,7 @@ async function findAlternativeHumanImage(title, aliases) {
 
     for (const img of images) {
         const name = img.title.replace(/^File:/i, "");
-        if (!IMAGE_EXT_RE.test(name)) continue;
+        if (!IMAGE_EXT_RE.test(name) || HUMAN_IMAGE_BLOCKLIST.test(name)) continue;
         targets.push(img.title);
     }
 
@@ -169,14 +153,14 @@ async function findAlternativeHumanImage(title, aliases) {
         for (const file of commonsPages) {
             const pageTitle = file.title;
             const url = file.imageinfo?.[0]?.url;
-            if (url && isValidImageUrl(url)) urlMap.set(pageTitle, url);
+            if (url && isValidImageUrl(url) && !HUMAN_IMAGE_BLOCKLIST.test(pageTitle)) {
+                urlMap.set(pageTitle, url);
+            }
         }
 
         for (const target of batch) {
             const url = urlMap.get(target);
-            console.log(pageData.pageimage);
-            console.log(imageUrl);
-            if (url) return url;
+            if (url) return url; // 🌟 ReferenceError 원인이던 console.log 삭제 처리
         }
     }
     return null;
@@ -299,78 +283,64 @@ async function fillCache() {
                         if (/(대학교수|명예교수|석좌교수|교수|교육자)/.test(pageData.extract)) continue;
 
                         const aliases = makeNameAliases(pageData.title);
+                        const pageImageName = (pageData.pageimage || "").toLowerCase();
                         let imageUrl = null;
 
-                        if (pageData.thumbnail?.source &&
-                            isValidImageUrl(pageData.thumbnail.source)) {
-
-                             imageUrl = pageData.thumbnail.source;
-
-                             } else {
-
-                             imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
-                      }
-
-                      if (!imageUrl) continue;
-                        console.log("chatgpt 병신");
-                        console.log("thumbnail =", imageUrl);
-                        console.log("isValid =", isValidImageUrl(imageUrl));
-
-                        // 🌟 여기서부터 썸네일이 SVG이거나 아예 없으면 즉시 대체 이미지 탐색 + 철저한 검증
-                        if (!imageUrl || !isValidImageUrl(imageUrl)) {
+                        // 대표 이미지명이 차단 목록에 없고 유효한 이미지일 때만 사용
+                        if (
+                            pageData.thumbnail?.source && 
+                            !HUMAN_IMAGE_BLOCKLIST.test(pageImageName) &&
+                            isValidImageUrl(pageData.thumbnail.source)
+                        ) {
+                            imageUrl = pageData.thumbnail.source;
+                        } else {
                             imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
-                            console.log("alternative =", imageUrl);
-                            if (!imageUrl || !isValidImageUrl(imageUrl)) continue;
                         }
 
+                        if (!imageUrl || !isValidImageUrl(imageUrl)) continue;
 
-                        if (imageUrl) {
-                            console.log("PAGE =", pageData.title);
-                            console.log("PAGEIMAGE =", pageData.pageimage);
-                            console.log("IMAGE =", imageUrl);
-                            if (LAST_PLAYED.includes(pageData.title)) continue;
-                            if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) continue;
+                        if (LAST_PLAYED.includes(pageData.title)) continue;
+                        if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) continue;
 
-                            const fullExtract = pageData.extract;
-                            const firstHeaderIndex = fullExtract.search(/==+/);
-                            
-                            let exintro = fullExtract;
-                            let extractBody = "";
+                        const fullExtract = pageData.extract;
+                        const firstHeaderIndex = fullExtract.search(/==+/);
+                        
+                        let exintro = fullExtract;
+                        let extractBody = "";
 
-                            if (firstHeaderIndex !== -1) {
-                                exintro = fullExtract.substring(0, firstHeaderIndex).trim();
-                                extractBody = fullExtract.substring(firstHeaderIndex).trim();
-                            }
+                        if (firstHeaderIndex !== -1) {
+                            exintro = fullExtract.substring(0, firstHeaderIndex).trim();
+                            extractBody = fullExtract.substring(firstHeaderIndex).trim();
+                        }
 
-                            const cutIndex = extractBody.search(/==\s*(각주|같이 보기|참고 문헌|외부 링크)\s*==/i);
-                            if (cutIndex !== -1) {
-                                extractBody = extractBody.substring(0, cutIndex);
-                            }
+                        const cutIndex = extractBody.search(/==\s*(각주|같이 보기|참고 문헌|외부 링크)\s*==/i);
+                        if (cutIndex !== -1) {
+                            extractBody = extractBody.substring(0, cutIndex);
+                        }
 
-                            let cleanExtract = extractBody
-                                .replace(/=+\s*.*?\s*=+/g, " ")
-                                .replace(/\s+/g, " ")
-                                .trim();
+                        let cleanExtract = extractBody
+                            .replace(/=+\s*.*?\s*=+/g, " ")
+                            .replace(/\s+/g, " ")
+                            .trim();
 
-                            let cleanIntro = exintro.replace(/\s+/g, " ").trim();
+                        let cleanIntro = exintro.replace(/\s+/g, " ").trim();
 
-                            const finalDescription = buildDescription(
-                                cleanIntro, 
-                                cleanExtract, 
-                                aliases, 
-                                3,   
-                                150, 
-                                1100  
-                            );
+                        const finalDescription = buildDescription(
+                            cleanIntro, 
+                            cleanExtract, 
+                            aliases, 
+                            3,   
+                            150, 
+                            1100  
+                        );
 
-                            if (finalDescription) {
-                                QUIZ_CACHE.push({
-                                    name: pageData.title,
-                                    image: imageUrl,
-                                    hint: createMaskedHint(pageData.title, finalDescription),
-                                    description: finalDescription 
-                                });
-                            }
+                        if (finalDescription) {
+                            QUIZ_CACHE.push({
+                                name: pageData.title,
+                                image: imageUrl,
+                                hint: createMaskedHint(pageData.title, finalDescription),
+                                description: finalDescription 
+                            });
                         }
                     }
                 }
