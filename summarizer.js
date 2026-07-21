@@ -20,14 +20,41 @@ function cleanWikiText(text) {
         .trim();
 }
 
-// 🌟 [신규] 온전한 종결 어미(~다, ~이다, ~했다 등)로 끝나지 않은 짤린 찌꺼기 문장 감지
+// 온전한 종결 어미로 끝나지 않은 짤린 문장 감지
 function isIncompleteSentence(sentence) {
     if (!sentence) return true;
     const text = sentence.trim();
-    
-    // 한국어 정상 문장 종결 패턴 (마침표 유무 상관없이 종결 어미 체크)
     const validEndingRegex = /(다|냐|까|요|죠|자|라|며|음|임|함|됨|성|상|위|중)\.?$/;
     return !validEndingRegex.test(text);
+}
+
+// 🌟 [신규] 앞 1~3개 문장을 역추적하여 《...》, <...>, “...” 형태의 작품/책 제목 추출
+function findPrecedingTitle(sentences, currentIndex) {
+    for (let i = currentIndex - 1; i >= Math.max(0, currentIndex - 3); i--) {
+        const prevText = sentences[i];
+        if (!prevText) continue;
+
+        // 《...》, <...>, 〈...〉, “...”, "...", '...' 표기 제목 감지
+        const titleMatch = prevText.match(/《([^》]+)》|<([^>]+)>|〈([^〉]+)〉|“([^”]+)”|"([^"]+)"|'([^']+)'/);
+        if (titleMatch) {
+            return titleMatch[0]; // 예: 《세 편의 단편과 열 편의 시》
+        }
+    }
+    return null;
+}
+
+// 🌟 [신규] 지칭어(단편 중, 이 중 등)를 추출한 작품 제목으로 자연스럽게 복원
+function resolveVagueReference(sentence, foundTitle) {
+    if (!foundTitle) return sentence;
+    let text = sentence.trim();
+
+    // 1. "이 중", "그 중" -> "《작품명》 중"
+    if (/^(이|그)\s*중\b/.test(text)) {
+        return text.replace(/^(이|그)\s*중\b/, `${foundTitle} 중`);
+    }
+
+    // 2. "단편 중", "작품 중", "두 작품" 등 -> "《작품명》의 단편 중..."
+    return `${foundTitle}의 ${text}`;
 }
 
 function filterOtherPersonDeath(text, aliases = []) {
@@ -56,8 +83,6 @@ function filterOtherPersonDeath(text, aliases = []) {
 
 function splitSentences(text) {
     const normalized = normalizeSpace(text).replace(/\n+/g, " ");
-    
-    // 마침표가 없더라도 짤린 단락을 분리해내기 위한 처리 포함
     return normalized
         .split(/(?<!\b[a-zA-Z])([.!?。！？])\s+/)
         .reduce((acc, part, i, arr) => {
@@ -88,29 +113,41 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
     const introWords = new Set(tokenize(introText));
     const nutritionRegex = /(독립|운동|투쟁|해방|전투|전사|왕위|즉위|폐위|살해|통치|재위|업적|개혁|혁명|조약|발명|발견|창시|수립|기여|작품|주의|성선설|사단|사덕|측은|수오|사양|시비|오륜|부자유친|민본주의|인정|왕도|역성혁명|천명관)/;
     
-    const contextBreakRegex = /^(그러자|이에|그러나|또한|이후|그 뒤|한편|그러던 중|그리하여|따라서|때문에|이때|그때|이 무렵|당시|그해)\b/;
+    const contextBreakRegex = /^(하지만|그러나|그러자|이에|또한|이후|그\s*뒤|한편|그러던\s*중|그리하여|따라서|때문에|이때|그때|이\s*무렵|당시|그해|다만|반면|반면에|반대로|결국|마침내|그렇지만|그럼에도|이로\s*인해|이로써)\b/;
     const relativeSubjectRegex = /^(어머니|아버지|남동생|여동생|형|오빠|누나|언니|아들|딸|부인|아내|남편|할아버지|할머니|손자|손녀)\s+/;
     const deathPattern = /(사망|별세|서거|타계|전사|시해|사사|병사|죽음|숨졌|세상을\s+떠났|생을\s+마감|사사되었|목숨을\s+잃었)/;
 
-    const vagueStartRegex = /^(단편\s*중|작품\s*중|이\s*중|그\s*중|일부|두\s*작품|한\s*작품)\s+/;
+    // 🌟 추적 및 보완 대상 지칭 시작어 패턴
+    const vagueStartRegex = /^(단편\s*중|작품\s*중|이\s*중|그\s*중|일부|두\s*작품|한\s*작품|이\s*작품|그\s*작품|해당\s*작품|이\s*책|그\s*책)\b/;
     const relativeTimeRegex = /(지난해|올해|지난달|내년|그해|당해|최근에|얼마\s*전)/;
 
     const scored = sentences.map((sentence, index) => {
         let processedSentence = sentence.trim();
         
-        // 1. [맥락 파괴 / 짤린 미완성 문장 / 지칭 생략 / 상대 시점 문장 원천 제외]
+        // 🌟 [핵심] 지칭어가 나오면 앞 문장에서 제목을 찾아 문장 보완
+        if (vagueStartRegex.test(processedSentence)) {
+            const foundTitle = findPrecedingTitle(sentences, index);
+            if (foundTitle) {
+                // 예: "단편 중 두 작품은..." -> "《작품명》의 단편 중 두 작품은..."
+                processedSentence = resolveVagueReference(processedSentence, foundTitle);
+            } else {
+                // 앞 문장에서도 제목을 못 찾았으면 맥락 결여로 제외
+                return { sentence: processedSentence, index, score: -100 };
+            }
+        }
+
+        // [맥락 파괴 / 짤린 미완성 문장 / 상대 시점 문장 제외]
         if (
             contextBreakRegex.test(processedSentence) ||
-            vagueStartRegex.test(processedSentence) ||
             relativeTimeRegex.test(processedSentence) ||
-            isIncompleteSentence(processedSentence) || // 🌟 종결어미가 없는 짤린 문장 감지시 점수 몰수
+            isIncompleteSentence(processedSentence) ||
             /(칭했다|두었다|슬하|고 한다|라 한다)\.?$/.test(processedSentence) ||
             /^(이|그)\s+([가-힣]+)(이|가|은|는)\s+/.test(processedSentence)
         ) {
             return { sentence: processedSentence, index, score: -100 };
         }
 
-        // 2. [타인 주어 검증]
+        // [타인 주어 검증]
         if (aliases.length > 0) {
             const subjectMatch = processedSentence.match(/^([가-힣]{2,10})(?:은|는|이|가)\s+/);
             if (subjectMatch) {
@@ -271,7 +308,6 @@ export function buildDescription(
         .map(s => s.trim())
         .filter(Boolean);
 
-    // 🌟 서두 문장 역시 짤린 문장이 들어오지 않도록 검증
     const validIntroSentences = introSentences.filter(s => !isIncompleteSentence(s));
     const firstSentence = validIntroSentences[0] || introSentences[0] || "";
 
