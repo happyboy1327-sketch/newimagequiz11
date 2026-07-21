@@ -5,11 +5,9 @@ const IMPORTANT_KEYWORDS = [
     "임명", "취임", "부정"
 ];
 
-// 단순 족보/가족관계 나열 전용 감지 정규식
 const GENEALOGY_REGEX = /(의\s*(아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|차녀|장녀)(이다|이었다|이며|이고|\s|\.))|(슬하에)|(결혼하(여|였|고))|(출생하|태어났)/;
-
-// 영양가(업적/사건 등) 감지 정규식
 const NUTRITION_REGEX = /(독립|전투|운동|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|승리|패배|결성|폐지|창립|설립|의병|관찰사|벼슬|임진왜란)/;
+const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노년|보냈|생활했|향리|소일)/;
 
 function normalizeSpace(text = "") {
     return String(text).replace(/\s+/g, " ").trim();
@@ -93,35 +91,16 @@ function splitSentences(text) {
         }, []);
 }
 
-function normalizeTitleCandidate(title) {
-    if (!title) return "";
-    return title.replace(/\([^)]*\)/g, "").replace(/[\s\_\-]/g, "").trim();
-}
-
-function matchesAlias(word, alias) {
-    if (!word || !alias) return false;
-    const cleanWord = word.replace(/[\s\_\-]/g, "");
-    const cleanAlias = normalizeTitleCandidate(alias);
-    if (!cleanWord || !cleanAlias) return false;
-    return cleanWord.includes(cleanAlias) || cleanAlias.includes(cleanWord);
-}
-
 function calculateBasicNutritionScore(sentence) {
     let score = 0;
     if (NUTRITION_REGEX.test(sentence)) score += 20;
-
     IMPORTANT_KEYWORDS.forEach(kw => {
         if (sentence.includes(kw)) score += 5;
     });
     return score;
 }
 
-// 🌟 [추가] 퀴즈 지문에 불필요한 은퇴/마이너 TMI 감점 정규식
-const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노년|보냈|생활했|향리|소일)/;
-
-// 🌟 [추가] 연도 숫자가 없을 때 텍스트 키워드로 시대를 추정하는 함수
 function estimateChronoOrder(text, originalIndex) {
-    // 1. 명확한 연도/날짜 숫자 파싱
     const yearMatch = text.match(/(\d{3,4})\s*년(?:\s*(\d{1,2})\s*월)?(?:\s*(\d{1,2})\s*일)?/);
     if (yearMatch) {
         const year = parseInt(yearMatch[1], 10);
@@ -129,18 +108,13 @@ function estimateChronoOrder(text, originalIndex) {
         const day = yearMatch[3] ? parseInt(yearMatch[3], 10) : 1;
         return year * 10000 + month * 100 + day;
     }
-
-    // 2. 연도 숫자가 없을 경우 텍스트 키워드 기반 시대 추정
-    if (/(프렌치\s*인디언|청년|유년|초기|참가했|마부)/.test(text)) return 17500000; // 청년기/초기
-    if (/(독립\s*전쟁|카우펜스|대륙회의|승리|전술)/.test(text)) return 17770000;     // 전성기/핵심업적
-    if (/(위스키\s*반란|진압|하원|의원|지휘)/.test(text)) return 17940000;          // 후기/정계
-    if (/(돌아와|말년|자제|은퇴|사망|서거)/.test(text)) return 18000000;            // 말년
-
-    // 3. 그것도 없으면 원문 index로 순서 대체 (1 index당 100점 가산)
-    return 17000000 + (originalIndex * 100);
+    if (/(유년|청년|초기|참가했|시작했|입문|출생)/.test(text)) return 10000000 + originalIndex;
+    if (/(이후|후에|이어|말년|은퇴|지휘|진압|사망|서거)/.test(text)) return 90000000 + originalIndex;
+    return 50000000 + originalIndex;
 }
 
-export function extractImportantSentences(bodyText, count = 2) { // 🌟 default 2개 추천
+// 🌟 기존 함수 시그니처 100% 유지
+export function extractImportantSentences(bodyText, count = 2) {
     if (!bodyText || typeof bodyText !== "string") return "";
 
     const rawSentences = splitSentences(bodyText);
@@ -176,36 +150,31 @@ export function extractImportantSentences(bodyText, count = 2) { // 🌟 default
             score -= 100;
         }
 
-        // 🌟 [추가] 단순 마부/은퇴/소일거리 TMI 문장 감점
         if (MINOR_TMI_REGEX.test(original)) {
             score -= 30;
         }
 
         if (original.length >= 25 && original.length <= 120) score += 5;
 
-        // 🌟 정밀 시대 추정값 계산
         const chronoTime = estimateChronoOrder(original, index);
 
         return { sentence: original, index, score, chronoTime };
     });
 
     const validCandidates = candidates.filter(item => item.score > 0);
+    if (validCandidates.length === 0) return "";
 
-    const highQualityCandidates = validCandidates.filter(item => item.score >= 15);
-    if (highQualityCandidates.length === 0) {
-        return "";
-    }
-
-    // 1차: 점수순으로 핵심 문장 N개 선별
+    // 1차: 점수 높은 순으로 상위 문장 선별
     validCandidates.sort((a, b) => b.score - a.score);
     const selected = validCandidates.slice(0, count);
 
-    // 2차: 선별된 문장들 간 정밀 시간순 정렬
+    // 2차: 선별된 문장들만 시간순 재정렬
     selected.sort((a, b) => a.chronoTime - b.chronoTime);
 
     return selected.map(item => item.sentence).join(" ");
 }
 
+// 🌟 기존 함수 시그니처 100% 유지 (extraCount 기본값만 2로 세팅하여 길이 안정화)
 export function buildDescription(
     introText,
     bodyText,
@@ -216,6 +185,19 @@ export function buildDescription(
 ) {
     let intro = cleanWikiText(introText);
     let body = cleanWikiText(bodyText);
+
+    // 만약 introText에 글 전체가 통째로 들어온 경우의 안전 장치 (첫 문장만 인트로로 분리)
+    if (!body && intro.includes('.')) {
+        const allSentences = splitSentences(intro);
+        if (allSentences.length > 1) {
+            intro = allSentences[0];
+            if (intro.length < 50 && allSentences.length > 1) {
+                intro = `${allSentences[0]} ${allSentences[1]}`;
+            }
+            const introCount = intro.split('.').filter(Boolean).length;
+            body = allSentences.slice(introCount).join(" ");
+        }
+    }
 
     if (intro && aliases.length > 0) {
         intro = filterOtherPersonDeath(intro, aliases);
@@ -229,16 +211,14 @@ export function buildDescription(
 
     if (!intro && !body) return "";
 
-    // 본문에서 알짜 문장 추출
     const extra = extractImportantSentences(body, extraCount);
 
     const introHasNutrition = NUTRITION_REGEX.test(intro);
     const bodyHasNutrition = NUTRITION_REGEX.test(extra);
     const isGenealogyOnly = GENEALOGY_REGEX.test(intro) && !introHasNutrition;
 
-    // 업적 키워드가 없고 족보만 있는 토막글이면 탈락 ("" 반환)
     if ((!extra || !bodyHasNutrition) && (!introHasNutrition || isGenealogyOnly)) {
-        return "";
+        return intro || "";
     }
 
     let merged = normalizeSpace([intro, extra].filter(Boolean).join(" "));
