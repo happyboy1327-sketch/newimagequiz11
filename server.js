@@ -218,15 +218,7 @@ function createMaskedHint(title, extract) {
 
     return hintText.substring(0, 130).trim() + "...";
 } 
-  // 건물/사적지 파일명 여부 검사 함수
-function isBuildingFilename(filename) {
-    if (!filename) return false;
-    const nameWithoutExt = filename.replace(/\.[^/.]+$/, "").toLowerCase();
-    const buildingSuffixRegex = /(sa|won|gung|neung|reung|myo|bi|jeon|gak|ru|ji|shrine|tomb|statue|park|site|사|원|궁|능|묘|비|전|각|루|지)$/i;
-    
-    return buildingSuffixRegex.test(nameWithoutExt);
-}
-
+  
 // =======================================================
 // 캐시 충전 및 데이터 가공 로직
 // =======================================================
@@ -317,24 +309,39 @@ async function fillCache() {
                         if (/(선수|축구|야구|농구|배구|골프|테니스|수영|양궁|유도|체육|올림픽|프로게이머|대학교수|명예교수|교수)/.test(pageData.extract)) continue;
                         const aliases = makeNameAliases(pageData.title);
                         const pageImageName = (pageData.pageimage || "").toLowerCase();
-                        let imageUrl = null;
 
-                        // 대표 이미지명이 차단 목록에 없고 유효한 이미지일 때만 사용
-                        if (
-                            pageData.thumbnail?.source && 
-                            !HUMAN_IMAGE_BLOCKLIST.test(pageImageName) &&
-                            isValidImageUrl(pageData.thumbnail.source)
-                        ) {
-                            imageUrl = pageData.thumbnail.source;
-                            if (imageUrl && isBuildingFilename(imageUrl)) {
-            // 건물 사진이면 이미지를 빼버리거나(null), 이 인물은 넘어감(continue)
-            continue; 
-                            }
-                        } else {
-                            imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
-                        }
+                        for (const pageData of normalizedPages) {
+    if (QUIZ_CACHE.length >= CACHE_SIZE) break;
 
-                        if (!imageUrl || !isValidImageUrl(imageUrl)) continue;
+    if (!pageData.extract || pageData.extract.length < 60) continue;
+    if (/(선수|축구|야구|농구|배구|골프|테니스|수영|양궁|유도|체육|올림픽|프로게이머|대학교수|명예교수|교수)/.test(pageData.extract)) continue;
+
+    const aliases = makeNameAliases(pageData.title);
+    const pageImageName = (pageData.pageimage || "").toLowerCase();
+
+    // 1. 건물/사적지 고유명사나 숫자로 끝나는지 검사하는 정규식
+    const isBuildingOrNumber = (url) => /(sa|won|gung|neung|reung|myo|bi|jeon|gak|ru|ji|shrine|tomb|statue|park|site|사|원|궁|능|묘|비|전|각|루|지|\d+)\.[a-z]+$/i.test(url);
+
+    // 2. 대표 이미지 가져오기
+    let imageUrl = pageData.thumbnail?.source;
+
+    // 3. 대표 이미지가 없거나, 차단목록, 사적지/숫자, 유효하지 않은 이미지면 대체 이미지 검색
+    if (
+        !imageUrl || 
+        HUMAN_IMAGE_BLOCKLIST.test(pageImageName) || 
+        !isValidImageUrl(imageUrl) ||
+        isBuildingOrNumber(imageUrl)
+    ) {
+        imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
+    }
+
+    // 4. 최종 이미지 검사 (없거나, 사적지/숫자이거나, 유효하지 않은 이미지면 건너뜀)
+    if (!imageUrl || isBuildingOrNumber(imageUrl) || !isValidImageUrl(imageUrl)) {
+        continue;
+    }
+
+    // ... 이 뒤에 QUIZ_CACHE.push 로직 계속 ...
+                        
 
                         if (LAST_PLAYED.includes(pageData.title)) continue;
                         if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) continue;
