@@ -108,6 +108,105 @@ function isHumanPhoto(filename, aliases) {
         const cleanFile = n.replace(/[\s\-\_]/g, "");
         if (cleanFile.includes(cleanName)) return true;
     }
+    
+    async function findAlternativeHumanImage(title, aliases) {
+    try {
+        const htmlRes = await axios.get("https://ko.wikipedia.org/w/index.php", {
+            ...WIKI_AXIOS_CONFIG,
+            params: { title, action: "render" }
+        });
+        const imageUrl = extractInfoboxImage(htmlRes.data);
+        if (imageUrl && isValidImageUrl(imageUrl)) {
+            let imageName = imageUrl.toLowerCase();
+            try { imageName = decodeURIComponent(imageName); } catch (e) {}
+            if (!HUMAN_IMAGE_BLOCKLIST.test(imageName) && isHumanPhoto(imageName, aliases, imageUrl)) {
+                return imageUrl;
+            }
+        }
+    } catch (e) {
+        console.log(`⚠️ 인포박스 조회 실패: ${title}`);
+    }
+
+    let res;
+    try {
+        res = await axios.get("https://ko.wikipedia.org/w/api.php", {
+            ...WIKI_AXIOS_CONFIG,
+            params: { action: "query", titles: title, prop: "images", imlimit: 50, format: "json", origin: "*" }
+        });
+    } catch (e) {
+        return null;
+    }
+
+    const page = Object.values(res.data?.query?.pages || {})[0];
+    const images = page?.images;
+    if (!images || images.length === 0) return null;
+    const targets = [];
+
+    for (const img of images) {
+        const name = img.title.replace(/^File:/i, "");
+        if (!IMAGE_EXT_RE.test(name)) continue;
+        if (!isHumanPhoto(name, aliases)) continue;
+        targets.push(img.title);
+    }
+
+    if (targets.length === 0) return null;
+    
+    for (let i = 0; i < targets.length; i += COMMONS_BATCH_SIZE) {
+        const batch = targets.slice(i, i + COMMONS_BATCH_SIZE);
+        let info;
+        try {
+            info = await axios.get("https://commons.wikimedia.org/w/api.php", {
+                ...WIKI_AXIOS_CONFIG,
+                params: { action: "query", titles: batch.join("|"), prop: "imageinfo", iiprop: "url|extmetadata", format: "json", origin: "*" }
+            });
+        } catch (e) { continue; }
+
+        const commonsPages = Object.values(info.data?.query?.pages || {});
+        const urlMap = new Map();
+
+        for (const file of commonsPages) {
+            const url = file.imageinfo?.[0]?.url;
+            if (url && isValidImageUrl(url) && isHumanPhoto(file, aliases)) {
+                urlMap.set(file.title, url);
+            }
+        }
+
+        for (const target of batch) {
+            const url = urlMap.get(target);
+            if (url) return url;
+        }
+    }
+    return null;
+}
+
+function createMaskedHint(title, extract) {
+    let hintText = extract.substring(0, 350);
+    const cleanTitle = title.trim();
+    
+    const parenMatch = cleanTitle.match(/\((.*?)\)/);
+    if (parenMatch) {
+        parenMatch[1].split(/[\s\.\,\-]+/).forEach(part => {
+            if (part.length > 1) hintText = hintText.replace(new RegExp(part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), "OOO");
+        });
+    }
+
+    const baseName = cleanTitle.replace(/\s*\(.*?\)\s*/g, ''); 
+    baseName.split(' ').forEach(word => {
+        if (word.length >= 2) {
+            hintText = hintText.replace(new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), "OOO");
+            if (word.length >= 3 && !/\s/.test(word)) { 
+                for(let i = 0; i <= word.length - 2; i++) {
+                    hintText = hintText.replace(new RegExp(word.substring(i, i + 2).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), "OOO");
+                }
+            }
+        }
+    });
+
+    hintText = hintText.replace(/([a-zA-Z\d\.\,\:\-\s'\[\]\/\(\)ˌˈɛɔ]+)/g, (match, p1) => {
+        const cleanedMatch = p1.trim();
+        return (cleanedMatch.length > 1 && /[a-zA-Z]/.test(cleanedMatch)) ? "OOO" : match; 
+    });
+
     return hintText.substring(0, 130).trim() + "...";
 } 
 
