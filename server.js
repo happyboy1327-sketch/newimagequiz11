@@ -350,7 +350,7 @@ async function fillCache() {
                                 cleanIntro, 
                                 cleanExtract, 
                                 aliases, 
-                                2,   
+                                3,   
                                 150, 
                                 1100  
                             );
