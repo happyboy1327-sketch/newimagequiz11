@@ -24,13 +24,6 @@ function cleanWikiText(text) {
         .trim();
 }
 
-function isIncompleteSentence(sentence) {
-    if (!sentence) return true;
-    const text = sentence.trim();
-    const validEndingRegex = /(다|냐|까|요|죠|자|라|며|음|임|함|됨|성|상|위|중)\.?$/;
-    return !validEndingRegex.test(text);
-}
-
 function findPrecedingTitle(sentences, currentIndex) {
     for (let i = currentIndex - 1; i >= Math.max(0, currentIndex - 3); i--) {
         const prevText = sentences[i];
@@ -51,6 +44,33 @@ function resolveVagueReference(sentence, foundTitle) {
         return text.replace(/^(이|그)\s*중\b/, `${foundTitle} 중`);
     }
     return `${foundTitle}의 ${text}`;
+}
+
+function isIncompleteSentence(sentence) {
+    if (!sentence) return true;
+    const text = sentence.trim();
+    const validEndingRegex = /(다|냐|까|요|죠|자|라|며|음|임|함|됨|성|상|위|중)\.?$/;
+    return !validEndingRegex.test(text);
+}
+
+function resolveDemonstrativeReference(sentence, sentences, currentIndex) {
+    let processedSentence = sentence;
+    const targetRegex = /(이|그)\s+(작품|조각|그림|회화|동상|건축물|벽화|서적|책|화풍|시리즈|주장|사상|이론|업적|시기|운동|전쟁)/;
+    
+    if (targetRegex.test(processedSentence)) {
+        let foundTitle = null;
+        for (let j = currentIndex - 1; j >= Math.max(0, currentIndex - 3); j--) {
+            const match = sentences[j].match(/《([^》]+)》/) || sentences[j].match(/〈([^〉]+)〉/);
+            if (match) {
+                foundTitle = match[0];
+                break;
+            }
+        }
+        if (foundTitle) {
+            processedSentence = processedSentence.replace(targetRegex, `${foundTitle} $2`);
+        }
+    }
+    return processedSentence;
 }
 
 function filterOtherPersonDeath(text, aliases = []) {
