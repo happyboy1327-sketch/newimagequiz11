@@ -38,7 +38,7 @@ const WIKI_AXIOS_CONFIG = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json'
     },
-    timeout: 20000 
+    timeout: 22000 
 };
 
 // VIP 풀
@@ -76,9 +76,13 @@ function makeNameAliases(title) {
 
 function isValidImageUrl(url) {
     if (!url || typeof url !== "string") return false;
-    if (/\.svg(\?.*)?$/i.test(url) || /\/svg\//i.test(url)) return false;
+    
+    // 🌟 주소 안에 .svg가 포함되어 있다면(.svg.png, .svg/ 등 전부) 무조건 차단
+    if (url.toLowerCase().includes(".svg")) return false;
+
     const lowerUrl = url.toLowerCase();
     if (lowerUrl.includes("coat_of_arms") || lowerUrl.includes("emblem") || lowerUrl.includes("flag") || lowerUrl.includes("icon")) return false;
+    
     return /\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(url);
 }
 
