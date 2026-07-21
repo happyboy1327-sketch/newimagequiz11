@@ -146,7 +146,7 @@ async function findAlternativeHumanImage(title, aliases) {
     try {
         res = await axios.get("https://ko.wikipedia.org/w/api.php", {
             ...WIKI_AXIOS_CONFIG,
-            params: { action: "query", titles: title, prop: "images", imlimit: 50, format: "json", origin: "*" }
+            params: { action: "query", titles: title, prop: "images", iiprop: "url|extmetadata", imlimit: 50, format: "json", origin: "*" }
         });
     } catch (e) {
         return null;
