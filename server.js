@@ -78,7 +78,7 @@ function isValidImageUrl(url) {
     if (!url || typeof url !== "string") return false;
     
     // 🌟 주소 안에 .svg가 포함되어 있다면(.svg.png, .svg/ 등 전부) 무조건 차단
-    if (url.toLowerCase().includes(".svg")) return false;
+    if (url.toLowerCase().includes(".svg"|"picto"|"Picto")) return false;
 
     const lowerUrl = url.toLowerCase();
     if (lowerUrl.includes("coat_of_arms") || lowerUrl.includes("emblem") || lowerUrl.includes("flag") || lowerUrl.includes("icon")) return false;
@@ -91,7 +91,7 @@ function isHumanPhoto(filename, aliases) {
     const n = filename.toLowerCase();
 
     const BLACKLIST = [
-        "svg", "gif", "coat of arms", "coat_of_arms", "coa", "stone", "tomb", "_tomb",
+        "svg", "gif", "coat of arms", "coat_of_arms", "coa", "stone", "tomb", "_tomb", "picto",
         "arms", "emblem", "insignia", "flag", "standard", "banner", "seal", "stamp",
         "icon", "logo", "symbol", "map", "chart", "diagram", "signature", "sign",
         "grave", "monument", "book", "cover", "coin", "currency", "memorial", "plaque", 
