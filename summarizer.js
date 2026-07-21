@@ -1,18 +1,20 @@
 // ==========================================
-// 1. 텍스트 정제 및 기본 유틸리티
+// 1. 텍스트 정제 및 안전 유틸리티
 // ==========================================
 
 function normalizeSpace(text = "") {
     return String(text).replace(/\s+/g, " ").trim();
 }
 
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// 🌟 외국어/한자 유지 + 각주 및 불필요 공백만 정제
 export function cleanWikiText(text) {
     if (!text) return "";
     return text
         .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
-        .replace(/\((일본어|한자|영어|중국어|프랑스어|독일어|러시아어):\s*.*?\)/gi, "")
-        .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "")
-        .replace(/\(주:[^\)]*\)/g, "")
         .replace(/\(\s*\)/g, "")
         .replace(/\s+/g, " ")
         .replace(/\s+\./g, ".")
@@ -48,7 +50,7 @@ const COMMON_STOP_WORDS = new Set([
 ]);
 
 // ==========================================
-// 2. 접속어 및 절(Clause) 연결어미 자연화 알고리즘
+// 2. 접속어 및 주어 중복 안전 정제
 // ==========================================
 
 function cleanLeadingConjunctions(sentence) {
@@ -78,6 +80,32 @@ function fixDanglingClause(sentence) {
         .replace(/(하며|하며,|하며\s*)$/, "하였다.")
         .replace(/(하고|하고,|하고\s*)$/, "하였다.")
         .replace(/(했으나|하였으나)$/, "하였다.");
+}
+
+function formatMergedText(sentences, aliases = []) {
+    if (sentences.length <= 1) return sentences.join(" ");
+
+    const safeAliases = aliases
+        .map(a => a.trim())
+        .filter(a => a.length >= 2)
+        .sort((a, b) => b.length - a.length);
+
+    return sentences.map((sent, idx) => {
+        if (idx === 0) return sent;
+
+        let trimmed = sent;
+        for (const alias of safeAliases) {
+            try {
+                const escapedAlias = escapeRegExp(alias);
+                const subjectRegex = new RegExp(`^${escapedAlias}(은|는|이|가)\\s+`);
+                if (subjectRegex.test(trimmed)) {
+                    trimmed = trimmed.replace(subjectRegex, "");
+                    break;
+                }
+            } catch (e) {}
+        }
+        return trimmed;
+    }).join(" ");
 }
 
 function isMicroDetailSentence(sentence) {
@@ -127,11 +155,9 @@ function extractTopKeywords(text, topN = 12) {
 export function extractImportantSentences(bodyText, introText = "", aliases = []) {
     if (!bodyText) return [];
 
-    // 단락별 분할
     const paragraphs = bodyText.split(/\n+/).map(p => p.trim()).filter(p => p.length > 30);
     if (paragraphs.length === 0) return [];
 
-    // 🌟 1. 내용(글자 수)이 가장 많은 핵심 단락 찾기
     let largestParaIndex = 0;
     let maxCharCount = 0;
 
@@ -155,8 +181,8 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
             }
 
             let score = 0;
-            if (/(《|『).*?(》|』)/.test(trimmed)) score += 18; // 저서 표기 우대
-            if (index === 0) score += 15; // 단락 첫 문장 우대
+            if (/(《|『).*?(》|』)/.test(trimmed)) score += 18;
+            if (index === 0) score += 15;
 
             const hasAlias = aliases.some(alias => alias && trimmed.includes(alias));
             if (hasAlias) score += 12;
@@ -186,17 +212,14 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         };
     });
 
-    // 🌟 2. 가장 내용이 많은 단락에서는 2문장, 나머지 단락에서는 1문장 추출
     const selectedSentences = [];
 
     paragraphCandidates.forEach(({ paraIdx, candidates }) => {
         if (candidates.length === 0) return;
 
-        // 가장 분량이 큰 단락이면 상위 2개 추출
         if (paraIdx === largestParaIndex) {
             selectedSentences.push(...candidates.slice(0, 2).map(c => c.sentence));
         } else {
-            // 일반 단락은 상위 1개 추출
             selectedSentences.push(candidates[0].sentence);
         }
     });
@@ -222,7 +245,6 @@ export function buildDescription(
 
     let selectedSentences = [];
 
-    // 서론 대표 문장
     if (introSentences.length > 0) {
         selectedSentences.push(introSentences[0]);
         if (introSentences.length > 1 && introSentences[1].length < 120) {
@@ -230,7 +252,6 @@ export function buildDescription(
         }
     }
 
-    // 🌟 가장 비중 큰 본문 단락에서 2문장 + 기타 단락에서 1문장씩 추출
     if (cleanBody) {
         const bodyExtracted = extractImportantSentences(
             cleanBody,
@@ -242,7 +263,6 @@ export function buildDescription(
         }
     }
 
-    // 접속어 및 절 매끄럽게 정제
     const processedSentences = selectedSentences.map((sent, idx) => {
         let text = sent;
         if (idx > 0) text = cleanLeadingConjunctions(text);
@@ -251,7 +271,7 @@ export function buildDescription(
         return text;
     });
 
-    const mergedText = processedSentences.join(" ");
+    const mergedText = formatMergedText(processedSentences, aliases);
 
     if (mergedText.length <= maxLength) return mergedText;
 
