@@ -222,13 +222,13 @@ async function fillCache() {
                 .slice(0, 8);
 
             // 2) 신규 인물 후보
-            const baseYear = Math.floor(Math.random() * (2000 - 900 + 1)) + 900;
+            const baseYear = Math.floor(Math.random() * (1970 - 900 + 1)) + 900;
             let candidates = [];
 
             for (let offset = 0; offset <= 10 && candidates.length === 0; offset++) {
                 const years = offset === 0 ? [baseYear] : [baseYear - offset, baseYear + offset];
                 for (const year of years) {
-                    if (year < 900 || year > 2000) continue;
+                    if (year < 900 || year > 1970) continue;
                     const listRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
                         ...WIKI_AXIOS_CONFIG,
                         params: { action: "query", list: "categorymembers", cmtitle: `분류:${year}년_출생`, cmlimit: 48, cmtype: "page", format: "json", origin: "*" }
@@ -280,8 +280,7 @@ async function fillCache() {
                         if (QUIZ_CACHE.length >= CACHE_SIZE) break;
 
                         if (!pageData.extract || pageData.extract.length < 60) continue;
-                        if (/(대학교수|명예교수|석좌교수|교수|교육자)/.test(pageData.extract)) continue;
-
+                        if (/(선수|축구|야구|농구|배구|골프|테니스|수영|양궁|유도|체육|올림픽|프로게이머|대학교수|명예교수|교수)/.test(pageData.extract)) continue;
                         const aliases = makeNameAliases(pageData.title);
                         const pageImageName = (pageData.pageimage || "").toLowerCase();
                         let imageUrl = null;
