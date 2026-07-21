@@ -37,7 +37,7 @@ const WIKI_AXIOS_CONFIG = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json'
     },
-    timeout: 32000 
+    timeout: 12000 
 };
 
 // VIP 풀
@@ -381,7 +381,7 @@ async function fillCache() {
             }
         } catch (e) {
             if (e.response?.status === 429) {
-                await new Promise(resolve => setTimeout(resolve, 10000));
+                await new Promise(resolve => setTimeout(resolve, 8000));
             }
         }
     }
