@@ -80,28 +80,45 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
     const introWords = new Set(tokenize(introText));
 
+    // 🌟 [고영양가 핵심 키워드 정규식]
+    // 사상, 학술, 역사, 업적 등의 핵심 단어 통합 (+15점)
+    const nutritionRegex = /(독립|운동|투쟁|해방|전투|전사|왕위|즉위|폐위|살해|통치|재위|업적|개혁|혁명|조약|발명|발견|창시|수립|기여|작품|주의|성선설|사단|사덕|측은|수오|사양|시비|오륜|부자유친|민본주의|인정|왕도|역성혁명|천명관)/;
+
+    // 🌟 [범용 지시어-조사 엄격 감지 정규식]
+    // "이 [모든명사]가/이/은/는", "그 [모든명사]가/이/은/는" 패턴 감지
+    // (공백 \s+ 조건으로 '이념이', '이론이' 같은 일반 단어 충돌 100% 방지)
+    const fullStructureRegex = /^(이|그)\s+([가-힣]+)(이|가|은|는)\s+/;
+
     const scored = sentences.map((sentence, index) => {
         let processedSentence = sentence.trim();
         
-        // 🌟 [추출 제외 필터 강화] 
-        // 1. 금지 단어(칭했다, 두었다, 슬하)가 포함된 경우
-        // 2. 문장 시작점에 앞 맥락이 필수적인 지시어(이때, 그때, 이 무렵, 당시, 그해)가 오는 경우 원천 차단
+        // 1. [원천 제외 필터] 노이즈 및 맥락 의존형 시점 지시어 배제
         if (
-            /(칭했다|두었다|슬하)/.test(processedSentence) || 
+            /(칭했다|두었다|슬하)/.test(processedSentence) ||
             /^(이때|그때|이 무렵|당시|그해)\s+/.test(processedSentence)
         ) {
             return { sentence: processedSentence, index, score: -100 };
         }
 
-        let score = 0;
-
-        // [고영양가 핵심 키워드 점수]
-        const nutritionRegex = /(독립|운동|투쟁|해방|전투|전사|왕위|즉위|폐위|살해|통치|재위|업적|개혁|혁명|조약|발명|발견|창시|수립|기여|작품|주의)/;
-        if (nutritionRegex.test(processedSentence)) {
-            score += 15; 
+        // 🌟 2. [지시어 주어 맥락 자동 병합 (Context Pairing)]
+        // 범용 fullStructureRegex 활용
+        if (fullStructureRegex.test(processedSentence)) {
+            if (nutritionRegex.test(processedSentence)) {
+                // 핵심 키워드가 있는 알맹이 문장이면 앞 문장(개념 설명)과 자동 병합
+                if (index > 0) {
+                    const prevSentence = sentences[index - 1].trim();
+                    processedSentence = `${prevSentence} ${processedSentence}`;
+                } else {
+                    // 앞 문장이 없는 경우 관형사 '이/그 '만 제거
+                    processedSentence = processedSentence.replace(/^(이|그)\s+/, "");
+                }
+            } else {
+                // 알맹이 키워드가 없는 단순 맥락 의존 문장은 탈락 (-100점)
+                return { sentence: processedSentence, index, score: -100 };
+            }
         }
 
-        // 명사형 지시어 문맥 보정 (이 작품은 -> 《작품명》 작품은)
+        // 3. [명사형 작품/매체 지시어 보정] (이 작품은 -> 《작품명》 작품은)
         const targetRegex = /(이|그)\s+(작품|조각|그림|회화|동상|건축물|벽화|서적|책|화풍|시리즈)/;
         if (targetRegex.test(processedSentence)) {
             let foundTitle = null;
@@ -117,6 +134,26 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
             }
         }
 
+        let score = 0;
+
+        // 4. [점수 부여]
+        if (nutritionRegex.test(processedSentence)) {
+            score += 15; 
+        }
+
+        for (const alias of aliases) {
+            if (alias && processedSentence.includes(alias)) score += 8;
+        }
+
+        if (typeof IMPORTANT_KEYWORDS !== "undefined") {
+            for (const keyword of IMPORTANT_KEYWORDS) {
+                if (processedSentence.includes(keyword)) score += 5;
+            }
+        }
+
+        if (/\d{3,4}년/.test(processedSentence)) score += 5;
+
+        // 5. [서론 중복도 검사]
         const words = tokenize(processedSentence);
         if (words.length === 0) return { sentence: processedSentence, index, score: -100 };
 
@@ -126,23 +163,12 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         }
         
         const overlapRate = overlap / Math.max(words.length, 1);
-        
-        // 중복도 필터 안전장치
-        const maxOverlapLimit = /(독립|혁명|운동|투쟁|해방)/.test(processedSentence) ? 0.88 : 0.75;
+        const maxOverlapLimit = nutritionRegex.test(processedSentence) ? 0.88 : 0.75;
         if (overlapRate >= maxOverlapLimit) return { sentence: processedSentence, index, score: -100 };
 
-        for (const alias of aliases) {
-            if (alias && processedSentence.includes(alias)) score += 8;
-        }
-
-        for (const keyword of IMPORTANT_KEYWORDS) {
-            if (processedSentence.includes(keyword)) score += 5;
-        }
-
-        if (/\d{3,4}년/.test(processedSentence)) score += 5;
-
-        if (processedSentence.length > 180) score -= 6;
-        if (processedSentence.length < 35) score -= 15; 
+        // 병합 문장의 특성을 고려해 길이에 따른 감점 기준 완화 (300자)
+        if (processedSentence.length > 300) score -= 6;
+        if (processedSentence.length < 30) score -= 15; 
 
         return { sentence: processedSentence, index, score };
     });
@@ -150,34 +176,67 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
     const validCandidates = scored.filter(item => item.score > 0 && item.sentence.length >= 25);
     if (validCandidates.length === 0) return "";
 
-    // 데이터가 적을 때는 순수 최고 점수 추출
-    if (validCandidates.length <= count) {
+    // 후보 문장이 4개 이하로 적은 경우 순수 점수 순으로 반환
+    if (validCandidates.length <= 4) {
         return validCandidates
             .sort((a, b) => b.score - a.score)
             .map(item => item.sentence)
             .join(" ");
     }
 
-    // 데이터가 충분할 때만 구역별 분산 샘플링
-    const selectedItems = [];
-    const zoneSize = Math.floor(validCandidates.length / count);
+    // 🌟 6. [동적 3구역 분할 및 비중 기반 가변 추출]
+    const totalCount = sentences.length;
+    const boundary1 = Math.floor(totalCount / 3);
+    const boundary2 = Math.floor((totalCount * 2) / 3);
 
-    for (let i = 0; i < count; i++) {
-        const startIdx = i * zoneSize;
-        const endIdx = (i === count - 1) ? validCandidates.length : (i + 1) * zoneSize;
-        const zoneCandidates = validCandidates.slice(startIdx, endIdx);
-        
-        if (zoneCandidates.length > 0) {
-            zoneCandidates.sort((a, b) => b.score - a.score);
-            selectedItems.push(zoneCandidates[0]);
+    const zones = [
+        { id: 1, candidates: [] }, // 1구역 (초반)
+        { id: 2, candidates: [] }, // 2구역 (중반)
+        { id: 3, candidates: [] }  // 3구역 (후반)
+    ];
+
+    // 원문 위치(index) 기준 구역 할당
+    validCandidates.forEach(item => {
+        if (item.index < boundary1) {
+            zones[0].candidates.push(item);
+        } else if (item.index < boundary2) {
+            zones[1].candidates.push(item);
+        } else {
+            zones[2].candidates.push(item);
         }
-    }
+    });
 
+    // 후보 문장 수가 가장 많은 메인 구역 찾기
+    let maxZoneIndex = 0;
+    let maxCandidateCount = -1;
+
+    zones.forEach((zone, idx) => {
+        if (zone.candidates.length > maxCandidateCount) {
+            maxCandidateCount = zone.candidates.length;
+            maxZoneIndex = idx;
+        }
+    });
+
+    // 구역별 문장 선택 (메인 구역 2문장, 나머지 구역 1문장)
+    const selectedItems = [];
+
+    zones.forEach((zone, idx) => {
+        if (zone.candidates.length === 0) return;
+
+        zone.candidates.sort((a, b) => b.score - a.score);
+
+        const takeCount = (idx === maxZoneIndex) ? 2 : 1;
+        const picked = zone.candidates.slice(0, takeCount);
+        selectedItems.push(...picked);
+    });
+
+    // 최종 원문 순서(index) 정렬 후 결합
     return selectedItems
         .sort((a, b) => a.index - b.index)
         .map(item => item.sentence)
         .join(" ");
 }
+
 /**
  * exintro가 짧을 때만 본문 핵심 문장을 보강해서 최종 설명을 만든다.
  * @param {string} introText 기존 exintro
