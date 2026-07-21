@@ -76,14 +76,27 @@ function makeNameAliases(title) {
 
 function isValidImageUrl(url) {
     if (!url || typeof url !== "string") return false;
-    
-    // 🌟 주소 안에 .svg가 포함되어 있다면(.svg.png, .svg/ 등 전부) 무조건 차단
-    if (url.toLowerCase().includes(".svg"|"picto"|"Picto")) return false;
 
     const lowerUrl = url.toLowerCase();
-    if (lowerUrl.includes("coat_of_arms") || lowerUrl.includes("emblem") || lowerUrl.includes("flag") || lowerUrl.includes("icon")) return false;
-    
-    return /\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(url);
+
+    // Picto, SVG 아이콘 차단
+    if (
+        lowerUrl.includes(".svg") ||
+        lowerUrl.includes("picto")
+    ) {
+        return false;
+    }
+
+    if (
+        lowerUrl.includes("coat_of_arms") ||
+        lowerUrl.includes("emblem") ||
+        lowerUrl.includes("flag") ||
+        lowerUrl.includes("icon")
+    ) {
+        return false;
+    }
+
+    return /\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(lowerUrl);
 }
 
 function isHumanPhoto(filename, aliases) {
