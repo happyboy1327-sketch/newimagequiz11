@@ -108,7 +108,6 @@ function isHumanPhoto(filename, aliases) {
         const cleanFile = n.replace(/[\s\-\_]/g, "");
         if (cleanFile.includes(cleanName)) return true;
     }
-    return true; 
     return hintText.substring(0, 130).trim() + "...";
 } 
 
