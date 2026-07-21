@@ -60,7 +60,7 @@ const LEGACY_VIP_LIST = [
 ];
 
 // 🌟 사물, 무기, 계급장, 상징물 차단 키워드 강화
-const HUMAN_IMAGE_BLOCKLIST = /coin|medal|seal|flag|coat_of_arms|emblem|tomb|grave|map|signature|statue|bust|sword|sabre|poem|weapon|feather|quill|pen|symbol|icon|picto|insignia|rank|military|ribbon|award|painting|handwriting|drawing|sketch|illustration|calligraphy|landscape|gardenshield/i;
+const HUMAN_IMAGE_BLOCKLIST = /coin|medal|seal|flag|coat_of_arms|emblem|tomb|temple|grave|map|signature|statue|bust|sword|sabre|poem|weapon|feather|quill|pen|symbol|icon|picto|insignia|rank|military|ribbon|award|painting|handwriting|drawing|sketch|illustration|calligraphy|landscape|gardenshield/i;
 const IMAGE_EXT_RE = /\.(jpg|jpeg|png|webp)$/i;
 const COMMONS_BATCH_SIZE = 14;
 
@@ -349,7 +349,7 @@ async function fillCache() {
     const pageImageName = (pageData.pageimage || "").toLowerCase();
 
     // 🌟 사당/건물/숫자 파일명 잡는 정규식 (함수 대신 패턴 변수 하나만 선언)
-    const badImgRegex = /(sa|won|gung|neung|reung|myo|bi|jeon|gak|ru|si|ji|shrine|tomb|statue|park|site|사|원|궁|능|묘|비|전|각|루|지)\.[a-z]+$/i;
+    const badImgRegex = /(won|gung|neung|reung|myo|bi|jeon|gak|ru|si|ji|shrine|tomb|statue|park|site|사|원|궁|능|묘|비|전|각|루|지)\.[a-z]+$/i;
 
     let imageUrl = pageData.thumbnail?.source;
 
