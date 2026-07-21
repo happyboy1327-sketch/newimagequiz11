@@ -322,20 +322,16 @@ async function fillCache() {
         HUMAN_IMAGE_BLOCKLIST.test(pageImageName) || 
         !isValidImageUrl(imageUrl) ||
         badImgRegex.test(imageUrl.split('?')[0])
-    ) {
-        imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
-    }
+                          ) {
+                            imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
+                           }
 
-    // 2. 최종 이미지 검사 (없거나, 사적지/숫자 사진이거나, 유효하지 않으면 건너뜀)
-    if (!imageUrl || !isValidImageUrl(imageUrl) || badImgRegex.test(imageUrl.split('?')[0])) {
-        continue;
-    }
+                          // 2. 최종 이미지 검사 (없거나, 사적지/숫자 사진이거나, 유효하지 않으면 건너뜀)
+                          if (!imageUrl || !isValidImageUrl(imageUrl) || badImgRegex.test(imageUrl.split('?')[0])) {
+                           continue;
+                         }
 
-    // ... 이 뒤에 기존 QUIZ_CACHE.push 로직 진행 ...
-}
-
-    // ... 이 뒤에 QUIZ_CACHE.push 로직 계속 ...
-                        
+                        /
 
                         if (LAST_PLAYED.includes(pageData.title)) continue;
                         if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) continue;
