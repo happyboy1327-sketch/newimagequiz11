@@ -347,7 +347,8 @@ async function fillCache() {
                         if (/(대학교수|명예교수|석좌교수|교수|교육자)/.test(pageData.extract)) continue;
 
                         const aliases = makeNameAliases(pageData.title);
-                        pageData.extract = filterOtherPersonDeath(pageData.extract, aliases);
+                        let sanitizedExtract = cleanWikiText(pageData.extract);
+                        sanitizedExtract = filterOtherPersonDeath(sanitizedExtract, aliases);
                         
                         let imageUrl = pageData.thumbnail?.source;
 
