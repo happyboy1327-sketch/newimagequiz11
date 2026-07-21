@@ -15,7 +15,7 @@ app.use((req, res, next) => {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '1; mode=block'); 
     
-    if (req.path === '/api/quiz') {
+    if (req.path === '/api/quiz') { 
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     } else {
         res.setHeader('Cache-Control', 'public, max-age=3600, immutable');
@@ -218,6 +218,14 @@ function createMaskedHint(title, extract) {
 
     return hintText.substring(0, 130).trim() + "...";
 } 
+  // 건물/사적지 파일명 여부 검사 함수
+function isBuildingFilename(filename) {
+    if (!filename) return false;
+    const nameWithoutExt = filename.replace(/\.[^/.]+$/, "").toLowerCase();
+    const buildingSuffixRegex = /(sa|won|gung|neung|reung|myo|bi|jeon|gak|ru|ji|shrine|tomb|statue|park|site|사|원|궁|능|묘|비|전|각|루|지)$/i;
+    
+    return buildingSuffixRegex.test(nameWithoutExt);
+}
 
 // =======================================================
 // 캐시 충전 및 데이터 가공 로직
@@ -318,6 +326,10 @@ async function fillCache() {
                             isValidImageUrl(pageData.thumbnail.source)
                         ) {
                             imageUrl = pageData.thumbnail.source;
+                            if (imageUrl && isBuildingFilename(imageUrl)) {
+            // 건물 사진이면 이미지를 빼버리거나(null), 이 인물은 넘어감(continue)
+            continue; 
+                            }
                         } else {
                             imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
                         }
