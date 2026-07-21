@@ -240,8 +240,12 @@ async function fillCache() {
 
             // 1) VIP 후보
             const vipTitles = shuffle(LEGACY_VIP_LIST)
-                .filter(name => !QUIZ_CACHE.some(c => c.name.includes(name)) && !LAST_PLAYED.some(lp => lp.includes(name)))
-                .slice(0, 14);
+          .filter(name => {
+             const isCached = QUIZ_CACHE.some(c => c.name.includes(name) || (c.rawName && c.rawName === name));
+             const isPlayed = LAST_PLAYED.some(lp => lp.includes(name));
+             return !isCached && !isPlayed;
+           })
+          .slice(0, 10);
 
             // 2) 신규 인물 후보
             const baseYear = Math.floor(Math.random() * (1970 - 900 + 1)) + 900;
