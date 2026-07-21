@@ -116,6 +116,20 @@ function calculateBasicNutritionScore(sentence) {
     return score;
 }
 
+// 🌟 [추가] 문장에서 연도/날짜(예: 1339년, 1903년 12월)를 정밀 파싱하는 함수
+function extractChronoTimestamp(text) {
+    // 1. "1339년 11월 13일" 혹은 "1339년" 형태 감지
+    const yearMatch = text.match(/(\d{3,4})\s*년(?:\s*(\d{1,2})\s*월)?(?:\s*(\d{1,2})\s*일)?/);
+    if (yearMatch) {
+        const year = parseInt(yearMatch[1], 10);
+        const month = yearMatch[2] ? parseInt(yearMatch[2], 10) : 1;
+        const day = yearMatch[3] ? parseInt(yearMatch[3], 10) : 1;
+        // 비교용 타임스탬프 숫자 생성 (예: 13390000 + 1100 + 13)
+        return year * 10000 + month * 100 + day;
+    }
+    return null; // 연도 언급 없음
+}
+
 export function extractImportantSentences(bodyText, count = 2) {
     if (!bodyText || typeof bodyText !== "string") return "";
 
@@ -157,7 +171,10 @@ export function extractImportantSentences(bodyText, count = 2) {
 
         if (original.length >= 25 && original.length <= 120) score += 5;
 
-        return { sentence: original, index, score };
+        // 🌟 [추가] 문장의 연도 정보 파싱
+        const chronoTime = extractChronoTimestamp(original);
+
+        return { sentence: original, index, score, chronoTime };
     });
 
     const validCandidates = candidates.filter(item => item.score > 0);
@@ -167,10 +184,25 @@ export function extractImportantSentences(bodyText, count = 2) {
         return "";
     }
 
+    // 1차: 점수 높은 순으로 상위 문장(count) 추출
     validCandidates.sort((a, b) => b.score - a.score);
-
     const selected = validCandidates.slice(0, count);
-    selected.sort((a, b) => a.index - b.index);
+
+    // 🌟 [핵심 변경] 2차: 뽑힌 문장들을 '시간순(연도순)'으로 정렬
+    // 연도 정보가 있는 문장끼리는 연도순, 연도 언급이 없는 문장은 원문 순서(index) 기준으로 시간순 배치
+    selected.sort((a, b) => {
+        if (a.chronoTime !== null && b.chronoTime !== null) {
+            if (a.chronoTime !== b.chronoTime) {
+                return a.chronoTime - b.chronoTime; // 연도 빠른 순
+            }
+        } else if (a.chronoTime !== null) {
+            // a만 연도가 있는 경우, 연도 비교 후 애매하면 원문 순서
+            return -1;
+        } else if (b.chronoTime !== null) {
+            return 1;
+        }
+        return a.index - b.index; // 둘 다 연도 표기가 없으면 원문 순서
+    });
 
     return selected.map(item => item.sentence).join(" ");
 }
