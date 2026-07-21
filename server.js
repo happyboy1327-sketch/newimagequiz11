@@ -91,7 +91,9 @@ function isValidImageUrl(url) {
         lowerUrl.includes("coat_of_arms") ||
         lowerUrl.includes("emblem") ||
         lowerUrl.includes("flag") ||
-        lowerUrl.includes("icon")
+        lowerUrl.includes("icon") ||
+        lowerUrl.includes("grave") ||
+        lowerUrl.includes("tomb")
     ) {
         return false;
     }
@@ -99,34 +101,7 @@ function isValidImageUrl(url) {
     return /\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(lowerUrl);
 }
 
-function isHumanPhoto(filename, aliases) {
-    if (!filename || typeof filename !== "string") return false;
-    const n = filename.toLowerCase();
 
-    const BLACKLIST = [
-        "svg", "gif", "coat of arms", "coat_of_arms", "coa", "stone", "tomb", "_tomb", "picto",
-        "arms", "emblem", "insignia", "flag", "standard", "banner", "seal", "stamp",
-        "icon", "logo", "symbol", "map", "chart", "diagram", "signature", "sign",
-        "grave", "monument", "book", "cover", "coin", "currency", "memorial", "plaque", 
-        "calligraphy", "handwriting", "manuscript", "document", "letter", "rubbing",
-        "필적", "글씨", "서체", "문서", "편지", "탁본", "서간", "의궤", "집자", "현판", "비석", "묘", 
-        "충렬비", "기념비", "비각", "정려각", "사당", "전경", "생가", "현충사", "사적비", "정려", "탑", "릉"
-    ];
-
-    for (const badWord of BLACKLIST) {
-        if (n.includes(badWord)) return false;
-    }
-    
-    if (/(portrait|photo|face|profile|bust|painting|oil|canvas|illustration|hyakunin|statue)/i.test(n)) return true;
-
-    for (const a of aliases) {
-        if (!a) continue;
-        const cleanName = a.replace(/[\s\-\_]/g, "");
-        const cleanFile = n.replace(/[\s\-\_]/g, "");
-        if (cleanFile.includes(cleanName)) return true;
-    }
-    return false;
-} // ← 반드시 있어야 함
     function extractInfoboxImage(html) {
     const match = html.match(/<table[^>]*class="[^"]*infobox[\s\S]*?<img[^>]+src="([^"]+)"/i);
     if (!match) return null;
@@ -173,7 +148,6 @@ async function findAlternativeHumanImage(title, aliases) {
     for (const img of images) {
         const name = img.title.replace(/^File:/i, "");
         if (!IMAGE_EXT_RE.test(name)) continue;
-        if (!isHumanPhoto(name, aliases)) continue;
         targets.push(img.title);
     }
 
