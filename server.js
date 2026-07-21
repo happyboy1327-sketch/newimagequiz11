@@ -108,6 +108,8 @@ function isHumanPhoto(filename, aliases) {
         const cleanFile = n.replace(/[\s\-\_]/g, "");
         if (cleanFile.includes(cleanName)) return true;
     }
+    return false;
+} // ← 반드시 있어야 함
     function extractInfoboxImage(html) {
     const match = html.match(/<table[^>]*class="[^"]*infobox[\s\S]*?<img[^>]+src="([^"]+)"/i);
     if (!match) return null;
