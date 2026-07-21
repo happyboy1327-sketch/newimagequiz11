@@ -236,6 +236,7 @@ async function fillCache() {
     if (QUIZ_CACHE.length >= CACHE_SIZE) return;
 
     isCaching = true;
+    console.log("fillCache 시작 isCaching:", isCaching);
     console.log(`🔄 캐시 충전 가동 (${QUIZ_CACHE.length}/${CACHE_SIZE})`);
 
     let randomSearchAttempts = 0;
