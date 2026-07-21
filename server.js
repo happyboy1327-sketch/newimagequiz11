@@ -108,8 +108,19 @@ function isHumanPhoto(filename, aliases) {
         const cleanFile = n.replace(/[\s\-\_]/g, "");
         if (cleanFile.includes(cleanName)) return true;
     }
-    
-    async function findAlternativeHumanImage(title, aliases) {
+    function extractInfoboxImage(html) {
+    const match = html.match(/<table[^>]*class="[^"]*infobox[\s\S]*?<img[^>]+src="([^"]+)"/i);
+    if (!match) return null;
+    let url = match[1];
+    if (url.startsWith("//")) url = "https:" + url;
+    return url;
+}
+
+const HUMAN_IMAGE_BLOCKLIST = /coin|medal|seal|flag|coat_of_arms|emblem|tomb|map|signature|statue|bust/i;
+const IMAGE_EXT_RE = /\.(jpg|jpeg|png|webp)$/i;
+const COMMONS_BATCH_SIZE = 12;
+
+async function findAlternativeHumanImage(title, aliases) {
     try {
         const htmlRes = await axios.get("https://ko.wikipedia.org/w/index.php", {
             ...WIKI_AXIOS_CONFIG,
@@ -119,9 +130,7 @@ function isHumanPhoto(filename, aliases) {
         if (imageUrl && isValidImageUrl(imageUrl)) {
             let imageName = imageUrl.toLowerCase();
             try { imageName = decodeURIComponent(imageName); } catch (e) {}
-            if (!HUMAN_IMAGE_BLOCKLIST.test(imageName) && isHumanPhoto(imageName, aliases, imageUrl)) {
-                return imageUrl;
-            }
+            if (!HUMAN_IMAGE_BLOCKLIST.test(imageName)) return imageUrl;
         }
     } catch (e) {
         console.log(`⚠️ 인포박스 조회 실패: ${title}`);
@@ -157,7 +166,7 @@ function isHumanPhoto(filename, aliases) {
         try {
             info = await axios.get("https://commons.wikimedia.org/w/api.php", {
                 ...WIKI_AXIOS_CONFIG,
-                params: { action: "query", titles: batch.join("|"), prop: "imageinfo", iiprop: "url|extmetadata", format: "json", origin: "*" }
+                params: { action: "query", titles: batch.join("|"), prop: "imageinfo", iiprop: "url", format: "json", origin: "*" }
             });
         } catch (e) { continue; }
 
@@ -165,10 +174,9 @@ function isHumanPhoto(filename, aliases) {
         const urlMap = new Map();
 
         for (const file of commonsPages) {
+            const pageTitle = file.title;
             const url = file.imageinfo?.[0]?.url;
-            if (url && isValidImageUrl(url) && isHumanPhoto(file, aliases)) {
-                urlMap.set(file.title, url);
-            }
+            if (url && isValidImageUrl(url)) urlMap.set(pageTitle, url);
         }
 
         for (const target of batch) {
