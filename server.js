@@ -186,6 +186,12 @@ async function findAlternativeHumanImage(title, aliases) {
         for (const file of commonsPages) {
             const pageTitle = file.title;
             const url = file.imageinfo?.[0]?.url;
+            console.log(
+    "COMMONS 후보:",
+    pageTitle,
+    isValidImageUrl(url),
+    HUMAN_IMAGE_BLOCKLIST.test(pageTitle)
+);
             if (url && isValidImageUrl(url) && !HUMAN_IMAGE_BLOCKLIST.test(pageTitle)) {
                 urlMap.set(pageTitle, url);
             }
@@ -200,6 +206,7 @@ async function findAlternativeHumanImage(title, aliases) {
         }
     }
     console.timeEnd(`🖼️ 이미지 탐색 ${title}`);
+    console.log("대체 이미지 실패:", title, "targets:", targets.length);
     return null;
 }
 
@@ -340,7 +347,7 @@ async function fillCache() {
     const pageImageName = (pageData.pageimage || "").toLowerCase();
 
     // 🌟 사당/건물/숫자 파일명 잡는 정규식 (함수 대신 패턴 변수 하나만 선언)
-    const badImgRegex = /(sa|won|gung|neung|reung|myo|bi|jeon|gak|ru|ji|shrine|tomb|statue|park|site|사|원|궁|능|묘|비|전|각|루|지|\d+)\.[a-z]+$/i;
+    const badImgRegex = /(sa|won|gung|neung|reung|myo|bi|jeon|gak|ru|ji|shrine|tomb|statue|park|site|사|원|궁|능|묘|비|전|각|루|지)\.[a-z]+$/i;
 
     let imageUrl = pageData.thumbnail?.source;
 
