@@ -390,8 +390,8 @@ async function fillCache() {
     console.log("fillCache 종료", QUIZ_CACHE.length);
     isCaching = false;
 
-    if (QUIZ_CACHE.length <= 22) {
-        setTimeout(fillCache, 4000);
+    if (QUIZ_CACHE.length <= 30) {
+        setTimeout(fillCache, 3000);
     }
 }
 
