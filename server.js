@@ -305,8 +305,8 @@ async function fillCache() {
             targetTitles = shuffle([...vipTitles, ...newTitles]);
 
             if (targetTitles.length > 0) {
-                for (let i = 0; i < targetTitles.length; i += 3) { 
-                    const batch = targetTitles.slice(i, i + 3);
+                for (let i = 0; i < targetTitles.length; i += 4) { 
+                    const batch = targetTitles.slice(i, i + 4);
                     let detailRes;
 
                     try {
