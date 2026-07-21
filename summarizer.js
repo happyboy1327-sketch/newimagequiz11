@@ -117,7 +117,7 @@ function calculateBasicNutritionScore(sentence) {
 }
 
 // 🌟 [추가] 퀴즈 지문에 불필요한 은퇴/마이너 TMI 감점 정규식
-const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노년|보냈|생활했|향리|소일);
+const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노년|보냈|생활했|향리|소일)/;
 
 // 🌟 [추가] 연도 숫자가 없을 때 텍스트 키워드로 시대를 추정하는 함수
 function estimateChronoOrder(text, originalIndex) {
