@@ -25,6 +25,13 @@ app.use((req, res, next) => {
 
 process.on('unhandledRejection', (reason) => console.error('Unhandled Rejection:', reason));
 process.on('uncaughtException', (err) => console.error('Uncaught Exception:', err));
+process.on('exit', (code) => {
+    console.log("PROCESS EXIT", code);
+});
+
+process.on('SIGTERM', () => {
+    console.log("SIGTERM RECEIVED");
+});
 
 // --- 설정 ---
 const CACHE_SIZE = 40;        
