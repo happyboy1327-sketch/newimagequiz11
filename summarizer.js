@@ -134,7 +134,7 @@ function estimateChronoOrder(text, originalIndex) {
 }
 
 // 🌟 기존 함수 시그니처 100% 유지
-export function extractImportantSentences(bodyText, count = 2) {
+export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 2) {
     if (!bodyText || typeof bodyText !== "string") return "";
 
     const rawSentences = splitSentences(bodyText);
