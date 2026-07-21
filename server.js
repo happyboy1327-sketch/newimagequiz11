@@ -37,7 +37,7 @@ const WIKI_AXIOS_CONFIG = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json'
     },
-    timeout: 12000 
+    timeout: 22000 
 };
 
 // VIP 풀
@@ -374,7 +374,7 @@ async function fillCache() {
                             150, 
                             1100  
                         );
-
+                        console.log("캐시 추가 직전:", pageData.title, imageUrl, finalDescription?.length);
                         if (finalDescription) {
                             QUIZ_CACHE.push({
                                 name: pageData.title,
@@ -385,6 +385,7 @@ async function fillCache() {
                         }
                     }
                 }
+                console.log("현재 캐시:", QUIZ_CACHE.length);
                 await new Promise(resolve => setTimeout(resolve, 780));
             }
         } catch (e) {
