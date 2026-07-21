@@ -13,14 +13,13 @@ function cleanWikiText(text) {
     if (!text) return "";
     return text
         .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
-        .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "")
+        .replace(/\((첫\vert{}두\vert{}세\vert{}네\vert{}다섯\vert{}\d+)\s*번째\)/g, "")
         .replace(/\(\s*\)/g, "")
         .replace(/\s+/g, " ")
         .replace(/\s+\./g, ".")
         .trim();
 }
 
-// 온전한 종결 어미로 끝나지 않은 짤린 문장 감지
 function isIncompleteSentence(sentence) {
     if (!sentence) return true;
     const text = sentence.trim();
@@ -28,32 +27,25 @@ function isIncompleteSentence(sentence) {
     return !validEndingRegex.test(text);
 }
 
-// 🌟 [신규] 앞 1~3개 문장을 역추적하여 《...》, <...>, “...” 형태의 작품/책 제목 추출
 function findPrecedingTitle(sentences, currentIndex) {
     for (let i = currentIndex - 1; i >= Math.max(0, currentIndex - 3); i--) {
         const prevText = sentences[i];
         if (!prevText) continue;
-
-        // 《...》, <...>, 〈...〉, “...”, "...", '...' 표기 제목 감지
         const titleMatch = prevText.match(/《([^》]+)》|<([^>]+)>|〈([^〉]+)〉|“([^”]+)”|"([^"]+)"|'([^']+)'/);
         if (titleMatch) {
-            return titleMatch[0]; // 예: 《세 편의 단편과 열 편의 시》
+            return titleMatch[0];
         }
     }
     return null;
 }
 
-// 🌟 [신규] 지칭어(단편 중, 이 중 등)를 추출한 작품 제목으로 자연스럽게 복원
 function resolveVagueReference(sentence, foundTitle) {
     if (!foundTitle) return sentence;
     let text = sentence.trim();
 
-    // 1. "이 중", "그 중" -> "《작품명》 중"
     if (/^(이|그)\s*중\b/.test(text)) {
         return text.replace(/^(이|그)\s*중\b/, `${foundTitle} 중`);
     }
-
-    // 2. "단편 중", "작품 중", "두 작품" 등 -> "《작품명》의 단편 중..."
     return `${foundTitle}의 ${text}`;
 }
 
@@ -84,186 +76,115 @@ function filterOtherPersonDeath(text, aliases = []) {
 function splitSentences(text) {
     const normalized = normalizeSpace(text).replace(/\n+/g, " ");
     return normalized
-        .split(/(?<!\b[a-zA-Z])([.!?。！？])\s+/)
-        .reduce((acc, part, i, arr) => {
-            if (i % 2 === 0 && part.length > 0) {
-                const nextPart = arr[i + 1];
-                acc.push(nextPart ? part + nextPart : part);
+        .split(/(?<!\b[a-zA-Z])([.!?。])(?=\s+|$)/)
+        .reduce((acc, curr, index, array) => {
+            if (index % 2 === 0) {
+                const punctuation = array[index + 1] || "";
+                const sentence = (curr + punctuation).trim();
+                if (sentence) acc.push(sentence);
             }
             return acc;
-        }, [])
-        .map(s => s.trim())
-        .filter(s => s.length >= 12);
+        }, []);
 }
 
-function tokenize(text) {
-    return normalizeSpace(text)
-        .replace(/[^\w가-힣]+/g, " ")
-        .split(/\s+/)
-        .map(s => s.trim())
-        .filter(s => s.length >= 2);
+function normalizeTitleCandidate(title) {
+    if (!title) return "";
+    return title.replace(/\([^)]*\)/g, "").replace(/[\s\_\-]/g, "").trim();
 }
 
-export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 3) {
-    if (!bodyText) return "";
+function matchesAlias(word, alias) {
+    if (!word || !alias) return false;
+    const cleanWord = word.replace(/[\s\_\-]/g, "");
+    const cleanAlias = normalizeTitleCandidate(alias);
+    if (!cleanWord || !cleanAlias) return false;
+    return cleanWord.includes(cleanAlias) || cleanAlias.includes(cleanWord);
+}
 
-    const sentences = splitSentences(bodyText);
-    if (sentences.length === 0) return "";
+function calculateBasicNutritionScore(sentence) {
+    let score = 0;
+    const nutritionRegex = /(독립|전투|운동|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|승리|패배|결성|폐지|창립|설립)/;
+    if (nutritionRegex.test(sentence)) score += 20;
 
-    const introWords = new Set(tokenize(introText));
-    const nutritionRegex = /(독립|운동|투쟁|해방|전투|전사|왕위|즉위|폐위|살해|통치|재위|업적|개혁|혁명|조약|발명|발견|창시|수립|기여|작품|주의|성선설|사단|사덕|측은|수오|사양|시비|오륜|부자유친|민본주의|인정|왕도|역성혁명|천명관)/;
-    
-    const contextBreakRegex = /^(하지만|그러나|그러자|이에|또한|이후|그\s*뒤|한편|그러던\s*중|그리하여|따라서|때문에|이때|그때|이\s*무렵|당시|그해|다만|반면|반면에|반대로|결국|마침내|그렇지만|그럼에도|이로\s*인해|이로써)\b/;
-    const relativeSubjectRegex = /^(어머니|아버지|남동생|여동생|형|오빠|누나|언니|아들|딸|부인|아내|남편|할아버지|할머니|손자|손녀)\s+/;
-    const deathPattern = /(사망|별세|서거|타계|전사|시해|사사|병사|죽음|숨졌|세상을\s+떠났|생을\s+마감|사사되었|목숨을\s+잃었)/;
+    IMPORTANT_KEYWORDS.forEach(kw => {
+        if (sentence.includes(kw)) score += 5;
+    });
+    return score;
+}
 
-    // 🌟 추적 및 보완 대상 지칭 시작어 패턴
-    const vagueStartRegex = /^(단편\s*중|작품\s*중|이\s*중|그\s*중|일부|두\s*작품|한\s*작품|이\s*작품|그\s*작품|해당\s*작품|이\s*책|그\s*책)\b/;
-    const relativeTimeRegex = /(지난해|올해|지난달|내년|그해|당해|최근에|얼마\s*전)/;
+/**
+ * 본문에서 알짜 문장을 추출.
+ * 💡 알짜 문장(15점 이상)이 단 하나도 없는 토막글/족보 문서라면 "" (빈값) 반환!
+ */
+export function extractImportantSentences(bodyText, count = 2) {
+    if (!bodyText || typeof bodyText !== "string") return "";
 
-    const scored = sentences.map((sentence, index) => {
-        let processedSentence = sentence.trim();
-        
-        // 🌟 [핵심] 지칭어가 나오면 앞 문장에서 제목을 찾아 문장 보완
-        if (vagueStartRegex.test(processedSentence)) {
-            const foundTitle = findPrecedingTitle(sentences, index);
+    const rawSentences = splitSentences(bodyText);
+    const cleanedSentences = [];
+
+    // 1. 단순 족보/가족관계 나열 전용 감지 정규식
+    const genealogyRegex = /(의\s*(아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|차녀|장녀)(이다|이었다|이며|이고|\s|\.))|(슬하에)|(결혼하(여|였|고))|(출생하|태어났)/;
+
+    rawSentences.forEach((sentence, index) => {
+        let text = cleanWikiText(sentence);
+        if (!text || isIncompleteSentence(text)) return;
+
+        if (/^[《<〈“"'`].*[》>〉”"'`]$/.test(text)) {
+            return;
+        }
+
+        if (text.length < 15 || text.length > 200) return;
+
+        let processedText = text;
+        if (/^(이|그)\s*중\b/.test(processedText) || !/^[가-힣a-zA-Z0-9\s《<〈“"'\(\)]+(이|가|은|는|을|를|의|에|에서)/.test(processedText)) {
+            const foundTitle = findPrecedingTitle(rawSentences, index);
             if (foundTitle) {
-                // 예: "단편 중 두 작품은..." -> "《작품명》의 단편 중 두 작품은..."
-                processedSentence = resolveVagueReference(processedSentence, foundTitle);
+                processedText = resolveVagueReference(processedText, foundTitle);
             } else {
-                // 앞 문장에서도 제목을 못 찾았으면 맥락 결여로 제외
-                return { sentence: processedSentence, index, score: -100 };
+                return;
             }
         }
 
-        // [맥락 파괴 / 짤린 미완성 문장 / 상대 시점 문장 제외]
-        if (
-            contextBreakRegex.test(processedSentence) ||
-            relativeTimeRegex.test(processedSentence) ||
-            isIncompleteSentence(processedSentence) ||
-            /(칭했다|두었다|슬하|고 한다|라 한다)\.?$/.test(processedSentence) ||
-            /^(이|그)\s+([가-힣]+)(이|가|은|는)\s+/.test(processedSentence)
-        ) {
-            return { sentence: processedSentence, index, score: -100 };
-        }
-
-        // [타인 주어 검증]
-        if (aliases.length > 0) {
-            const subjectMatch = processedSentence.match(/^([가-힣]{2,10})(?:은|는|이|가)\s+/);
-            if (subjectMatch) {
-                const subjectCandidate = subjectMatch[1].trim();
-                const isMainSubject = aliases.some(alias => {
-                    if (!alias) return false;
-                    const cleanA = alias.replace(/[\s\_\-]/g, "");
-                    const cleanS = subjectCandidate.replace(/[\s\_\-]/g, "");
-                    return cleanS.includes(cleanA) || cleanA.includes(cleanS);
-                });
-                const hasMainAliasInSentence = aliases.some(alias => alias && processedSentence.includes(alias));
-
-                if (!isMainSubject && !hasMainAliasInSentence) {
-                    return { sentence: processedSentence, index, score: -100 };
-                }
-            }
-        }
-
-        if (
-            relativeSubjectRegex.test(processedSentence) || deathPattern.test(processedSentence) 
-        ) {
-            return { sentence: processedSentence, index, score: -120 };
-        }
-
-        let score = 0;
-        const hasAlias = aliases.some(alias => alias && processedSentence.includes(alias));
-        const isRelativeSubject = relativeSubjectRegex.test(processedSentence);
-
-        if (hasAlias) score += 20;
-
-        if (isRelativeSubject && !hasAlias) {
-            score -= 15;
-        } else {
-            if (nutritionRegex.test(processedSentence)) score += 15; 
-        }
-
-        for (const keyword of IMPORTANT_KEYWORDS) {
-            if (processedSentence.includes(keyword)) score += 5;
-        }
-
-        if (/\d{3,4}년/.test(processedSentence)) score += 5;
-
-        const words = tokenize(processedSentence);
-        if (words.length === 0) return { sentence: processedSentence, index, score: -100 };
-
-        let overlap = 0;
-        for (const word of words) {
-            if (introWords.has(word)) overlap++;
-        }
-        
-        const overlapRate = overlap / Math.max(words.length, 1);
-        const maxOverlapLimit = nutritionRegex.test(processedSentence) ? 0.88 : 0.75;
-        if (overlapRate >= maxOverlapLimit) return { sentence: processedSentence, index, score: -100 };
-
-        if (processedSentence.length > 300) score -= 6;
-        if (processedSentence.length < 30) score -= 15; 
-
-        return { sentence: processedSentence, index, score };
+        cleanedSentences.push({ original: processedText, index });
     });
 
-    const validCandidates = scored.filter(item => item.score > 0 && item.sentence.length >= 25);
-    if (validCandidates.length === 0) return "";
+    if (cleanedSentences.length === 0) return "";
 
-    if (validCandidates.length <= 4) {
-        return validCandidates
-            .sort((a, b) => b.score - a.score)
-            .map(item => item.sentence)
-            .join(" ");
+    // 2. 문장별 점수 계산
+    const candidates = cleanedSentences.map(({ original, index }) => {
+        let score = calculateBasicNutritionScore(original);
+
+        // 단순 가족나열/족보 문장은 감점 (-100)
+        const hasNutrition = /(독립|전투|운동|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|승리|패배|결성|폐지|창립|설립)/.test(original);
+        if (!hasNutrition && genealogyRegex.test(original)) {
+            score -= 100;
+        }
+
+        if (original.length >= 25 && original.length <= 120) score += 5;
+
+        return { sentence: original, index, score };
+    });
+
+    // 3. 유효 점수(0점 초과) 문장 필터링
+    const validCandidates = candidates.filter(item => item.score > 0);
+
+    // 🌟 핵심 검증: 알짜 정보(15점 이상)를 담은 문장이 '최소 1개'도 없다면 이 본문은 문제 출제 불가능(탈락) 처리!
+    const highQualityCandidates = validCandidates.filter(item => item.score >= 15);
+    if (highQualityCandidates.length === 0) {
+        return ""; // 출제 불가 (스킵)
     }
 
-    const totalCount = sentences.length;
-    const boundary1 = Math.floor(totalCount / 3);
-    const boundary2 = Math.floor((totalCount * 2) / 3);
+    validCandidates.sort((a, b) => b.score - a.score);
 
-    const zones = [
-        { id: 1, candidates: [] },
-        { id: 2, candidates: [] },
-        { id: 3, candidates: [] }
-    ];
+    const selected = validCandidates.slice(0, count);
+    selected.sort((a, b) => a.index - b.index);
 
-    validCandidates.forEach(item => {
-        if (item.index < boundary1) {
-            zones[0].candidates.push(item);
-        } else if (item.index < boundary2) {
-            zones[1].candidates.push(item);
-        } else {
-            zones[2].candidates.push(item);
-        }
-    });
-
-    let maxZoneIndex = 0;
-    let maxCandidateCount = -1;
-
-    zones.forEach((zone, idx) => {
-        if (zone.candidates.length > maxCandidateCount) {
-            maxCandidateCount = zone.candidates.length;
-            maxZoneIndex = idx;
-        }
-    });
-
-    const selectedItems = [];
-
-    zones.forEach((zone, idx) => {
-        if (zone.candidates.length === 0) return;
-        zone.candidates.sort((a, b) => b.score - a.score);
-        const takeCount = (idx === maxZoneIndex) ? 2 : 1;
-        const picked = zone.candidates.slice(0, takeCount);
-        selectedItems.push(...picked);
-    });
-
-    return selectedItems
-        .sort((a, b) => a.index - b.index)
-        .map(item => item.sentence)
-        .join(" ");
+    return selected.map(item => item.sentence).join(" ");
 }
 
+/**
+ * 최종 지문 구성 함수
+ * 💡 문제 출제에 적합하지 않은 토막글/가족 나열글이면 "" (빈값) 반환!
+ */
 export function buildDescription(
     introText,
     bodyText,
@@ -272,57 +193,25 @@ export function buildDescription(
     introThreshold = 150,
     maxLength = 1100
 ) {
-    const rawIntro = filterOtherPersonDeath(cleanWikiText(introText), aliases);
-    const rawBody = filterOtherPersonDeath(cleanWikiText(bodyText), aliases);
+    let intro = cleanWikiText(firstSentence);
 
-    const intro = normalizeSpace(rawIntro || "");
-    const body = normalizeSpace(rawBody || "");
-
-    if (!intro && !body) return "";
-
-    const cleanSlice = (text) => {
-        if (text.length <= maxLength) return text;
-        const sliced = text.slice(0, maxLength);
-        const lastPeriod = sliced.lastIndexOf(".");
-        if (lastPeriod > maxLength * 0.5) {
-            return sliced.slice(0, lastPeriod + 1).trim();
-        }
-        return sliced;
-    };
-
-    const totalLength = intro.length + body.length;
-    if (totalLength < 350) {
-        const combined = normalizeSpace([intro, body].filter(Boolean).join(" "));
-        return cleanSlice(combined);
+    // 서두 개요 청소
+    if (intro && aliases.length > 0) {
+        intro = filterOtherPersonDeath(intro, aliases);
     }
 
-    const introSentences = intro
-        .split(/(?<!\b[a-zA-Z])([.!?。！？])\s+/)
-        .reduce((acc, part, i, arr) => {
-            if (i % 2 === 0 && part.length > 0) {
-                const nextPart = arr[i + 1];
-                acc.push(nextPart ? part + nextPart : part);
-            }
-            return acc;
-        }, [])
-        .map(s => s.trim())
-        .filter(Boolean);
+    // 본문에서 알짜 문장 추출
+    const extra = extractImportantSentences(bodyText, bodySentencesCount);
 
-    const validIntroSentences = introSentences.filter(s => !isIncompleteSentence(s));
-    const firstSentence = validIntroSentences[0] || introSentences[0] || "";
-
-    let extra = "";
-    if (body && body.length > 40) {
-        extra = extractImportantSentences(body, intro, aliases, extraCount);
+    // 🌟 최종 탈락 판정:
+    // 본문에서 알짜 문장이 전혀 추출되지 않았고(extra === ""), 서두 역시 주요 업적 키워드가 없거나 지나치게 짧다면
+    // 문제 출제 지문으로서 '탈락' 처리하여 빈 문자열("")을 반환합니다.
+    const introHasNutrition = /(독립|전투|운동|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|승리|패배|결성|폐지|창립|설립)/.test(intro);
+    
+    if (!extra && !introHasNutrition) {
+        return ""; // ❌ 문제 생성 대상에서 탈락!
     }
 
-    if (!extra) {
-        const remainingIntro = introSentences.slice(1).join(" ");
-        if (remainingIntro) {
-            extra = extractImportantSentences(remainingIntro, firstSentence, aliases, extraCount);
-        }
-    }
-
-    const merged = normalizeSpace([firstSentence, extra].filter(Boolean).join(" "));
-    return cleanSlice(merged);
+    const combined = [intro, extra].filter(Boolean).join(" ");
+    return cleanWikiText(combined);
 }
