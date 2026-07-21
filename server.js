@@ -274,8 +274,8 @@ async function fillCache() {
             targetTitles = shuffle([...vipTitles, ...newTitles]);
 
             if (targetTitles.length > 0) {
-                for (let i = 0; i < targetTitles.length; i += 5) { 
-                    const batch = targetTitles.slice(i, i + 5);
+                for (let i = 0; i < targetTitles.length; i += 4) { 
+                    const batch = targetTitles.slice(i, i + 4);
                     let detailRes;
 
                     try {
@@ -377,7 +377,7 @@ async function fillCache() {
                         }
                     }
                 }
-                await new Promise(resolve => setTimeout(resolve, 460));
+                await new Promise(resolve => setTimeout(resolve, 780));
             }
         } catch (e) {
             if (e.response?.status === 429) {
