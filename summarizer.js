@@ -185,6 +185,11 @@ export function extractImportantSentences(bodyText, count = 2) {
  * 최종 지문 구성 함수
  * 💡 문제 출제에 적합하지 않은 토막글/가족 나열글이면 "" (빈값) 반환!
  */
+
+const GENEALOGY_REGEX = /(의\s*(아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|차녀|장녀)(이다|이었다|이며|이고|\s|\.))|(슬하에)|(결혼하(여|였|고))|(출생하|태어났)/;
+
+// 영양가(업적/사건 등) 감지 정규식
+const NUTRITION_REGEX = /(독립|전투|운동|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|승리|패배|결성|폐지|창립|설립|의병|관찰사|벼슬|임진왜란)/;
 export function buildDescription(
     introText,
     bodyText,
