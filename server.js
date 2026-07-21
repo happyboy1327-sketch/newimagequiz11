@@ -363,7 +363,7 @@ async function fillCache() {
                             if (LAST_PLAYED.includes(pageData.title)) continue;
                             if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) continue;
 
-                            const fullExtract = pageData.extract;
+                            const fullExtract = sanitizedExtract; 
                             const firstHeaderIndex = fullExtract.search(/==+/);
                             
                             let exintro = fullExtract;
