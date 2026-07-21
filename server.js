@@ -80,14 +80,36 @@ function makeNameAliases(title) {
 
 function isValidImageUrl(url) {
     if (!url || typeof url !== "string") return false;
-    const lowerUrl = url.toLowerCase();
 
-    // SVG 및 차단 키워드 포함 시 배제
-    if (lowerUrl.includes(".svg") || HUMAN_IMAGE_BLOCKLIST.test(lowerUrl)) {
+    // 1. URL 인코딩(%EC%B9%BC 등) 해제하여 한글 파일명 추출
+    let decodedUrl = url.toLowerCase();
+    try {
+        decodedUrl = decodeURIComponent(decodedUrl);
+    } catch (e) {
+        // 변환 실패 시 원본 유지
+    }
+
+    // 2. SVG 및 아이콘 원천 차단
+    if (decodedUrl.includes(".svg") || decodedUrl.includes("picto")) return false;
+
+    // 3. 뚫렸던 칼, 깃털, 무기, 상징물 키워드 (한글/영문 통합)
+    const forbiddenKeywords = [
+        // 영문 무기/사물/상징 키워드
+        "coat_of_arms", "emblem", "flag", "icon", "grave", "tomb", "map", 
+        "signature", "statue", "bust", "sword", "sabre", "saber", "weapon", 
+        "feather", "quill", "pen", "symbol", "insignia", "rank", "military", 
+        "ribbon", "award", "shield", "badge", "crest", "coin", "medal", "cross",
+        // 한글 무기/사물/상징 키워드 (디코딩 후 검사)
+        "칼", "검", "깃털", "무기", "훈장", "계급", "상징", "지도", "동상", 
+        "흉상", "묘", "도장", "서명", "깃발", "휘장", "문장", "초상", "영정"
+    ];
+
+    if (forbiddenKeywords.some(keyword => decodedUrl.includes(keyword))) {
         return false;
     }
 
-    return /\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(lowerUrl);
+    // 4. 확장자 최종 확인
+    return /\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(decodedUrl);
 }
 
 function extractInfoboxImage(html) {
