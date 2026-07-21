@@ -303,14 +303,6 @@ async function fillCache() {
                     const normalizedPages = pages.filter(p => !p.missing);
 
                     for (const pageData of normalizedPages) {
-                        if (QUIZ_CACHE.length >= CACHE_SIZE) break;
-
-                        if (!pageData.extract || pageData.extract.length < 60) continue;
-                        if (/(선수|축구|야구|농구|배구|골프|테니스|수영|양궁|유도|체육|올림픽|프로게이머|대학교수|명예교수|교수)/.test(pageData.extract)) continue;
-                        const aliases = makeNameAliases(pageData.title);
-                        const pageImageName = (pageData.pageimage || "").toLowerCase();
-
-                        for (const pageData of normalizedPages) {
     if (QUIZ_CACHE.length >= CACHE_SIZE) break;
 
     if (!pageData.extract || pageData.extract.length < 60) continue;
@@ -319,26 +311,28 @@ async function fillCache() {
     const aliases = makeNameAliases(pageData.title);
     const pageImageName = (pageData.pageimage || "").toLowerCase();
 
-    // 1. 건물/사적지 고유명사나 숫자로 끝나는지 검사하는 정규식
-    const isBuildingOrNumber = (url) => /(sa|won|gung|neung|reung|myo|bi|jeon|gak|ru|ji|shrine|tomb|statue|park|site|사|원|궁|능|묘|비|전|각|루|지|\d+)\.[a-z]+$/i.test(url);
+    // 🌟 사당/건물/숫자 파일명 잡는 정규식 (함수 대신 패턴 변수 하나만 선언)
+    const badImgRegex = /(sa|won|gung|neung|reung|myo|bi|jeon|gak|ru|ji|shrine|tomb|statue|park|site|사|원|궁|능|묘|비|전|각|루|지|\d+)\.[a-z]+$/i;
 
-    // 2. 대표 이미지 가져오기
     let imageUrl = pageData.thumbnail?.source;
 
-    // 3. 대표 이미지가 없거나, 차단목록, 사적지/숫자, 유효하지 않은 이미지면 대체 이미지 검색
+    // 1. 대표 이미지가 없거나, 차단목록, 사적지/숫자 사진, 유효하지 않은 사진이면 대체 이미지 검색
     if (
         !imageUrl || 
         HUMAN_IMAGE_BLOCKLIST.test(pageImageName) || 
         !isValidImageUrl(imageUrl) ||
-        isBuildingOrNumber(imageUrl)
+        badImgRegex.test(imageUrl.split('?')[0])
     ) {
         imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
     }
 
-    // 4. 최종 이미지 검사 (없거나, 사적지/숫자이거나, 유효하지 않은 이미지면 건너뜀)
-    if (!imageUrl || isBuildingOrNumber(imageUrl) || !isValidImageUrl(imageUrl)) {
+    // 2. 최종 이미지 검사 (없거나, 사적지/숫자 사진이거나, 유효하지 않으면 건너뜀)
+    if (!imageUrl || !isValidImageUrl(imageUrl) || badImgRegex.test(imageUrl.split('?')[0])) {
         continue;
     }
+
+    // ... 이 뒤에 기존 QUIZ_CACHE.push 로직 진행 ...
+}
 
     // ... 이 뒤에 QUIZ_CACHE.push 로직 계속 ...
                         
