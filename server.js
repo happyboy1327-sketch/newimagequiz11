@@ -34,7 +34,8 @@ process.on('SIGTERM', () => {
 });
 
 // --- 설정 ---
-const CACHE_SIZE = 40;        
+const CACHE_SIZE = 40;
+const SERVER_ID = Math.random().toString(36).slice(2,8);
 let QUIZ_CACHE = [];
 let LAST_PLAYED = [];
 let isCaching = false;
@@ -245,6 +246,7 @@ function createMaskedHint(title, extract) {
 // 캐시 충전 및 데이터 가공 로직
 // =======================================================
 async function fillCache() {
+    console.log("SERVER_ID:", SERVER_ID, "PID:", process.pid);
     console.log("PID:", process.pid);
     if (isCaching) return;
     if (QUIZ_CACHE.length >= CACHE_SIZE) return;
@@ -435,6 +437,7 @@ if (badImgRegex.test(imageUrl.split('?')[0])) {
 
     QUIZ_CACHE = shuffle(QUIZ_CACHE);
     console.log("fillCache 종료", QUIZ_CACHE.length);
+    console.log("fillCache 종료", SERVER_ID, QUIZ_CACHE.length);
     isCaching = false;
 
     if (QUIZ_CACHE.length <= 30) {
