@@ -325,8 +325,19 @@ async function fillCache() {
                         if (/(대학교수|명예교수|석좌교수|교수|교육자)/.test(pageData.extract)) continue;
 
                         const aliases = makeNameAliases(pageData.title);
-                        
-                        let imageUrl = pageData.thumbnail?.source;
+                        let imageUrl = null;
+
+                        if (pageData.thumbnail?.source &&
+                            isValidImageUrl(pageData.thumbnail.source)) {
+
+                             imageUrl = pageData.thumbnail.source;
+
+                             } else {
+
+                             imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
+                      }
+
+                      if (!imageUrl) continue;
                         console.log("chatgpt 병신");
                         console.log("thumbnail =", imageUrl);
                         console.log("isValid =", isValidImageUrl(imageUrl));
