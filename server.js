@@ -312,11 +312,14 @@ async function fillCache() {
                         if (/(대학교수|명예교수|석좌교수|교수|교육자)/.test(pageData.extract)) continue;
 
                         const aliases = makeNameAliases(pageData.title);
+                        
                         let imageUrl = pageData.thumbnail?.source;
+                        console.log("thumbnail =", imageUrl);
 
                         // 🌟 여기서부터 썸네일이 SVG이거나 아예 없으면 즉시 대체 이미지 탐색 + 철저한 검증
                         if (!imageUrl || !isValidImageUrl(imageUrl)) {
                             imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
+                            console.log("alternative =", imageUrl);
                             if (!imageUrl || !isValidImageUrl(imageUrl)) continue;
                         }
 
