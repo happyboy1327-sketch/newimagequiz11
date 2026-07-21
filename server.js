@@ -268,7 +268,7 @@ async function fillCache() {
             const newTitles = candidates
                 .filter(cand => !cand.title.includes(":") && !QUIZ_CACHE.some(c => c.name === cand.title) && !LAST_PLAYED.includes(cand.title))
                 .filter(cand => !/\(.*\)|선수|음악|기업|영화|배우|가수/.test(cand.title))
-                .sort(() => Math.random() - 0.5)
+                .sort(() => Math.random() - 0.4)
                 .map(c => c.title)
                 .slice(0, 8);
 
