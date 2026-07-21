@@ -107,8 +107,8 @@ function isValidImageUrl(url) {
         "feather", "quill", "pen", "symbol", "insignia", "rank", "military", 
         "ribbon", "award", "shield", "badge", "crest", "coin", "medal", "cross",
         // 한글 무기/사물/상징 키워드 (디코딩 후 검사)
-        "칼", "검", "깃털", "무기", "훈장", "계급", "상징", "지도", "동상", 
-        "흉상", "묘", "도장", "서명", "깃발", "휘장", "문장", "초상", "영정"
+        "칼", "검", "깃털", "무기", "훈장", "계급", "상징", "지도", 
+      "묘", "도장", "서명", "깃발", "휘장", "문장"
     ];
 
     if (forbiddenKeywords.some(keyword => decodedUrl.includes(keyword))) {
@@ -355,10 +355,20 @@ async function fillCache() {
                            }
 
                           // 2. 최종 이미지 검사 (없거나, 사적지/숫자 사진이거나, 유효하지 않으면 건너뜀)
-                          if (!imageUrl || !isValidImageUrl(imageUrl) || badImgRegex.test(imageUrl.split('?')[0])) {
-                              console.log("최종탈락 이미지", pageData.title);
-                           continue;
-                         }
+                          if (!imageUrl) {
+    console.log("최종탈락: 이미지 없음", pageData.title);
+    continue;
+}
+
+if (!isValidImageUrl(imageUrl)) {
+    console.log("최종탈락: isValidImageUrl", pageData.title, imageUrl);
+    continue;
+}
+
+if (badImgRegex.test(imageUrl.split('?')[0])) {
+    console.log("최종탈락: badImgRegex", pageData.title, imageUrl);
+    continue;
+}
 
 
                         if (LAST_PLAYED.includes(pageData.title)) continue;
