@@ -187,6 +187,8 @@ async function findAlternativeHumanImage(title, aliases) {
 
         for (const target of batch) {
             const url = urlMap.get(target);
+            console.log(pageData.pageimage);
+            console.log(imageUrl);
             if (url) return url;
         }
     }
@@ -324,6 +326,9 @@ async function fillCache() {
                         }
 
                         if (imageUrl) {
+                            console.log("PAGE =", pageData.title);
+                            console.log("PAGEIMAGE =", pageData.pageimage);
+                            console.log("IMAGE =", imageUrl);
                             if (LAST_PLAYED.includes(pageData.title)) continue;
                             if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) continue;
 
