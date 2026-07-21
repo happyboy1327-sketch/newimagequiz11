@@ -248,6 +248,19 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
  * @param {number} maxLength 최종 최대 길이
  * @returns {string}
  */
+function cleanWikiText(text) {
+    if (!text) return "";
+
+    return text
+        .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
+        .replace(/\((일본어|한자|영어|중국어|프랑스어|독일어|러시아어):\s*.*?\)/gi, "")
+        .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "")
+        .replace(/\(\s*\)/g, "")
+        .replace(/\s+/g, " ")
+        .replace(/\s+\./g, ".")
+        .trim();
+}
+
 function filterOtherPersonDeath(text, aliases = []) {
     if (!text) return "";
     const sentences = text.split(/(?<=[.!?])\s+/);
