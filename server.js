@@ -397,8 +397,7 @@ async function fillCache() {
     if (
         !imageUrl || 
         HUMAN_IMAGE_BLOCKLIST.test(pageImageName) || 
-        !isValidImageUrl(imageUrl) ||
-        badImgRegex.test(imageUrl.split('?')[0])
+        !isValidImageUrl(imageUrl) )
                           ) {
                             imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
                            }
@@ -410,12 +409,12 @@ async function fillCache() {
 }
 
             if (!isValidImageUrl(imageUrl)) {
-                         console.log("최종탈락 I: isValidImageUrl", pageData.title, imageUrl);
+                         console.log("최종탈락: isValidImageUrl", pageData.title, imageUrl);
                          continue;
                        }
 
 if (isCulturalSiteImage(imageUrl)) {
-                            console.log("최종탈락 II (문화재 썸네일 감지됨):", pageData.title, imageUrl);
+                            console.log("최종탈  (문화재 썸네일 감지됨):", pageData.title, imageUrl);
                             continue;
                         }
 
