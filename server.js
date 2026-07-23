@@ -86,6 +86,48 @@ function makeNameAliases(title) {
     return [...new Set(aliases)];
 }
 
+// 🌟 새로 추가된 문화재/사적지 정밀 필터링 함수
+function isCulturalSiteImage(url) {
+    if (!url || typeof url !== "string") return false;
+
+    let filename = url.split('?')[0];
+    try {
+        filename = decodeURIComponent(filename); // [추가] 퍼센트 인코딩된 한글 파일명 자동 해제
+    } catch (e) {}
+
+    // [추가] 파일명에서 불필요한 경로, 확장자, '파일:' 접두사 정제
+    let clean = filename
+        .replace(/^.*[\\/]/, '')
+        .replace(/^파일:/i, '')
+        .replace(/\.[^/.]+$/, '')
+        .replace(/[\s_.-]+\d+$/g, '')
+        .trim();
+
+    // 1. 확실한 문화재/건축물 영문 키워드 차단
+    const absoluteSiteRegex = /(palace|temple|shrine|tomb|statue|heritage|sanctuary|sadaang|gyeongbok|bulguk|seokguram)/i;
+    if (absoluteSiteRegex.test(clean)) return true;
+
+    // 2. 단어 분리 검사
+    const tokens = clean.split(/[\s_.-]+/).filter(Boolean);
+
+    // [추가] 인물명 보호 (Mother_Teresa, King_Sejong 등 직함 포함 시 통과)
+    const personTitles = new Set(['mother', 'king', 'queen', 'saint', 'president', 'actor', 'doctor', 'prof']);
+    if (tokens.some(t => personTitles.has(t.toLowerCase()))) return false;
+
+    // [추가] 2글자 이상 4글자 이하 '사' 단어 필터링 (예: 범어사, 불국사, 향현사 등)
+    const koreanSaRegex = /^[가-힣]{1,3}사$/;
+
+    // [추가] 기타 한글/영문 문화재 접미사 감지
+    const otherSiteRegex = /([가-힣]{2,}(궁|능|릉|묘|각|루)$|사찰|서원|유적지)/;
+    const englishSiteSuffix = /(gung|neung|reung|myo|sadaang|hyeonsa|guksa)$/i;
+
+    return tokens.some(token => 
+        koreanSaRegex.test(token) || 
+        otherSiteRegex.test(token) || 
+        englishSiteSuffix.test(token)
+    );
+}
+
 function isValidImageUrl(url) {
     if (!url || typeof url !== "string") return false;
 
@@ -102,14 +144,12 @@ function isValidImageUrl(url) {
 
     // 3. 뚫렸던 칼, 깃털, 무기, 상징물 키워드 (한글/영문 통합)
     const forbiddenKeywords = [
-        // 영문 무기/사물/상징 키워드
         "coat_of_arms", "emblem", "flag", "icon", "grave", "tomb", "map", 
         "signature", "statue", "bust", "sword", "sabre", "saber", "weapon", 
         "feather", "quill", "pen", "symbol", "insignia", "rank", "military", 
-        "ribbon", "award", "shield", "badge", "crest", "coin", "medal", "cross",
-        // 한글 무기/사물/상징 키워드 (디코딩 후 검사)
+        "ribbon", "award", "shield", "badge", "crest", "coin", "cross", // [수정] 차단 키워드 추가
         "칼", "검", "깃털", "무기", "훈장", "계급", "상징", "지도", 
-      "묘", "도장", "서명", "깃발", "휘장", "문장"
+        "묘", "도장", "서명", "깃발", "휘장", "문장"
     ];
 
     if (forbiddenKeywords.some(keyword => decodedUrl.includes(keyword))) {
@@ -136,7 +176,7 @@ async function findAlternativeHumanImage(title, aliases) {
             params: { title, action: "render" }
         });
         const imageUrl = extractInfoboxImage(htmlRes.data);
-        if (imageUrl && isValidImageUrl(imageUrl)) {
+        if (imageUrl && isValidImageUrl(imageUrl) && !isCulturalSiteImage(imageUrl)) {
             let imageName = imageUrl.toLowerCase();
             try { imageName = decodeURIComponent(imageName); } catch (e) {}
             if (!HUMAN_IMAGE_BLOCKLIST.test(imageName)) {
@@ -165,7 +205,7 @@ async function findAlternativeHumanImage(title, aliases) {
 
     for (const img of images) {
         const name = img.title.replace(/^File:/i, "");
-        if (!IMAGE_EXT_RE.test(name) || HUMAN_IMAGE_BLOCKLIST.test(name)) continue;
+        if (!IMAGE_EXT_RE.test(name) || HUMAN_IMAGE_BLOCKLIST.test(name) || isCulturalSiteImage(name)) continue;
         targets.push(img.title);
     }
 
@@ -193,7 +233,7 @@ async function findAlternativeHumanImage(title, aliases) {
     isValidImageUrl(url),
     HUMAN_IMAGE_BLOCKLIST.test(pageTitle)
 );
-            if (url && isValidImageUrl(url) && !HUMAN_IMAGE_BLOCKLIST.test(pageTitle)) {
+            if (url && isValidImageUrl(url) && !HUMAN_IMAGE_BLOCKLIST.test(pageTitle) && !isCulturalSiteImage(url)) {
                 urlMap.set(pageTitle, url);
             }
         }
@@ -349,7 +389,7 @@ async function fillCache() {
     const pageImageName = (pageData.pageimage || "").toLowerCase();
 
     // 🌟 사당/건물/숫자 파일명 잡는 정규식 (함수 대신 패턴 변수 하나만 선언)
-    const badImgRegex = /(won|gung|neung|reung|myo|bi|jeon|gak|ru|si|ji|shrine|tomb|statue|park|site|사|원|궁|능|묘|비|전|각|루|지)\.[a-z]+$/i;
+    
 
     let imageUrl = pageData.thumbnail?.source;
 
@@ -369,15 +409,15 @@ async function fillCache() {
     continue;
 }
 
-if (!isValidImageUrl(imageUrl)) {
-    console.log("최종탈락: isValidImageUrl", pageData.title, imageUrl);
-    continue;
-}
+            if (!isValidImageUrl(imageUrl)) {
+                         console.log("최종탈락 I: isValidImageUrl", pageData.title, imageUrl);
+                         continue;
+                       }
 
-if (badImgRegex.test(imageUrl.split('?')[0])) {
-    console.log("최종탈락: badImgRegex", pageData.title, imageUrl);
-    continue;
-}
+if (isCulturalSiteImage(imageUrl)) {
+                            console.log("최종탈락 II (문화재 썸네일 감지됨):", pageData.title, imageUrl);
+                            continue;
+                        }
 
 
                         if (LAST_PLAYED.includes(pageData.title)) continue;
