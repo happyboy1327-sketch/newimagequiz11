@@ -60,7 +60,7 @@ const LEGACY_VIP_LIST = [
 ];
 
 // 🌟 사물, 무기, 계급장, 상징물 차단 키워드 강화
-const HUMAN_IMAGE_BLOCKLIST = /coin|medal|seal|flag|coat_of_arms|emblem|tomb|temple|grave|map|signature|statue|bust|sword|sabre|poem|weapon|feather|quill|pen|symbol|icon|picto|insignia|rank|military|ribbon|award|painting|handwriting|drawing|sketch|illustration|calligraphy|landscape|gardenshield/i;
+const HUMAN_IMAGE_BLOCKLIST = /coin|medal|seal|flag|coat_of_arms|emblem|tomb|temple|grave|map|signature|statue|bust|sword|sabre|poem|weapon|feather|quill|pen|symbol|icon|picto|insignia|rank|military|ribbon|award|painting|handwriting|drawing|sketch|illustration|calligraphy|landscape|gardenshield|(?:^|[\s_./\\])(?:청|적|백|황|녹|파|남|흑|blue|red|green|yellow)\d+(?:px)?(?:\.|[\s_.-]|$)/i;
 const IMAGE_EXT_RE = /\.(jpg|jpeg|png|webp)$/i;
 const COMMONS_BATCH_SIZE = 14;
 
