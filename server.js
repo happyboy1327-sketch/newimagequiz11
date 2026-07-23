@@ -398,7 +398,7 @@ async function fillCache() {
         !imageUrl || 
         HUMAN_IMAGE_BLOCKLIST.test(pageImageName) || 
         !isValidImageUrl(imageUrl) )
-                          ) {
+                           {
                             imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
                            }
 
