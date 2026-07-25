@@ -147,7 +147,10 @@ function isValidImageUrl(url) {
         "coat_of_arms", "emblem", "flag", "icon", "grave", "tomb", "map", 
         "signature", "statue", "bust", "sword", "sabre", "saber", "weapon", 
         "feather", "quill", "pen", "symbol", "insignia", "rank", "military", 
-        "ribbon", "award", "shield", "badge", "crest", "coin", "cross", // [수정] 차단 키워드 추가
+        "ribbon", "award", "shield", "badge", "crest", "coin", "cross",
+        "black dot", "black_dot", "black-dot", "placeholder", "no image", "no_image",
+        "question book", "question_book",
+        "default", "missing",// [수정] 차단 키워드 추가
         "칼", "검", "깃털", "무기", "훈장", "계급", "상징", "지도", 
         "묘", "도장", "서명", "깃발", "휘장", "문장"
     ];
