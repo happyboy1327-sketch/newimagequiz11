@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import axios from "axios";
 import dotenv from "dotenv";
+import { load } from "cheerio";
 import { buildDescription } from "./summarizer.js";
 
 dotenv.config();
@@ -164,11 +165,25 @@ function isValidImageUrl(url) {
 }
 
 function extractInfoboxImage(html) {
-    const match = html.match(/<table[^>]*class="[^"]*infobox[\s\S]*?<img[^>]+src="([^"]+)"/i);
-    if (!match) return null;
-    let url = match[1];
-    if (url.startsWith("//")) url = "https:" + url;
-    return url;
+    const $ = load(html);
+
+    const infobox = $("table.infobox").first();
+    if (!infobox.length) return null;
+
+    for (const img of infobox.find("img")) {
+        let url = $(img).attr("src");
+        if (!url) continue;
+
+        if (url.startsWith("//")) {
+            url = "https:" + url;
+        }
+
+        if (isHumanPhoto(url)) {
+            return url;
+        }
+    }
+
+    return null;
 }
 
 async function findAlternativeHumanImage(title, aliases) {
