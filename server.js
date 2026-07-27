@@ -61,7 +61,9 @@ const LEGACY_VIP_LIST = [
 ];
 
 // 🌟 사물, 무기, 계급장, 상징물 차단 키워드 강화
-const HUMAN_IMAGE_BLOCKLIST = /coin|medal|seal|flag|coat_of_arms|emblem|tomb|temple|grave|map|signature|statue|bust|sword|sabre|poem|feather|quill|pen|symbol|icon|picto|insignia|rank|award|handwriting|drawing|sketch|illustration|calligraphy|landscape|gardenshield|(?:^|[\s_./\\])(?:청|적|백|황|녹|파|남|흑|blue|red|green|yellow)\d+(?:px)?(?:\.|[\s_.-]|$)/i;
+// 🌟 수정전: const HUMAN_IMAGE_BLOCKLIST = /coin|medal|...|rank|.../i;
+// 🌟 수정후: 단어 경계(\b) 및 구분자 적용
+const HUMAN_IMAGE_BLOCKLIST = /(?:^|[\s_./\\-])(?:coin|medal|seal|flag|coat_of_arms|emblem|tomb|temple|grave|map|signature|statue|bust|sword|sabre|poem|feather|quill|pen|symbol|icon|picto|insignia|rank|award|handwriting|drawing|sketch|illustration|calligraphy|landscape|gardenshield)(?:$|[\s_./\\-])|(?:^|[\s_./\\-])(?:청|적|백|황|녹|파|남|흑|blue|red|green|yellow)\d+(?:px)?(?:\.|[\s_.-]|$)/i;
 const IMAGE_EXT_RE = /\.(jpg|jpeg|png|webp)$/i;
 const COMMONS_BATCH_SIZE = 14;
 
@@ -156,7 +158,16 @@ function isValidImageUrl(url) {
         "묘", "도장", "서명", "깃발", "휘장", "문장"
     ];
 
-    if (forbiddenKeywords.some(keyword => decodedUrl.includes(keyword))) {
+    const hasForbiddenKeyword = forbiddenKeywords.some(keyword => {
+        // 영문 단어는 단어 경계(\b)를 사용하여 frank -> rank 오탐 방지
+        if (/^[a-z0-9_-]+$/i.test(keyword)) {
+            const regex = new RegExp(`(?:^|[\\s_./\\\\-])${keyword}(?:$|[\\s_./\\\\-])`, 'i');
+            return regex.test(decodedUrl);
+        }
+        return decodedUrl.includes(keyword);
+    });
+
+    if (hasForbiddenKeyword) {
         return false;
     }
 
