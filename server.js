@@ -180,9 +180,6 @@ function extractInfoboxImage(html) {
             url = "https:" + url;
         }
 
-        if (isHumanPhoto(url)) {
-            return url;
-        }
     }
 
     return null;
