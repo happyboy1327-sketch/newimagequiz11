@@ -153,7 +153,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         return;
     }
 
-    if (text.length > 200) {
+    if (text.length > 260) {
         console.log("❌ long", text.length, text);
         return;
     }
@@ -169,7 +169,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
             } else {
                 return;
             }
-        } else if (/^(이|그)\s*중\b/.test(processedText) || !/^[가-힣a-zA-Z0-9\s《<〈“"'\(\)]+(이|가|은|는|을|를|의|에|에서)/.test(processedText)) {
+        } else if (/^(이|그)\s*중\b/.test(processedText)) {
             const foundTitle = findPrecedingTitle(rawSentences, index);
             if (foundTitle) {
                 processedText = resolveVagueReference(processedText, foundTitle);
