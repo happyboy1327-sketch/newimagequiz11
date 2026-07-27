@@ -209,7 +209,7 @@ async function findAlternativeHumanImage(title, aliases) {
         const imageUrl = extractInfoboxImage(htmlRes.data);
         console.log("extractInfoboxImage 결과:", title, imageUrl);
 if (imageUrl) {
-    let imageName = imageUrl.toLowerCase();
+    let imageName = imageUrl.split("/").pop().toLowerCase();
     try { imageName = decodeURIComponent(imageName); } catch (e) {}
 
     console.log("isCulturalSiteImage:", title, isCulturalSiteImage(imageUrl));
