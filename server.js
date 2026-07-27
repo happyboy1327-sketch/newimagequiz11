@@ -199,7 +199,6 @@ if (imageUrl) {
     let imageName = imageUrl.toLowerCase();
     try { imageName = decodeURIComponent(imageName); } catch (e) {}
 
-    console.log("isHumanPhoto:", title, isHumanPhoto(imageUrl));
     console.log("isCulturalSiteImage:", title, isCulturalSiteImage(imageUrl));
     console.log("BLOCK:", title, HUMAN_IMAGE_BLOCKLIST.test(imageName));
 }
