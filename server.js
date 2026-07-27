@@ -217,35 +217,16 @@ async function findAlternativeHumanImage(title, aliases) {
             params: { title, action: "render" }
         });
         const imageUrl = extractInfoboxImage(htmlRes.data);
-        console.log("extractInfoboxImage 결과:", title, imageUrl);
-if (imageUrl) {
-    let imageName = imageUrl.split("/").pop().toLowerCase();
-    try { imageName = decodeURIComponent(imageName); } catch (e) {}
-
-    console.log("isCulturalSiteImage:", title, isCulturalSiteImage(imageUrl));
-    console.log("BLOCK:", title, HUMAN_IMAGE_BLOCKLIST.test(imageName));
-}
+        
         if (imageUrl && isValidImageUrl(imageUrl) && !isCulturalSiteImage(imageUrl)) {
-            let imageName = imageUrl.toLowerCase();
-            try { imageName = decodeURIComponent(imageName); } catch (e) {}
-            console.log("TEST STRING:", imageName);
-            console.log("REGEX:", HUMAN_IMAGE_BLOCKLIST);
-            console.log("MATCH:", imageName.match(HUMAN_IMAGE_BLOCKLIST));
-            console.log("BLOCK CHECK:", title, imageName, HUMAN_IMAGE_BLOCKLIST.test(imageName));
-            if (!HUMAN_IMAGE_BLOCKLIST.test(imageName)) {
-    console.timeEnd(`🖼️ 이미지 탐색 ${title}`);
-    return imageUrl;
-            }
+            console.timeEnd(`🖼️ 이미지 탐색 ${title}`);
+            return imageUrl;
         }
-    }  catch (e) {
-    console.log(
-      `⚠️ 인포박스 조회 실패:`,
-      title,
-      e.message,
-      e.response?.status
-    );
-}
+    } catch (e) {
+        console.log(`⚠️ 인포박스 조회 실패:`, title, e.message);
+    }
 
+    // Commons API 대체 검색
     let res;
     try {
         res = await axios.get("https://ko.wikipedia.org/w/api.php", {
@@ -259,11 +240,11 @@ if (imageUrl) {
     const page = Object.values(res.data?.query?.pages || {})[0];
     const images = page?.images;
     if (!images || images.length === 0) return null;
-    const targets = [];
 
+    const targets = [];
     for (const img of images) {
         const name = img.title.replace(/^File:/i, "");
-        if (!IMAGE_EXT_RE.test(name) || HUMAN_IMAGE_BLOCKLIST.test(name) || isCulturalSiteImage(name)) continue;
+        if (!IMAGE_EXT_RE.test(name) || isBlockedImageName(name) || isCulturalSiteImage(name)) continue;
         targets.push(img.title);
     }
 
@@ -280,34 +261,19 @@ if (imageUrl) {
         } catch (e) { continue; }
 
         const commonsPages = Object.values(info.data?.query?.pages || {});
-        const urlMap = new Map();
-
         for (const file of commonsPages) {
-            const pageTitle = file.title;
             const url = file.imageinfo?.[0]?.url;
-            console.log(
-    "COMMONS 후보:",
-    pageTitle,
-    isValidImageUrl(url),
-    HUMAN_IMAGE_BLOCKLIST.test(pageTitle)
-);
-            if (url && isValidImageUrl(url) && !HUMAN_IMAGE_BLOCKLIST.test(pageTitle) && !isCulturalSiteImage(url)) {
-                urlMap.set(pageTitle, url);
+            if (url && isValidImageUrl(url) && !isCulturalSiteImage(url)) {
+                console.timeEnd(`🖼️ 이미지 탐색 ${title}`);
+                return url;
             }
-        }
-
-        for (const target of batch) {
-            const url = urlMap.get(target);
-            if (url) {
-    console.timeEnd(`🖼️ 이미지 탐색 ${title}`);
-    return url;
-}
         }
     }
     console.timeEnd(`🖼️ 이미지 탐색 ${title}`);
     console.log("대체 이미지 실패:", title, "targets:", targets.length);
     return null;
 }
+   
 
 function createMaskedHint(title, extract) {
     let hintText = extract.substring(0, 350);
