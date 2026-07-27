@@ -223,18 +223,14 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
             if (uniqueCandidates.length >= count) break;
         }
     }
-   console.log("===== uniqueCandidates length =====", uniqueCandidates.length);
+   uniqueCandidates.sort((a, b) => a.index - b.index);
 
-   const result = uniqueCandidates.map(item => item.sentence).join(" ");
+const result = uniqueCandidates.map(item => item.sentence).join(" ");
 
-   console.log("===== extract result =====");
-   console.log(result);
-   console.log("===== extract result length =====", result.length);
+console.log("===== extract result =====");
+console.log(result);
 
-     return result;
-    uniqueCandidates.sort((a, b) => a.index - b.index);
-
-    return uniqueCandidates.map(item => item.sentence).join(" ");
+return result;
 }
 
 export function buildDescription(
