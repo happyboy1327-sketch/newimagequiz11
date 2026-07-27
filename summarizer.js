@@ -184,8 +184,8 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
         cleanedSentences.push({ original: processedText, index: targetIndex });
     });
-    console.log("===== cleanedSentences =====");
-    console.log(cleanedSentences);
+    console.log("===== cleanedSentences length =====", cleanedSentences.length);
+    console.log(JSON.stringify(cleanedSentences, null, 2));
 
 
     if (cleanedSentences.length === 0) return "";
