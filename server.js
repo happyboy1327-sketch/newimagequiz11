@@ -502,7 +502,7 @@ if (isCulturalSiteImage(imageUrl)) {
                             cleanIntro, 
                             cleanExtract, 
                             aliases, 
-                            3,   
+                            2,   
                             150, 
                             1100  
                         );
