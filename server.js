@@ -202,7 +202,7 @@ async function findAlternativeHumanImage(title, aliases) {
     return imageUrl;
             }
         }
-    catch (e) {
+    }  catch (e) {
     console.log(
       "⚠️ 인포박스 조회 실패:",
       title,
