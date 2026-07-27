@@ -223,7 +223,15 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
             if (uniqueCandidates.length >= count) break;
         }
     }
+   console.log("===== uniqueCandidates length =====", uniqueCandidates.length);
 
+   const result = uniqueCandidates.map(item => item.sentence).join(" ");
+
+   console.log("===== extract result =====");
+   console.log(result);
+   console.log("===== extract result length =====", result.length);
+
+     return result;
     uniqueCandidates.sort((a, b) => a.index - b.index);
 
     return uniqueCandidates.map(item => item.sentence).join(" ");
