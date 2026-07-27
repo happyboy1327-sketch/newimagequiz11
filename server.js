@@ -165,7 +165,6 @@ function isValidImageUrl(url) {
 }
 
 function extractInfoboxImage(html) {
-function extractInfoboxImage(html) {
     const $ = load(html);
 
     const infobox = $("table.infobox").first();
