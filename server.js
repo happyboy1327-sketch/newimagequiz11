@@ -194,6 +194,15 @@ async function findAlternativeHumanImage(title, aliases) {
             params: { title, action: "render" }
         });
         const imageUrl = extractInfoboxImage(htmlRes.data);
+        console.log("extractInfoboxImage 결과:", title, imageUrl);
+if (imageUrl) {
+    let imageName = imageUrl.toLowerCase();
+    try { imageName = decodeURIComponent(imageName); } catch (e) {}
+
+    console.log("isHumanPhoto:", title, isHumanPhoto(imageUrl));
+    console.log("isCulturalSiteImage:", title, isCulturalSiteImage(imageUrl));
+    console.log("BLOCK:", title, HUMAN_IMAGE_BLOCKLIST.test(imageName));
+}
         if (imageUrl && isValidImageUrl(imageUrl) && !isCulturalSiteImage(imageUrl)) {
             let imageName = imageUrl.toLowerCase();
             try { imageName = decodeURIComponent(imageName); } catch (e) {}
