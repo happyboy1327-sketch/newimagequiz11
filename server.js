@@ -218,6 +218,9 @@ if (imageUrl) {
         if (imageUrl && isValidImageUrl(imageUrl) && !isCulturalSiteImage(imageUrl)) {
             let imageName = imageUrl.toLowerCase();
             try { imageName = decodeURIComponent(imageName); } catch (e) {}
+            console.log("TEST STRING:", imageName);
+            console.log("REGEX:", HUMAN_IMAGE_BLOCKLIST);
+            console.log("MATCH:", imageName.match(HUMAN_IMAGE_BLOCKLIST));
             console.log("BLOCK CHECK:", title, imageName, HUMAN_IMAGE_BLOCKLIST.test(imageName));
             if (!HUMAN_IMAGE_BLOCKLIST.test(imageName)) {
     console.timeEnd(`🖼️ 이미지 탐색 ${title}`);
