@@ -286,11 +286,10 @@ else if (
     usedSecondSentence = true;
 }
 
-const remainingIntro = introSentences
+    let extra = "";
+    const remainingIntro = introSentences
     .slice(usedSecondSentence ? 2 : 1)
     .join(" ");
-    let extra = "";
-    const remainingIntro = introSentences.slice(firstSentence.includes(introSentences[1] || "") ? 2 : 1).join(" ");
     const targetBody = normalizeSpace([remainingIntro, body].filter(Boolean).join(" "));
 
     if (targetBody && targetBody.length > 20) {
