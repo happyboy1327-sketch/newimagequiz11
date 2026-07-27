@@ -204,7 +204,7 @@ async function findAlternativeHumanImage(title, aliases) {
         }
     }  catch (e) {
     console.log(
-      "⚠️ 인포박스 조회 실패:",
+      `⚠️ 인포박스 조회 실패:`,
       title,
       err.message,
       err.response?.status
