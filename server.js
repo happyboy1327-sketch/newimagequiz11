@@ -165,11 +165,14 @@ function isValidImageUrl(url) {
 }
 
 function extractInfoboxImage(html) {
+function extractInfoboxImage(html) {
     const $ = load(html);
 
     const infobox = $("table.infobox").first();
     console.log("infobox 존재:", infobox.length);
+
     if (!infobox.length) return null;
+
     console.log("infobox img 개수:", infobox.find("img").length);
 
     for (const img of infobox.find("img")) {
@@ -179,7 +182,19 @@ function extractInfoboxImage(html) {
         if (url.startsWith("//")) {
             url = "https:" + url;
         }
-         return url;
+
+        const name = decodeURIComponent(url.toLowerCase());
+
+        // 위키 인물 아이콘/서명/장식 이미지 제외
+        if (
+            name.includes("picto_infobox") ||
+            name.includes("signature") ||
+            name.endsWith(".svg")
+        ) {
+            continue;
+        }
+
+        return url;
     }
 
     return null;
