@@ -293,7 +293,12 @@ else if (
     const targetBody = normalizeSpace([remainingIntro, body].filter(Boolean).join(" "));
 
     if (targetBody && targetBody.length > 20) {
-        extra = extractImportantSentences(targetBody, extraCount);
+        extra = extractImportantSentences(
+    targetBody,
+    "",
+    aliases,
+    extraCount
+);
     }
 
     const merged = normalizeSpace([firstSentence, extra].filter(Boolean).join(" "));
