@@ -168,7 +168,9 @@ function extractInfoboxImage(html) {
     const $ = load(html);
 
     const infobox = $("table.infobox").first();
+    console.log("infobox 존재:", title, infobox.length);
     if (!infobox.length) return null;
+    console.log("infobox img 개수:", title, infobox.find("img").length);
 
     for (const img of infobox.find("img")) {
         let url = $(img).attr("src");
