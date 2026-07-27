@@ -150,7 +150,7 @@ function isValidImageUrl(url) {
         "feather", "quill", "pen", "symbol", "insignia", "rank", "military", 
         "ribbon", "award", "shield", "badge", "crest", "coin", "cross",
         "black dot", "black_dot", "black-dot", "placeholder", "no image", "no_image",
-        "question book", "question_book",
+        "question",
         "default", "missing",// [수정] 차단 키워드 추가
        "깃털", "훈장", "계급", "상징", "지도", 
         "묘", "도장", "서명", "깃발", "휘장", "문장"
@@ -391,6 +391,11 @@ async function fillCache() {
 
                     const pages = Object.values(detailRes.data.query?.pages || {});
                     console.log("DETAIL 응답:", JSON.stringify(pages[0]).substring(0, 300));
+                    console.log("================================");
+                    console.log("DETAIL TITLE:", pageData.title);
+                    console.log("DETAIL EXTRACT:");
+                    console.log(pageData.extract);
+                    console.log("================================");
                     const normalizedPages = pages.filter(p => !p.missing);
 
                     for (const pageData of normalizedPages) {
