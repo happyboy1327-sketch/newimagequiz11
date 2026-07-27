@@ -10,7 +10,7 @@ const NUTRITION_REGEX = /(독립|전투|운동|학설|발명|발견|창시|개�
 const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노년|보냈|생활했|향리|소일)/;
 
 // 🌟 [추가] 앞 맥락 없이는 의미가 깨지는 단독 지시어/연결어 시작 문장 차단
-const DANGLING_START_REGEX = /^(이(후|러한|와\s+같이)?|따라서|이에|반면/;
+const DANGLING_START_REGEX = /^(이(후|러한|와\s+같이)?|따라서|이에|반면)\b/;
 function normalizeSpace(text = "") {
     return String(text).replace(/\s+/g, " ").trim();
 }
