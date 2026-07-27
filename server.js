@@ -149,8 +149,7 @@ function isValidImageUrl(url) {
     const forbiddenKeywords = [
         "coat_of_arms", "emblem", "flag", "icon", "grave", "tomb", "map", 
         "signature", "statue", "bust", "sword", "sabre", "saber", "weapon", 
-        "feather", "quill", "pen", "symbol", "insignia", "rank", "military", 
-        "ribbon", "award", "shield", "badge", "crest", "coin", "cross",
+        "feather", "quill", "symbol", "insignia", "coin", "cross",
         "black dot", "black_dot", "black-dot", "placeholder", "no image", "no_image",
         "question",
         "default", "missing",// [수정] 차단 키워드 추가
