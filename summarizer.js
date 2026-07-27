@@ -131,11 +131,32 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
     const cleanedSentences = [];
 
     rawSentences.forEach((sentence, index) => {
-        let text = cleanWikiText(sentence);
-        if (!text || isIncompleteSentence(text)) return;
+    let text = cleanWikiText(sentence);
 
-        if (/^[《<〈“"'`].*[》>〉”"'`]$/.test(text)) return;
-        if (text.length < 15 || text.length > 200) return;
+    if (!text) {
+        console.log("❌ empty", sentence);
+        return;
+    }
+
+    if (isIncompleteSentence(text)) {
+        console.log("❌ incomplete", text);
+        return;
+    }
+
+    if (/^[《<〈“"'`].*[》>〉”"'`]$/.test(text)) {
+        console.log("❌ title", text);
+        return;
+    }
+
+    if (text.length < 15) {
+        console.log("❌ short", text, text.length);
+        return;
+    }
+
+    if (text.length > 200) {
+        console.log("❌ long", text.length, text);
+        return;
+    }
 
         let processedText = text;
         let targetIndex = index;
