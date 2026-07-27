@@ -531,7 +531,7 @@ app.get("/api/quiz", async (req, res) => {
 
         LAST_PLAYED.push(item.name);
         if (LAST_PLAYED.length > 16) LAST_PLAYED.shift(); 
-console.log("===== 응답 직전 item =====", JSON.stringify(item));
+
         res.json({ ...item, imageUrl: item.image, requestId });
 
     } catch (error) {
