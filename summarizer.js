@@ -270,10 +270,25 @@ export function buildDescription(
 
     const introSentences = splitSentences(intro);
     let firstSentence = introSentences[0] || "";
-    if (firstSentence.length < 50 && introSentences.length > 1) {
-        firstSentence = `${introSentences[0]} ${introSentences[1]}`;
-    }
+let usedSecondSentence = false;
 
+// 첫 문장이 너무 짧으면 두 번째 문장까지 포함
+if (firstSentence.length < 50 && introSentences.length > 1) {
+    firstSentence += " " + introSentences[1];
+    usedSecondSentence = true;
+}
+// 두 번째 문장이 대표 업적이라면 함께 포함
+else if (
+    introSentences.length > 1 &&
+    /(창시자|제정|대표|설립|창립|발명|발견|창안|업적|노벨|수상|혁명|독립|창조|고안)/.test(introSentences[1])
+) {
+    firstSentence += " " + introSentences[1];
+    usedSecondSentence = true;
+}
+
+const remainingIntro = introSentences
+    .slice(usedSecondSentence ? 2 : 1)
+    .join(" ");
     let extra = "";
     const remainingIntro = introSentences.slice(firstSentence.includes(introSentences[1] || "") ? 2 : 1).join(" ");
     const targetBody = normalizeSpace([remainingIntro, body].filter(Boolean).join(" "));
