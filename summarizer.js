@@ -28,7 +28,7 @@ function cleanWikiText(text) {
 
 function isIncompleteSentence(sentence) {
     if (!sentence) return true;
-    const text = sentence.trim();
+     text = sentence.trim();
     const validEndingRegex = /(다|냐|까|요|죠|자|라|며|음|임|함|됨|성|상|위|중)\.?$/;
     return !validEndingRegex.test(text);
 }
@@ -265,6 +265,8 @@ export function buildDescription(
     const totalLength = intro.length + body.length;
     if (totalLength < 350) {
         const combined = normalizeSpace([intro, body].filter(Boolean).join(" "));
+        console.log("===== BUILD DESCRIPTION SHORT DEBUG =====");
+    console.log("COMBINED:", combined);
         return cleanSlice(combined);
     }
 
@@ -302,5 +304,9 @@ else if (
     }
 
     const merged = normalizeSpace([firstSentence, extra].filter(Boolean).join(" "));
+    console.log("===== BUILD DESCRIPTION DEBUG =====");
+console.log("INTRO:", firstSentence);
+console.log("EXTRA:", extra);
+console.log("MERGED:", merged);
     return cleanSlice(merged);
 }
