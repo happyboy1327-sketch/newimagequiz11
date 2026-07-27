@@ -391,11 +391,7 @@ async function fillCache() {
 
                     const pages = Object.values(detailRes.data.query?.pages || {});
                     console.log("DETAIL 응답:", JSON.stringify(pages[0]).substring(0, 300));
-                    console.log("================================");
-                    console.log("DETAIL TITLE:", pageData.title);
-                    console.log("DETAIL EXTRACT:");
-                    console.log(pageData.extract);
-                    console.log("================================");
+                    
                     const normalizedPages = pages.filter(p => !p.missing);
 
                     for (const pageData of normalizedPages) {
