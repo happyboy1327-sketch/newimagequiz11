@@ -126,6 +126,8 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
     if (!bodyText || typeof bodyText !== "string") return "";
 
     const rawSentences = splitSentences(bodyText);
+    console.log("===== rawSentences =====");
+    console.log(rawSentences);
     const cleanedSentences = [];
 
     rawSentences.forEach((sentence, index) => {
@@ -161,6 +163,9 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
         cleanedSentences.push({ original: processedText, index: targetIndex });
     });
+    console.log("===== cleanedSentences =====");
+    console.log(cleanedSentences);
+
 
     if (cleanedSentences.length === 0) return "";
 
@@ -184,7 +189,8 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
         return { sentence: original, index, score };
     });
-
+    console.log("===== candidates =====");
+    console.table(candidates);
     candidates.sort((a, b) => b.score - a.score);
     
     const seen = new Set();
