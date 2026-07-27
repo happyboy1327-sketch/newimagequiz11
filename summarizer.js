@@ -292,7 +292,7 @@ else if (
     .join(" ");
     const targetBody = normalizeSpace([remainingIntro, body].filter(Boolean).join(" "));
 
-    if (targetBody && targetBody.length > 20) {
+    if (targetBody && targetBody.length > 12) {
         extra = extractImportantSentences(
     targetBody,
     "",
