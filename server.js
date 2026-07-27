@@ -168,9 +168,9 @@ function extractInfoboxImage(html) {
     const $ = load(html);
 
     const infobox = $("table.infobox").first();
-    console.log("infobox 존재:", title, infobox.length);
+    console.log("infobox 존재:", infobox.length);
     if (!infobox.length) return null;
-    console.log("infobox img 개수:", title, infobox.find("img").length);
+    console.log("infobox img 개수:", infobox.find("img").length);
 
     for (const img of infobox.find("img")) {
         let url = $(img).attr("src");
@@ -179,7 +179,7 @@ function extractInfoboxImage(html) {
         if (url.startsWith("//")) {
             url = "https:" + url;
         }
-
+         return url;
     }
 
     return null;
