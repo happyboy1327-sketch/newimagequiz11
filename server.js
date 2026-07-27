@@ -477,7 +477,11 @@ if (isCulturalSiteImage(imageUrl)) {
                             150, 
                             1100  
                         );
-                        console.log("캐시 추가 직전:", pageData.title, imageUrl, finalDescription?.length);
+                        console.log("PUSH 직전", {
+    title,
+    quizExists: !!quiz,
+    cacheLength: QUIZ_CACHE.length
+});
                         if (finalDescription) {
                             QUIZ_CACHE.push({
                                 name: pageData.title,
@@ -488,7 +492,9 @@ if (isCulturalSiteImage(imageUrl)) {
                         }
                     }
                 }
-                console.log("현재 캐시:", QUIZ_CACHE.length);
+                QUIZ_CACHE.push(quiz);
+
+console.log("PUSH 성공", QUIZ_CACHE.length);
                 await new Promise(resolve => setTimeout(resolve, 780));
             }
         } catch (e) {
