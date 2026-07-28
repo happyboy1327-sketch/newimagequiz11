@@ -130,9 +130,9 @@ function isValidImageUrl(url) {
 
     if (decodedUrl.includes(".svg") || decodedUrl.includes("picto")) return false;
 
-    const forbiddenKeywords = [
+    const Keywords = [
         "coat_of_arms", "emblem", "flag", "icon", "grave", "tomb", "map", 
-        "signature", "statue", "bust", "sword", "sabre", "saber", "weapon", 
+        "signature", "sword", "sabre", "saber", "weapon", 
         "feather", "quill", "symbol", "insignia", "coin", "cross",
         "black dot", "black_dot", "black-dot", "placeholder", "no image", "no_image",
         "question", "default", "missing",
@@ -140,7 +140,7 @@ function isValidImageUrl(url) {
         "묘", "도장", "서명", "깃발", "휘장", "문장"
     ];
 
-    const hasForbiddenKeyword = forbiddenKeywords.some(keyword => {
+    const hasKeyword = Keywords.some(keyword => {
         if (/^[a-z0-9_-]+$/i.test(keyword)) {
             const regex = new RegExp(`(?:^|[\\s_./\\\\-])${keyword}(?:$|[\\s_./\\\\-])`, 'i');
             return regex.test(decodedUrl);
