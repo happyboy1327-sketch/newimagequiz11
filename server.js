@@ -132,7 +132,7 @@ function isValidImageUrl(url) {
 
     const Keywords = [
         "coat_of_arms", "emblem", "flag", "icon", "grave", "tomb", "map", "moon",
-        "signature", "sword", "sabre", "saber", "weapon", 
+        "signature", "sword", "sabre", "saber", "weapon", "monument",
         "feather", "quill", "symbol", "insignia", "coin", "cross",
         "black dot", "black_dot", "black-dot", "placeholder", "no image", "no_image",
         "question", "default", "missing",
