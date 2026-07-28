@@ -445,9 +445,7 @@ async function fillCache() {
 
                         let cleanIntro = exintro.replace(/\s+/g, " ").trim();
 
-                        if (!cleanExtract) {
-                            cleanExtract = cleanIntro;
-                        }
+                        
 
                         const finalDescription = buildDescription(
                             cleanIntro, 
