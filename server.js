@@ -101,7 +101,7 @@ function isCulturalSiteImage(url) {
         .replace(/[\s_.-]+\d+$/g, '')
         .trim();
 
-    const absoluteSiteRegex = /(palace|temple|shrine|tomb|statue|heritage|sanctuary|sadaang|gyeongbok|bulguk|seokguram)/i;
+    const absoluteSiteRegex = /(palace|temple|shrine|tomb|heritage|sanctuary|sadaang|gyeongbok|bulguk|seokguram)/i;
     if (absoluteSiteRegex.test(clean)) return true;
 
     const tokens = clean.split(/[\s_.-]+/).filter(Boolean);
