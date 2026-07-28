@@ -344,6 +344,7 @@ async function fillCache() {
                                 action: "query",
                                 titles: batch.join("|"),
                                 prop: "extracts|pageimages",
+                                exlimit: "max",
                                 explaintext: 1,   
                                 redirects: 1,
                                 pithumbsize: 800,
@@ -364,7 +365,7 @@ async function fillCache() {
                     for (const pageData of normalizedPages) {
                         if (QUIZ_CACHE.length >= CACHE_SIZE) break;
 
-                        if (!pageData.extract || pageData.extract.length < 60) {
+                        if (!pageData.extract || pageData.extract.length < 20) {
                             console.log("탈락: extract 부족", pageData.title, pageData.extract?.length);
                             continue;
                         }
