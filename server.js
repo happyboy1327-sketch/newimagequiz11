@@ -449,7 +449,7 @@ async function fillCache() {
 
                         const finalDescription = buildDescription(
                             cleanIntro, 
-                            cleanExtract, 
+                            cleanExtract || "",
                             aliases, 
                             3,   
                             150, 
