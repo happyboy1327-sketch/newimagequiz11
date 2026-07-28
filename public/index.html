@@ -27,11 +27,25 @@
   button:disabled {background:#dee2e6; cursor:not-allowed;}
 
   #timer {
-    font-family: 'Chakra Petch', sans-serif;
-    font-size: 1.6rem;
-    font-weight: 700;
-    color: #f03e3e;
-    margin-bottom: 12px;
+  display: inline-block;
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #fa5252;
+  letter-spacing: 1px;
+
+  /* 글래스모피즘 (반투명 + 블러) 효과 */
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+
+  /* 은은한 유리 테두리와 그림자 */
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+
+  padding: 6px 20px;
+  border-radius: 20px;
+  margin-bottom: 16px;
   }
 
   #result {margin-top:20px; text-align:left;}
