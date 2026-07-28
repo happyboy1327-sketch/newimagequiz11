@@ -377,7 +377,6 @@ async function fillCache() {
                             console.log("탈락: extract 부족", pageData.title, pageData.extract?.length);
                             continue;
                         }
-                        if (/(선수|축구|야구|농구|배구|골프|테니스|수영|양궁|유도|체육|올림픽|프로게이머|대학교수|명예교수|교수)/.test(pageData.extract)) continue;
 
                         const aliases = makeNameAliases(pageData.title);
                         const pageImageName = (pageData.pageimage || "").toLowerCase();
