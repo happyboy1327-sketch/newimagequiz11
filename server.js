@@ -131,7 +131,7 @@ function isValidImageUrl(url) {
     if (decodedUrl.includes(".svg") || decodedUrl.includes("picto")) return false;
 
     const Keywords = [
-        "coat_of_arms", "emblem", "flag", "icon", "grave", "tomb", "map", 
+        "coat_of_arms", "emblem", "flag", "icon", "grave", "tomb", "map", "moon",
         "signature", "sword", "sabre", "saber", "weapon", 
         "feather", "quill", "symbol", "insignia", "coin", "cross",
         "black dot", "black_dot", "black-dot", "placeholder", "no image", "no_image",
