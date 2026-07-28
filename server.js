@@ -64,6 +64,10 @@ const HUMAN_IMAGE_BLOCKLIST = /(?:^|[\s_./\\-])(?:coin|medal|seal|flag|coat_of_a
 const IMAGE_EXT_RE = /\.(jpg|jpeg|png|webp)$/i;
 const COMMONS_BATCH_SIZE = 14;
 
+const VIP_IMAGE_FALLBACKS = {
+    "이순신": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/%EC%9D%B4%EC%88%9C%EC%8B%A0.jpg/1280px-%EC%9D%B4%EC%88%9C%EC%8B%A0.jpg"
+}
+
 function shuffle(array) {
     const arr = [...array];
     for (let i = arr.length - 1; i > 0; i--) {
@@ -396,6 +400,9 @@ async function fillCache() {
                                 console.warn(`[이미지 탐색 실패] ${pageData.title}:`, err.message);
                                 imageUrl = null;
                             }
+                        }
+                        if (VIP_IMAGE_FALLBACKS[pageData.title]) {
+    imageUrl = VIP_IMAGE_FALLBACKS[pageData.title];
                         }
 
                         imageUrl = imageUrl || null;
