@@ -27,27 +27,24 @@
   button:disabled {background:#dee2e6; cursor:not-allowed;}
 
   #timer {
-  display: inline-block;
   font-family: 'Chakra Petch', sans-serif;
-  font-size: 1.4rem;
+  font-size: 2.2rem;
   font-weight: 700;
-  color: #fa5252;
-  letter-spacing: 1px;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
 
-  /* 글래스모피즘 (반투명 + 블러) 효과 */
-  background: rgba(255, 255, 255, 0.5);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  /* 글자 내부를 반투명 그라데이션으로 처리하여 뒤 배경이 비치게 설정 */
+  background: linear-gradient(135deg, rgba(250, 82, 82, 0.85), rgba(250, 82, 82, 0.2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 
-  /* 은은한 유리 테두리와 그림자 */
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  /* 유리 질감 표면의 빛 반사 테두리 (외곽선) */
+  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.7);
 
-  padding: 6px 20px;
-  border-radius: 20px;
-  margin-bottom: 16px;
-  }
-
+  /* 유리 글자 입체감 및 굴절 그림자 */
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1)) 
+          drop-shadow(0 1px 1px rgba(255, 255, 255, 0.8));
+}
   #result {margin-top:20px; text-align:left;}
   .res-header {font-size:1.2rem; font-weight:800; margin-bottom:8px; text-align:center;}
   .desc-box {font-size:0.9rem; color:#343a40; background:#f1f3f5; padding:12px; border-radius:8px; line-height:1.6;}
