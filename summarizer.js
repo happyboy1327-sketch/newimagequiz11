@@ -5,7 +5,8 @@ const IMPORTANT_KEYWORDS = [
     "임명", "취임", "부정", "일기", "수용소", "유대인", "수필"
 ];
 
-const GENEALOGY_REGEX = /(의\s*(아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|차녀|장녀)(이다|이었다|이며|이고|\s|\.))|(슬하에)|(결혼하(여|였|고))|(출생하|태어났)/;
+// 📍 summ.js 상단 GENEALOGY_REGEX 수정
+const GENEALOGY_REGEX = /(의\s*(아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|차녀|장녀)(이다|이었다|이며|이고|\s|\.))|(슬하에)|(결혼하(여|였|고))|(출생하|태어났)|(본관은|아명은|자\(字\)는|자\s*는|호\(號\)는|호\s*는|당호는|시호는)/;
 const NUTRITION_REGEX = /(독립|전투|운동|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|승리|패배|결성|폐지|창립|설립|의병|관찰사|벼슬|임진왜란|제정|창간|조직|주도|도입|확립|개척|(?!(?:여론|결론|방법론))(?:[가-힣A-Za-z]+론)|(?:[가-힣A-Za-z]+주의))/;
 const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노년|보냈|생활했|향리|소일)/;
 const DANGLING_START_REGEX = /^(이(후|러한|와\s+같이)?|따라서|이에|반면)\b/;
@@ -240,15 +241,20 @@ export function buildDescription(
     let firstSentence = introSentences[0] || "";
     let usedSecondSentence = false;
 
-    if (firstSentence.length < 50 && introSentences.length > 1) {
-        firstSentence += " " + introSentences[1];
-        usedSecondSentence = true;
-    } else if (
-        introSentences.length > 1 &&
-        /(창시자|제정|대표|설립|창립|발명|발견|창안|업적|노벨|수상|혁명|독립|창조|고안)/.test(introSentences[1])
-    ) {
-        firstSentence += " " + introSentences[1];
-        usedSecondSentence = true;
+    const secondSentence = introSentences[1] || "";
+    const isGenealogyTMI = GENEALOGY_REGEX.test(secondSentence);
+
+    if (!isGenealogyTMI && secondSentence) {
+        if (firstSentence.length < 50 && introSentences.length > 1) {
+            firstSentence += " " + secondSentence;
+            usedSecondSentence = true;
+        } else if (
+            introSentences.length > 1 &&
+            /(창시자|제정|대표|설립|창립|발명|발견|창안|업적|노벨|수상|혁명|독립|창조|고안)/.test(secondSentence)
+        ) {
+            firstSentence += " " + secondSentence;
+            usedSecondSentence = true;
+        }
     }
 
     let extra = "";
