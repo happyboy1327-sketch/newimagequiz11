@@ -400,9 +400,7 @@ async function fillCache() {
 
                         imageUrl = imageUrl || null;
 
-                        if (imageUrl) {
-    imageUrl = getCleanWikimediaCdnUrl(imageUrl);
-                        }
+
 
                         if (!isValidImageUrl(imageUrl)) {
                             console.log("최종탈락: isValidImageUrl", pageData.title, imageUrl);
