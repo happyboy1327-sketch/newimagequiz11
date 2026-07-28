@@ -375,16 +375,11 @@ async function fillCache() {
                         const aliases = makeNameAliases(pageData.title);
                         const pageImageName = (pageData.pageimage || "").toLowerCase();
 
-                        let imageUrl = pageData.thumbnail?.source;
-
+                        let imageUrl = pageData?.thumbnail?.source || null;
                         if (!imageUrl || HUMAN_IMAGE_BLOCKLIST.test(pageImageName) || !isValidImageUrl(imageUrl)) {
                             imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
                         }
 
-                        if (!imageUrl) {
-                            console.log("최종탈락: 이미지 없음", pageData.title);
-                            continue;
-                        }
 
                         if (!isValidImageUrl(imageUrl)) {
                             console.log("최종탈락: isValidImageUrl", pageData.title, imageUrl);
