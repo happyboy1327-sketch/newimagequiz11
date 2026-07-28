@@ -148,7 +148,7 @@ function isValidImageUrl(url) {
         return decodedUrl.includes(keyword);
     });
 
-    if (hasForbiddenKeyword) return false;
+    if (hasKeyword) return false; // 💡 오타 수정됨 (hasForbiddenKeyword -> hasKeyword)
 
     return /\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(decodedUrl);
 }
@@ -206,12 +206,16 @@ async function findAlternativeHumanImage(title, aliases) {
             params: { action: "query", titles: title, prop: "images", iiprop: "url|extmetadata", imlimit: 50, format: "json", origin: "*" }
         });
     } catch (e) {
+        console.timeEnd(`🖼️ 이미지 탐색 ${title}`);
         return null;
     }
 
     const page = Object.values(res.data?.query?.pages || {})[0];
     const images = page?.images;
-    if (!images || images.length === 0) return null;
+    if (!images || images.length === 0) {
+        console.timeEnd(`🖼️ 이미지 탐색 ${title}`);
+        return null;
+    }
 
     const targets = [];
     for (const img of images) {
@@ -220,7 +224,10 @@ async function findAlternativeHumanImage(title, aliases) {
         targets.push(img.title);
     }
 
-    if (targets.length === 0) return null;
+    if (targets.length === 0) {
+        console.timeEnd(`🖼️ 이미지 탐색 ${title}`);
+        return null;
+    }
     
     for (let i = 0; i < targets.length; i += COMMONS_BATCH_SIZE) {
         const batch = targets.slice(i, i + COMMONS_BATCH_SIZE);
@@ -375,25 +382,18 @@ async function fillCache() {
                         const aliases = makeNameAliases(pageData.title);
                         const pageImageName = (pageData.pageimage || "").toLowerCase();
 
-                        // 1. pageData와 thumbnail 객체가 없어도 안전하도록 ?. 적용 (let으로 선언)
-let imageUrl = pageData?.thumbnail?.source || null;
+                        let imageUrl = pageData?.thumbnail?.source || null;
 
-// 2. 이미지가 없거나 블록리스트 대상일 때 대체 이미지 시도 (try-catch 적용)
-if (!imageUrl || (pageImageName && HUMAN_IMAGE_BLOCKLIST.test(pageImageName)) || !isValidImageUrl(imageUrl)) {
-    try {
-        imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
-    } catch (err) {
-        console.warn(`[이미지 탐색 실패] ${pageData.title}:`, err.message);
-        imageUrl = null; // 대체 이미지를 못 찾아도 프로세스가 멈추지 않음
-    }
-}
+                        if (!imageUrl || (pageImageName && HUMAN_IMAGE_BLOCKLIST.test(pageImageName)) || !isValidImageUrl(imageUrl)) {
+                            try {
+                                imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
+                            } catch (err) {
+                                console.warn(`[이미지 탐색 실패] ${pageData.title}:`, err.message);
+                                imageUrl = null;
+                            }
+                        }
 
-// 3. 최종 확정 (null 처리)
-imageUrl = imageUrl || null;
-
-// ⚠️ [주의] 이 바로 아랫줄에 `if (!imageUrl) continue;` 같은 조건문이 있다면 반드시 삭제해야 합니다.
-// 이미지가 없어도 텍스트(description)는 저장되어야 합니다.
-
+                        imageUrl = imageUrl || null;
 
                         if (!isValidImageUrl(imageUrl)) {
                             console.log("최종탈락: isValidImageUrl", pageData.title, imageUrl);
@@ -408,7 +408,6 @@ imageUrl = imageUrl || null;
                         if (LAST_PLAYED.includes(pageData.title)) continue;
                         if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) continue;
 
-                        // 🌟 기존 요청하신 exintro & extractBody 파싱 로직 100% 유지
                         const fullExtract = pageData.extract;
                         const firstHeaderIndex = fullExtract.search(/==+/);
                         
@@ -507,6 +506,9 @@ app.get("/api/quiz", async (req, res) => {
 
 app.use(express.static(path.join(process.cwd(), "public")));
 app.get("/", (req, res) => res.sendFile(path.join(process.cwd(), "public", "index.html")));
+
+// 서버 시작 직후 최초 캐시 초기화 진행
+fillCache();
 
 if (process.env.NODE_ENV !== 'production') {
     app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
