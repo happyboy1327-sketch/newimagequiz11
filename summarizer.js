@@ -2,17 +2,15 @@ const IMPORTANT_KEYWORDS = [
     "태어났다", "출생", "사망", "활동", "노력", "독점", "정벌", "발표", "창시", "발명",
     "발견", "폐지", "수상", "노벨", "대표", "저서", "작품", "전쟁", "독립", "혁명",
     "연구", "증명", "설립", "창립", "개발", "제작", "기록", "영향", "업적", "졸업",
-    "임명", "취임", "부정", "일기", "희생자", "은신처", "수용소"
+    "임명", "취임", "부정"
 ];
 
 const GENEALOGY_REGEX = /(의\s*(아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|차녀|장녀)(이다|이었다|이며|이고|\s|\.))|(슬하에)|(결혼하(여|였|고))|(출생하|태어났)/;
+const NUTRITION_REGEX = /(독립|전투|운동|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|승리|패배|결성|폐지|창립|설립|의병|관찰사|벼슬|임진왜란|제정|창간|조직|주도|도입|확립|개척|(?!(?:여론|결론|방법론))(?:[가-힣A-Za-z]+론)|(?:[가-힣A-Za-z]+주의))/;
+const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노년|보냈|생활했|향리|소일)/;
 
-// 🌟 문화, 문학, 자서전/기록물, 역사적 희생자 관련 키워드 보완 (|일기|희생자|수용소|은신처|문학|수필|자서전|기록물|학살|피난)
-const NUTRITION_REGEX = /(독립|전투|운동|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|승리|패배|결성|폐지|창립|설립|의병|관찰사|벼슬|임진왜란|제정|창간|조직|주도|도입|확립|개척|일기|희생자|수용소|은신처|문학|수필|자서전|기록물|학살|피난)/;
-
-const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노년|보냈|향리|소일)/;
+// 🌟 [추가] 앞 맥락 없이는 의미가 깨지는 단독 지시어/연결어 시작 문장 차단
 const DANGLING_START_REGEX = /^(이(후|러한|와\s+같이)?|따라서|이에|반면)\b/;
-
 function normalizeSpace(text = "") {
     return String(text).replace(/\s+/g, " ").trim();
 }
@@ -59,7 +57,7 @@ function resolveVagueReference(sentence, foundTitle) {
 
 function resolveDemonstrativeReference(sentence, sentences, currentIndex) {
     let processedSentence = sentence;
-    const targetRegex = /(이|그)\s+(작품|조각|그림|회화|동상|건축물|벽화|서적|책|화풍|시리즈|주장|사상|이론|업적|시기|운동|전쟁|일기|수용소)/;
+    const targetRegex = /(이|그)\s+(작품|조각|그림|회화|동상|건축물|벽화|서적|책|화풍|시리즈|주장|사상|이론|업적|시기|운동|전쟁)/;
     
     if (targetRegex.test(processedSentence)) {
         let foundTitle = null;
@@ -115,18 +113,50 @@ function splitSentences(text) {
         }, []);
 }
 
-export function extractImportantSentences(bodyText, count = 3) {
+function calculateBasicNutritionScore(sentence) {
+    let score = 0;
+    if (NUTRITION_REGEX.test(sentence)) score += 20;
+    IMPORTANT_KEYWORDS.forEach(kw => {
+        if (sentence.includes(kw)) score += 5;
+    });
+    return score;
+}
+
+export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 2) {
     if (!bodyText || typeof bodyText !== "string") return "";
 
     const rawSentences = splitSentences(bodyText);
+    console.log("===== rawSentences =====");
+    console.log(rawSentences);
     const cleanedSentences = [];
 
     rawSentences.forEach((sentence, index) => {
-        let text = cleanWikiText(sentence);
+    let text = cleanWikiText(sentence);
 
-        if (!text || isIncompleteSentence(text)) return;
-        if (/^[《<〈“"'`].*[》>〉”"'`]$/.test(text)) return;
-        if (text.length < 15 || text.length > 260) return;
+    if (!text) {
+        console.log("❌ empty", sentence);
+        return;
+    }
+
+    if (isIncompleteSentence(text)) {
+        console.log("❌ incomplete", text);
+        return;
+    }
+
+    if (/^[《<〈“"'`].*[》>〉”"'`]$/.test(text)) {
+        console.log("❌ title", text);
+        return;
+    }
+
+    if (text.length < 15) {
+        console.log("❌ short", text, text.length);
+        return;
+    }
+
+    if (text.length > 260) {
+        console.log("❌ long", text.length, text);
+        return;
+    }
 
         let processedText = text;
         let targetIndex = index;
@@ -154,6 +184,9 @@ export function extractImportantSentences(bodyText, count = 3) {
 
         cleanedSentences.push({ original: processedText, index: targetIndex });
     });
+    console.log("===== cleanedSentences length =====", cleanedSentences.length);
+    console.log(JSON.stringify(cleanedSentences, null, 2));
+
 
     if (cleanedSentences.length === 0) return "";
 
@@ -177,7 +210,8 @@ export function extractImportantSentences(bodyText, count = 3) {
 
         return { sentence: original, index, score };
     });
-
+    console.log("===== candidates =====");
+    console.table(candidates);
     candidates.sort((a, b) => b.score - a.score);
     
     const seen = new Set();
@@ -189,6 +223,15 @@ export function extractImportantSentences(bodyText, count = 3) {
             if (uniqueCandidates.length >= count) break;
         }
     }
+   console.log("===== uniqueCandidates length =====", uniqueCandidates.length);
+
+   const result = uniqueCandidates.map(item => item.sentence).join(" ");
+
+   console.log("===== extract result =====");
+   console.log(result);
+   console.log("===== extract result length =====", result.length);
+
+     return result;
     uniqueCandidates.sort((a, b) => a.index - b.index);
 
     return uniqueCandidates.map(item => item.sentence).join(" ");
@@ -199,6 +242,7 @@ export function buildDescription(
     bodyText,
     aliases = [],
     extraCount = 3,
+    introThreshold = 150,
     maxLength = 1100
 ) {
     let intro = cleanWikiText(introText);
@@ -216,26 +260,55 @@ export function buildDescription(
 
     if (!intro && !body) return "";
 
-    const extra = extractImportantSentences(body, extraCount);
-
-    const introHasNutrition = NUTRITION_REGEX.test(intro);
-    const bodyHasNutrition = NUTRITION_REGEX.test(extra);
-    const isGenealogyOnly = GENEALOGY_REGEX.test(intro) && !introHasNutrition;
-
-    // 핵심 업적/사건 정보가 없거나 족보만 있는 토막글인 경우에만 탈락
-    if ((!extra || !bodyHasNutrition) && (!introHasNutrition || isGenealogyOnly)) {
-        return "";
-    }
-
-    let merged = normalizeSpace([intro, extra].filter(Boolean).join(" "));
-
-    if (merged.length > maxLength) {
-        merged = merged.slice(0, maxLength);
-        const lastPeriod = merged.lastIndexOf(".");
+    const cleanSlice = (text) => {
+        if (text.length <= maxLength) return text;
+        const sliced = text.slice(0, maxLength);
+        const lastPeriod = sliced.lastIndexOf(".");
         if (lastPeriod > maxLength * 0.5) {
-            merged = merged.slice(0, lastPeriod + 1).trim();
+            return sliced.slice(0, lastPeriod + 1).trim();
         }
+        return sliced;
+    };
+
+    const totalLength = intro.length + body.length;
+    if (totalLength < 350) {
+        const combined = normalizeSpace([intro, body].filter(Boolean).join(" "));
+        return cleanSlice(combined);
     }
 
-    return merged;
+    const introSentences = splitSentences(intro);
+    let firstSentence = introSentences[0] || "";
+let usedSecondSentence = false;
+
+// 첫 문장이 너무 짧으면 두 번째 문장까지 포함
+if (firstSentence.length < 50 && introSentences.length > 1) {
+    firstSentence += " " + introSentences[1];
+    usedSecondSentence = true;
+}
+// 두 번째 문장이 대표 업적이라면 함께 포함
+else if (
+    introSentences.length > 1 &&
+    /(창시자|제정|대표|설립|창립|발명|발견|창안|업적|노벨|수상|혁명|독립|창조|고안)/.test(introSentences[1])
+) {
+    firstSentence += " " + introSentences[1];
+    usedSecondSentence = true;
+}
+
+    let extra = "";
+    const remainingIntro = introSentences
+    .slice(usedSecondSentence ? 2 : 1)
+    .join(" ");
+    const targetBody = normalizeSpace([remainingIntro, body].filter(Boolean).join(" "));
+
+    if (targetBody && targetBody.length > 12) {
+        extra = extractImportantSentences(
+    targetBody,
+    "",
+    aliases,
+    extraCount
+);
+    }
+
+    const merged = normalizeSpace([firstSentence, extra].filter(Boolean).join(" "));
+    return cleanSlice(merged);
 }
