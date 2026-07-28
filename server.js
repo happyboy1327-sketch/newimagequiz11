@@ -187,6 +187,32 @@ function extractInfoboxImage(html) {
     return null;
 }
 
+function getCleanWikimediaCdnUrl(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== 'string') return null;
+
+    let decoded = rawUrl;
+    try { decoded = decodeURIComponent(rawUrl); } catch (e) {}
+
+    if (!decoded.includes('/commons/')) return rawUrl;
+
+    // 1. 맨 뒤 파일명 추출
+    let filename = decoded.substring(decoded.lastIndexOf('/') + 1);
+    
+    // 🌟 핵심: 기존에 붙어있던 '220px-', '800px-' 등의 크기 태그 제거
+    filename = filename.replace(/^\d+px-/, '');
+
+    // 2. 특수문자 및 한글 안전 인코딩
+    const strictEncoded = encodeURIComponent(filename).replace(/%20/g, '_');
+
+    // 3. 해시 경로(/8/82/) 추출
+    const parts = decoded.split('/commons/')[1].split('/');
+    const hashPath = decoded.includes('/commons/thumb/') 
+        ? `${parts[1]}/${parts[2]}` 
+        : `${parts[0]}/${parts[1]}`;
+
+    return `https://upload.wikimedia.org/wikipedia/commons/thumb/${hashPath}/${strictEncoded}/800px-${strictEncoded}`;
+}
+
 async function findAlternativeHumanImage(title, aliases) {
     console.time(`🖼️ 이미지 탐색 ${title}`);
     try {
@@ -398,6 +424,10 @@ async function fillCache() {
                         }
 
                         imageUrl = imageUrl || null;
+
+                        if (imageUrl) {
+    imageUrl = getCleanWikimediaCdnUrl(imageUrl);
+                        }
 
                         if (!isValidImageUrl(imageUrl)) {
                             console.log("최종탈락: isValidImageUrl", pageData.title, imageUrl);
