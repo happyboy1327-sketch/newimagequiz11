@@ -2,7 +2,7 @@ const IMPORTANT_KEYWORDS = [
     "태어났다", "출생", "사망", "활동", "노력", "독점", "정벌", "발표", "창시", "발명",
     "발견", "폐지", "수상", "노벨", "대표", "저서", "저자", "작품", "전쟁", "독립", "혁명",
     "연구", "증명", "설립", "창립", "개발", "제작", "기록", "영향", "업적", "졸업",
-    "임명", "취임", "부정"
+    "임명", "취임", "부정", "일기", "수용소", "유대인", "수필"
 ];
 
 const GENEALOGY_REGEX = /(의\s*(아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|차녀|장녀)(이다|이었다|이며|이고|\s|\.))|(슬하에)|(결혼하(여|였|고))|(출생하|태어났)/;
@@ -79,17 +79,25 @@ function filterOtherPersonDeath(text, aliases = []) {
         const match = sentence.match(/([가-힣\s]{2,12})(?:이|가|은|는).*?(?:사망|별세|서거|타계|전사|시해|사사|병사|처형|살해|숨졌|목숨을\s*잃)/);
         if (match) {
             const subjectName = match[1].trim();
-            const isSelf = aliases.some(alias => {
-                if (!alias) return false;
-                const cleanAlias = alias.replace(/[\s\_\-]/g, "");
-                const cleanSubject = subjectName.replace(/[\s\_\-]/g, "");
-                return cleanSubject.includes(cleanAlias) || cleanAlias.includes(cleanSubject);
-            });
-            if (!isSelf) return false;
+            
+            // 🌟 [추가된 부분] 대명사(그, 그녀 등)나 날짜/장소가 주어로 잡힌 경우 본인 문장으로 인정
+            const isPronounOrContext = /^(그|그녀|본인|이들|해당\s*인물|이\s*인물)$/.test(subjectName) || /년|월|일|수용소|당시/.test(subjectName);
+            
+            if (!isPronounOrContext) {
+                const isSelf = aliases.some(alias => {
+                    if (!alias) return false;
+                    const cleanAlias = alias.replace(/[\s\_\-]/g, "");
+                    const cleanSubject = subjectName.replace(/[\s\_\-]/g, "");
+                    return cleanSubject.includes(cleanAlias) || cleanAlias.includes(cleanSubject);
+                });
+                if (!isSelf) return false; // 확실한 타인 이름일 때만 삭제
+            }
         }
 
         const possessiveDeathRegex = /(아버지|부친|어머니|모친|아내|부인|남편|아들|딸|형|동생|스승|친구|동료|통역가)의\s*(사망|별세|서거|타계|처형|죽음)/;
-        if (possessiveDeathRegex.test(sentence)) return false;
+        if (possessiveDeathRegex.test(sentence) && !/(그녀|그|본인|가족|식구|모두|함께)/.test(sentence)) {
+            return false;
+        }
 
         return true;
     });
