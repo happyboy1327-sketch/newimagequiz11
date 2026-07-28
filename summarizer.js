@@ -212,8 +212,6 @@ export function buildDescription(
     intro = normalizeSpace(intro || "");
     body = normalizeSpace(body || "");
 
-    if (!intro && !body) return "";
-
     const cleanSlice = (text) => {
         if (text.length <= maxLength) return text;
         const sliced = text.slice(0, maxLength);
@@ -223,6 +221,13 @@ export function buildDescription(
         }
         return sliced;
     };
+    
+
+    if (!intro && !body) {
+        const fallback = normalizeSpace(cleanWikiText(introText) || cleanWikiText(bodyText));
+        if (!fallback) return "";
+        return cleanSlice(fallback);
+    }
 
     const totalLength = intro.length + body.length;
     if (totalLength < 350) {
