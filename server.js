@@ -60,7 +60,7 @@ const LEGACY_VIP_LIST = [
     "알렉산드로스 대왕", "율리우스 카이사르", "마더 테레사", "체 게바라", "오드리 헵번"
 ];
 
-const HUMAN_IMAGE_BLOCKLIST = /(?:^|[\s_./\\-])(?:coin|medal|seal|flag|coat_of_arms|emblem|tomb|temple|grave|map|signature|statue|bust|sword|sabre|poem|feather|quill|pen|symbol|icon|picto|insignia|rank|award|handwriting|drawing|sketch|illustration|calligraphy|landscape|gardenshield)(?:$|[\s_./\\-])|(?:^|[\s_./\\-])(?:청|적|백|황|녹|파|남|흑|blue|red|green|yellow)\d+(?:px)?(?:\.|[\s_.-]|$)/i;
+const HUMAN_IMAGE_BLOCKLIST = /(?:^|[\s_./\\-])(?:coin|medal|seal|flag|coat_of_arms|emblem|tomb|temple|grave|map|signature|sabre|poem|feather|quill|pen|symbol|icon|picto|insignia|rank|award|handwriting|drawing|sketch|illustration|calligraphy|landscape|gardenshield)(?:$|[\s_./\\-])|(?:^|[\s_./\\-])(?:청|적|백|황|녹|파|남|흑|blue|red|green|yellow)\d+(?:px)?(?:\.|[\s_.-]|$)/i;
 const IMAGE_EXT_RE = /\.(jpg|jpeg|png|webp)$/i;
 const COMMONS_BATCH_SIZE = 14;
 
