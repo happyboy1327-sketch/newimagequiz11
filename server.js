@@ -182,25 +182,45 @@ function extractInfoboxImage(html) {
     return null;
 }
 
+async function findAlternativeHumanImage(title, aliases) {
+    console.time(`🖼️ 이미지 탐색 ${title}`);
+    try {
+        const htmlRes = await axios.get("https://ko.wikipedia.org/w/index.php", {
+            ...WIKI_AXIOS_CONFIG,
+            params: { title, action: "render" }
+        });
+        const imageUrl = extractInfoboxImage(htmlRes.data);
+        
+        if (imageUrl && isValidImageUrl(imageUrl) && !isCulturalSiteImage(imageUrl)) {
+            console.timeEnd(`🖼️ 이미지 탐색 ${title}`);
+            return imageUrl;
+        }
+    } catch (e) {
+        console.log(`⚠️ 인포박스 조회 실패:`, title, e.message);
+    }
 
-async function findAlternativeImage(title, images) {
-    console.time(`🖼️ 이미지 탐색 ${title}`)
+    let res;
+    try {
+        res = await axios.get("https://ko.wikipedia.org/w/api.php", {
+            ...WIKI_AXIOS_CONFIG,
+            params: { action: "query", titles: title, prop: "images", iiprop: "url|extmetadata", imlimit: 50, format: "json", origin: "*" }
+        });
+    } catch (e) {
+        return null;
+    }
+
+    const page = Object.values(res.data?.query?.pages || {})[0];
+    const images = page?.images;
+    if (!images || images.length === 0) return null;
 
     const targets = [];
     for (const img of images) {
         const name = img.title.replace(/^File:/i, "");
-        if (!IMAGE_EXT_RE.test(name) || HUMAN_IMAGE_BLOCKLIST.test(name) || isCulturalSiteImage(name)) {
-            continue;
-        }
+        if (!IMAGE_EXT_RE.test(name) || HUMAN_IMAGE_BLOCKLIST.test(name) || isCulturalSiteImage(name)) continue;
         targets.push(img.title);
     }
 
-    // 1. targets가 없을 때도 console.timeEnd 처리
-    if (targets.length === 0) {
-        console.timeEnd(`🖼️ 이미지 탐색 ${title}`);
-        console.log("대체 이미지 대상 없음:", title);
-        return null;
-    }
+    if (targets.length === 0) return null;
     
     for (let i = 0; i < targets.length; i += COMMONS_BATCH_SIZE) {
         const batch = targets.slice(i, i + COMMONS_BATCH_SIZE);
@@ -208,35 +228,19 @@ async function findAlternativeImage(title, images) {
         try {
             info = await axios.get("https://commons.wikimedia.org/w/api.php", {
                 ...WIKI_AXIOS_CONFIG,
-                params: {
-                    action: "query",
-                    titles: batch.join("|"),
-                    prop: "imageinfo",
-                    iiprop: "url",
-                    format: "json",
-                    origin: "*"
-                }
+                params: { action: "query", titles: batch.join("|"), prop: "imageinfo", iiprop: "url", format: "json", origin: "*" }
             });
-        } catch (e) {
-            // 3. 에러 발생 시 로그 출력 후 계속 진행
-            console.warn(`Wikimedia API 요청 실패 (${title}):`, e.message);
-            continue;
-        }
+        } catch (e) { continue; }
 
-        const pages = info.data?.query?.pages || {};
-
-        // 2. batch 순서를 유지하며 검증 (Object.values의 pageid 정렬 문제 방지)
-        for (const targetTitle of batch) {
-            const page = Object.values(pages).find(p => p.title === targetTitle);
-            const url = page?.imageinfo?.[0]?.url;
-
+        const commonsPages = Object.values(info.data?.query?.pages || {});
+        for (const file of commonsPages) {
+            const url = file.imageinfo?.[0]?.url;
             if (url && isValidImageUrl(url) && !isCulturalSiteImage(url)) {
                 console.timeEnd(`🖼️ 이미지 탐색 ${title}`);
                 return url;
             }
         }
     }
-
     console.timeEnd(`🖼️ 이미지 탐색 ${title}`);
     console.log("대체 이미지 실패:", title, "targets:", targets.length);
     return null;
