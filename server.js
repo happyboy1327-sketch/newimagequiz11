@@ -153,6 +153,7 @@ function isValidImageUrl(url) {
     return /\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(decodedUrl);
 }
 
+
 function extractInfoboxImage(html) {
     const $ = load(html);
     const infobox = $("table.infobox").first();
@@ -165,14 +166,18 @@ function extractInfoboxImage(html) {
         if (url.startsWith("//")) {
             url = "https:" + url;
         }
+        console.log(`인포박스 이미지 발견`, url); // ← 이거 추가
 
         const name = decodeURIComponent(url.toLowerCase());
 
-        if (
-            name.includes("picto_infobox") ||
-            name.includes("signature") ||
-            name.endsWith(".svg")
-        ) {
+        if (name.includes("picto_infobox") || name.includes("signature") || name.endsWith(".svg")) {
+        console.log(`스킵: 픽토 또는 svg/si`, name); // ← 이것도
+        continue;
+    }
+
+        // ✅ 여기서 바로 return하지 말고, 실제로 유효한지 검증 후 아니면 다음 이미지로
+        if (!isValidImageUrl(url) || isCulturalSiteImage(url)) {
+            console.log(`[미유효 인포박스 이미지 스킵] ${name}`);
             continue;
         }
 
