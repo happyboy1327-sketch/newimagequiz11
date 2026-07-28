@@ -122,27 +122,41 @@ function calculateBasicNutritionScore(sentence) {
     return score;
 }
 
-        
-export function extractImportantSentences(bodyText, introText = "", count = 3) {
+export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 2) {
     if (!bodyText || typeof bodyText !== "string") return "";
 
     const rawSentences = splitSentences(bodyText);
+    console.log("===== rawSentences =====");
+    console.log(rawSentences);
     const cleanedSentences = [];
-    
-    // 서두 문장과의 중복 비교를 위해 깔끔히 정제
-    const cleanedIntro = cleanWikiText(introText);
 
     rawSentences.forEach((sentence, index) => {
-        let text = cleanWikiText(sentence);
+    let text = cleanWikiText(sentence);
 
-        if (!text || isIncompleteSentence(text)) return;
-        if (/^[《<〈“"'`].*[》>〉”"'`]$/.test(text)) return;
-        if (text.length < 15 || text.length > 260) return;
+    if (!text) {
+        console.log("❌ empty", sentence);
+        return;
+    }
 
-        // 🌟 [중복 차단 1] 이미 서두(intro)에 포함된 문장이면 본문 후보에서 제외
-        if (cleanedIntro && cleanedIntro.includes(text)) {
-            return;
-        }
+    if (isIncompleteSentence(text)) {
+        console.log("❌ incomplete", text);
+        return;
+    }
+
+    if (/^[《<〈“"'`].*[》>〉”"'`]$/.test(text)) {
+        console.log("❌ title", text);
+        return;
+    }
+
+    if (text.length < 15) {
+        console.log("❌ short", text, text.length);
+        return;
+    }
+
+    if (text.length > 260) {
+        console.log("❌ long", text.length, text);
+        return;
+    }
 
         let processedText = text;
         let targetIndex = index;
@@ -170,6 +184,9 @@ export function extractImportantSentences(bodyText, introText = "", count = 3) {
 
         cleanedSentences.push({ original: processedText, index: targetIndex });
     });
+    console.log("===== cleanedSentences length =====", cleanedSentences.length);
+    console.log(JSON.stringify(cleanedSentences, null, 2));
+
 
     if (cleanedSentences.length === 0) return "";
 
@@ -193,7 +210,8 @@ export function extractImportantSentences(bodyText, introText = "", count = 3) {
 
         return { sentence: original, index, score };
     });
-
+    console.log("===== candidates =====");
+    console.table(candidates);
     candidates.sort((a, b) => b.score - a.score);
     
     const seen = new Set();
@@ -205,6 +223,15 @@ export function extractImportantSentences(bodyText, introText = "", count = 3) {
             if (uniqueCandidates.length >= count) break;
         }
     }
+   console.log("===== uniqueCandidates length =====", uniqueCandidates.length);
+
+   const result = uniqueCandidates.map(item => item.sentence).join(" ");
+
+   console.log("===== extract result =====");
+   console.log(result);
+   console.log("===== extract result length =====", result.length);
+
+     return result;
     uniqueCandidates.sort((a, b) => a.index - b.index);
 
     return uniqueCandidates.map(item => item.sentence).join(" ");
@@ -215,6 +242,7 @@ export function buildDescription(
     bodyText,
     aliases = [],
     extraCount = 3,
+    introThreshold = 150,
     maxLength = 1100
 ) {
     let intro = cleanWikiText(introText);
@@ -232,31 +260,55 @@ export function buildDescription(
 
     if (!intro && !body) return "";
 
-    // 🌟 extractImportantSentences에 intro를 인자로 넘겨 서두 문장 추출 방지
-    const extra = extractImportantSentences(body, intro, extraCount);
-
-    const introHasNutrition = NUTRITION_REGEX.test(intro);
-    const bodyHasNutrition = NUTRITION_REGEX.test(extra);
-    const isGenealogyOnly = GENEALOGY_REGEX.test(intro) && !introHasNutrition;
-
-    if ((!extra || !bodyHasNutrition) && (!introHasNutrition || isGenealogyOnly)) {
-        return "";
-    }
-
-    let merged = normalizeSpace([intro, extra].filter(Boolean).join(" "));
-
-    // 🌟 [중복 차단 2] 최종 합쳐진 텍스트에서 동일 문장 중복 제거
-    const sentences = splitSentences(merged);
-    const uniqueSentences = Array.from(new Set(sentences));
-    merged = uniqueSentences.join(" ");
-
-    if (merged.length > maxLength) {
-        merged = merged.slice(0, maxLength);
-        const lastPeriod = merged.lastIndexOf(".");
+    const cleanSlice = (text) => {
+        if (text.length <= maxLength) return text;
+        const sliced = text.slice(0, maxLength);
+        const lastPeriod = sliced.lastIndexOf(".");
         if (lastPeriod > maxLength * 0.5) {
-            merged = merged.slice(0, lastPeriod + 1).trim();
+            return sliced.slice(0, lastPeriod + 1).trim();
         }
+        return sliced;
+    };
+
+    const totalLength = intro.length + body.length;
+    if (totalLength < 350) {
+        const combined = normalizeSpace([intro, body].filter(Boolean).join(" "));
+        return cleanSlice(combined);
     }
 
-    return merged;
+    const introSentences = splitSentences(intro);
+    let firstSentence = introSentences[0] || "";
+let usedSecondSentence = false;
+
+// 첫 문장이 너무 짧으면 두 번째 문장까지 포함
+if (firstSentence.length < 50 && introSentences.length > 1) {
+    firstSentence += " " + introSentences[1];
+    usedSecondSentence = true;
+}
+// 두 번째 문장이 대표 업적이라면 함께 포함
+else if (
+    introSentences.length > 1 &&
+    /(창시자|제정|대표|설립|창립|발명|발견|창안|업적|노벨|수상|혁명|독립|창조|고안)/.test(introSentences[1])
+) {
+    firstSentence += " " + introSentences[1];
+    usedSecondSentence = true;
+}
+
+    let extra = "";
+    const remainingIntro = introSentences
+    .slice(usedSecondSentence ? 2 : 1)
+    .join(" ");
+    const targetBody = normalizeSpace([remainingIntro, body].filter(Boolean).join(" "));
+
+    if (targetBody && targetBody.length > 12) {
+        extra = extractImportantSentences(
+    targetBody,
+    "",
+    aliases,
+    extraCount
+);
+    }
+
+    const merged = normalizeSpace([firstSentence, extra].filter(Boolean).join(" "));
+    return cleanSlice(merged);
 }
