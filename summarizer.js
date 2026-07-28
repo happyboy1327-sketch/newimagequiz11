@@ -212,6 +212,7 @@ export function buildDescription(
     intro = normalizeSpace(intro || "");
     body = normalizeSpace(body || "");
 
+    // 🌟 cleanSlice 함수 정의를 위로 이동
     const cleanSlice = (text) => {
         if (text.length <= maxLength) return text;
         const sliced = text.slice(0, maxLength);
@@ -221,8 +222,8 @@ export function buildDescription(
         }
         return sliced;
     };
-    
 
+    // 🌟 15번째 줄 수정: 필터링 후 문장이 0개가 되어 탈락하는 것을 방지 (Fallback)
     if (!intro && !body) {
         const fallback = normalizeSpace(cleanWikiText(introText) || cleanWikiText(bodyText));
         if (!fallback) return "";
