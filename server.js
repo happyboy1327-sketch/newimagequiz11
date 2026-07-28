@@ -375,10 +375,24 @@ async function fillCache() {
                         const aliases = makeNameAliases(pageData.title);
                         const pageImageName = (pageData.pageimage || "").toLowerCase();
 
-                        let imageUrl = pageData?.thumbnail?.source || null;
-                        if (!imageUrl || HUMAN_IMAGE_BLOCKLIST.test(pageImageName) || !isValidImageUrl(imageUrl)) {
-                            imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
-                        }
+                        // 1. pageData와 thumbnail 객체가 없어도 안전하도록 ?. 적용 (let으로 선언)
+let imageUrl = pageData?.thumbnail?.source || null;
+
+// 2. 이미지가 없거나 블록리스트 대상일 때 대체 이미지 시도 (try-catch 적용)
+if (!imageUrl || (pageImageName && HUMAN_IMAGE_BLOCKLIST.test(pageImageName)) || !isValidImageUrl(imageUrl)) {
+    try {
+        imageUrl = await findAlternativeHumanImage(pageData.title, aliases);
+    } catch (err) {
+        console.warn(`[이미지 탐색 실패] ${pageData.title}:`, err.message);
+        imageUrl = null; // 대체 이미지를 못 찾아도 프로세스가 멈추지 않음
+    }
+}
+
+// 3. 최종 확정 (null 처리)
+imageUrl = imageUrl || null;
+
+// ⚠️ [주의] 이 바로 아랫줄에 `if (!imageUrl) continue;` 같은 조건문이 있다면 반드시 삭제해야 합니다.
+// 이미지가 없어도 텍스트(description)는 저장되어야 합니다.
 
 
                         if (!isValidImageUrl(imageUrl)) {
