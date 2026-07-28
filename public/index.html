@@ -28,22 +28,21 @@
 
   #timer {
   font-family: 'Chakra Petch', sans-serif;
-  font-size: 2.2rem;
+  font-size: 2.5rem;
   font-weight: 700;
-  letter-spacing: 2px;
-  margin-bottom: 8px;
+  letter-spacing: 1.5px;
+  margin-bottom: 12px;
 
-  /* 글자 내부를 반투명 그라데이션으로 처리하여 뒤 배경이 비치게 설정 */
-  background: linear-gradient(135deg, rgba(250, 82, 82, 0.85), rgba(250, 82, 82, 0.2));
+  /* 글자 자체를 반투명하게 설정 */
+  color: rgba(250, 82, 82, 0.45);
+
+  /* 글자 획 뒤로 지나가는 배경을 블러 처리 */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+
+  /* 블러와 배경 효과를 네모 박스가 아닌 '글자 모양'대로 깎아냄 (핵심) */
   -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-
-  /* 유리 질감 표면의 빛 반사 테두리 (외곽선) */
-  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.7);
-
-  /* 유리 글자 입체감 및 굴절 그림자 */
-  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1)) 
-          drop-shadow(0 1px 1px rgba(255, 255, 255, 0.8));
+  background-clip: text;
 }
   #result {margin-top:20px; text-align:left;}
   .res-header {font-size:1.2rem; font-weight:800; margin-bottom:8px; text-align:center;}
