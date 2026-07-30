@@ -48,15 +48,47 @@ function removeMetaBySearch2(text) {
 
     let result = text;
 
-    // 문장 중간 메타 제거
-    // 예: "아명은 윤우의(尹禹儀), 호는 매헌(梅軒)이고, 충청남도 덕산 출생이다."
-    const regex = /(아명은?|태명은?|세례명은?|일명은?|본관은?|자는|자\(字\)는|호는|호\(號\)는|아호는|당호|시호)\s*[^,。.]+(,|이며|이고)\s*/g;
+    const metaWords = [
+        "태명은",
+        "세례명은",
+        "일명은",
+        "아명은",
+        "본관은",
+        "자는",
+        "자(字)는",
+        "호는",
+        "호(號)는",
+        "아호는",
+        "당호는",
+        "시호는"
+    ];
 
-    result = result.replace(regex, "");
+    for (const word of metaWords) {
+        let start = result.indexOf(word);
+
+        while (start !== -1) {
+            // 앞 문장이면 시작점부터 제거
+            let end = result.indexOf(",", start);
+
+            const nextSentence = result.indexOf(".", start);
+
+            if (end === -1 || (nextSentence !== -1 && nextSentence < end)) {
+                end = nextSentence;
+            }
+
+            if (end === -1) break;
+
+            result =
+                result.slice(0, start) +
+                result.slice(end + 1).trim();
+
+            start = result.indexOf(word);
+        }
+    }
 
     return result
         .replace(/,\s*,/g, ",")
-        .replace(/^\s*,/, "")
+        .replace(/\s+/g, " ")
         .trim();
 }
 
