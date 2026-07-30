@@ -110,33 +110,34 @@ function cleanWikiText(text) {
 }
 
 // 🌟 [핵심] 문장 통째 삭제가 아닌, "자는.. 호는.." 구문만 핀포인트로 오려내는 함수
+// 🌟 [수정] 일반 단어(시작된, 자유 등)에 절대로 반응하지 않는 안전한 핀포인트 수술기
 function cleanGenealogyClause(sentence) {
-    if (!sentence) return "";
+    if (!sentence || typeof sentence !== "string") return "";
 
-    let cleaned = sentence;
+    let cleaned = sentence.trim();
 
-    // 1. 문장 내부/끝에 붙은 자, 호, 본관, 아명, 당호, 시호, 태명, 세례명 구문만 싹 오려냄
-    const genealogyPattern = /,?\s*(?:본관은|아명은|태명은|세례명은|자\(字\)는|자는|호\(號\)는|호는|당호는|시호는|시\(諡\)는|일명은)\s+[^.!?]*?(?=\d+\.|\.|!|\?|$)/g;
+    // 1. 뒤에 '는/은/가/이'가 확실히 붙은 완전한 족보 표현만 정확히 타격
+    const genealogyPattern = /(?:,\s*|\s+)?(?:본관은|본관이|아명은|태명은|세례명은|당호는|시호는|일명은|묘호는|휘는|자\(字\)는|호\(號\)는|시\(諡\)는|자는|호는)(?:\s*|\s+)[^,.!?]+(?=[,.!?]|$)/g;
+    cleaned = cleaned.replace(genealogyPattern, "");
 
-    cleaned = cleaned.replace(genealogyPattern, (match) => {
-        // 혹시 족보 구문 끝에 숫자(예: 3)가 말려 들어갔다면 숫자는 살려두고 앞부분만 지움
-        return match.replace(/\s*\d+$/, "");
-    });
-    // 2. 구문을 오려내면서 문장 끝이 연결어미(~으로, ~이고, ~이며)로 남았으면 서술형(~이다.)으로 자동 마감
-    cleaned = cleaned.replace(/(?:으로|이고|이며|였으며|였고|였으나),\s*$/i, "이다.");
-    cleaned = cleaned.replace(/(?:으로|이고|이며|였으며|였고|였으나)\s*$/i, "이다.");
+    // 2. 구문 제거 후 문장 끝 찌꺼기 정돈
+    cleaned = cleaned.replace(/[.,\s]+$/, "");
 
-    // 3. 마침표 및 찌꺼기 공백 정돈
-    cleaned = cleaned.trim();
-    if (cleaned && !/[.!?]$/.test(cleaned)) {
+    // 3. 어미 수리 (~으로 -> ~이다. / ~였으며 -> ~였다.)
+    cleaned = cleaned.replace(/(?:으로|이고|이며|였으며|였고|였으나|이자)$/i, "이다.");
+    cleaned = cleaned.replace(/(?:하하였고|하였으며|하고)$/i, "하였다.");
+
+    // 4. 문장 시작 찌꺼기 정리
+    cleaned = cleaned.replace(/^[,.\s]+/, "").trim();
+
+    if (!cleaned) return "";
+
+    // 5. 마침표 복원
+    if (!/[.!?]$/.test(cleaned)) {
         cleaned += ".";
     }
-    cleaned = cleaned.replace(/\s+/g, " ").trim();
 
-    // 4. 오려내고 남은 알맹이가 너무 짧거나(15자 미만) 족보 단어만 있던 개별 문장이면 버림
-    if (cleaned.length < 15 || /^[^가-힣]*[가-힣]{1,5}[.!?]$/.test(cleaned)) {
-        return "";
-    }
+    if (cleaned.length < 10) return "";
 
     return cleaned;
 }
