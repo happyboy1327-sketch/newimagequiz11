@@ -74,7 +74,7 @@ function removeMetaBySearch(text, mode = "all") {
         )
         .replace(
         /(이고|이며|이고)\s*$/,
-        "$1."
+        "$1.")
         .replace(/,\s*,/g, ",")
         .replace(/\s+/g, " ")
         .trim();
