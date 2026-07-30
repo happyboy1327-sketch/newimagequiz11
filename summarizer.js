@@ -2,7 +2,17 @@ const IMPORTANT_KEYWORDS = [
     "태어났다", "출생", "사망", "활동", "노력", "독점", "정벌", "발표", "창시", "발명",
     "발견", "폐지", "수상", "노벨", "대표", "저서", "저자", "작품", "전쟁", "독립", "혁명",
     "연구", "증명", "설립", "창립", "개발", "제작", "기록", "영향", "업적", "졸업", "도입", "주장",
-    "임명", "취임", "부정", "일기", "수용소", "유대인", "수필", "순국", "3.1운동", "이토", "히로부미", "옥사", "고문", "투옥"
+    "임명", "취임", "부정", "일기", "수용소", "유대인", "수필", "순국", "3.1운동", "이토",
+    "히로부미", "옥사", "고문", "투옥",
+
+    // 추가 추천
+    "역임",
+    "주석",
+    "의병",
+    "교육",
+    "망명",
+    "피살",
+    "저항"
 ];
 
 // 📍 summ.js 상단 GENEALOGY_REGEX 수정
@@ -194,6 +204,43 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
     const result = uniqueCandidates.map(item => item.sentence).join(" ");
     return result;
+}
+const NAME_META_WORDS = [
+    "본관",
+    "자는",
+    "자(字)",
+    "호는",
+    "호(號)",
+    "초호",
+    "이명",
+    "아명"
+];
+
+function isMetaOnlySentence(sentence) {
+    const hasMeta = NAME_META_WORDS.some(word =>
+        sentence.includes(word)
+    );
+
+    if (!hasMeta) return false;
+
+    // 기존 전역변수 사용
+    const hasImportant = IMPORTANT_KEYWORDS.some(keyword =>
+        sentence.includes(keyword)
+    );
+
+    // 업적·활동 정보가 있으면 삭제 금지
+    if (hasImportant) return false;
+
+    return true;
+}
+
+
+function removeMetaSentence(sentence) {
+    if (!isMetaOnlySentence(sentence)) {
+        return sentence;
+    }
+
+    return null;
 }
 
 export function buildDescription(
