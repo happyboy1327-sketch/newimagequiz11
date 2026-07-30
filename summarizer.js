@@ -5,8 +5,10 @@ const IMPORTANT_KEYWORDS = [
     "임명", "취임", "부정", "일기", "수용소", "유대인", "수필"
 ];
 
-// 📍 summ.js 상단 GENEALOGY_REGEX 수정
-const GENEALOGY_REGEX = /(의\s*(아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|차녀|장녀)(이다|이었다|이며|이고|\s|\.))|(슬하에)|(결혼하(여|였|고))|(출생하|태어났)|(본관은|아명은|자\(字\)는|자\s*는|호\(號\)는|호\s*는|당호는|시호는)/;
+// 🌟 [강화] 자는, 호는, 시는, 본관은, 아명은 등 족보/호 TMI를 싹 잡아내는 정규식
+const STRICT_GENEALOGY_REGEX = /(본관은|아명은|자\(字\)는|자는\s+|호\(號\)는|호는\s+|당호는|시호는|시\(諡\)는|시는\s+|성씨는|족보는)/;
+
+const GENEALOGY_REGEX = /(의\s*(아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|차녀|장녀)(이다|이었다|이며|이고|\s|\.))|(슬하에)|(결혼하(여|였|고))|(출생하|태어났)/;
 const NUTRITION_REGEX = /(독립|전투|운동|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|승리|패배|결성|폐지|창립|설립|의병|관찰사|벼슬|임진왜란|제정|창간|조직|주도|도입|확립|개척|(?!(?:여론|결론|방법론))(?:[가-힣A-Za-z]+론)|(?:[가-힣A-Za-z]+주의))/;
 const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노년|보냈|생활했|향리|소일)/;
 const DANGLING_START_REGEX = /^(이(후|러한|와\s+같이)?|따라서|이에|반면)\b/;
@@ -24,6 +26,14 @@ function cleanWikiText(text) {
         .replace(/\s+/g, " ")
         .replace(/\s+\./g, ".")
         .trim();
+}
+
+// 🌟 [추가] 족보/호/자/시호 문장을 아예 통째로 지워버리는 청소 함수
+function purgeGenealogySentences(text) {
+    if (!text) return "";
+    return splitSentences(text)
+        .filter(sentence => !STRICT_GENEALOGY_REGEX.test(sentence))
+        .join(" ");
 }
 
 function isIncompleteSentence(sentence) {
@@ -80,8 +90,6 @@ function filterOtherPersonDeath(text, aliases = []) {
         const match = sentence.match(/([가-힣\s]{2,12})(?:이|가|은|는).*?(?:사망|별세|서거|타계|전사|시해|사사|병사|처형|살해|숨졌|목숨을\s*잃)/);
         if (match) {
             const subjectName = match[1].trim();
-            
-            // 🌟 [추가된 부분] 대명사(그, 그녀 등)나 날짜/장소가 주어로 잡힌 경우 본인 문장으로 인정
             const isPronounOrContext = /^(그|그녀|본인|이들|해당\s*인물|이\s*인물)$/.test(subjectName) || /년|월|일|수용소|당시/.test(subjectName);
             
             if (!isPronounOrContext) {
@@ -91,7 +99,7 @@ function filterOtherPersonDeath(text, aliases = []) {
                     const cleanSubject = subjectName.replace(/[\s\_\-]/g, "");
                     return cleanSubject.includes(cleanAlias) || cleanAlias.includes(cleanSubject);
                 });
-                if (!isSelf) return false; // 확실한 타인 이름일 때만 삭제
+                if (!isSelf) return false;
             }
         }
 
@@ -132,6 +140,9 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         if (/^[《<〈“"'`].*[》>〉”"'`]$/.test(text)) return;
         if (text.length < 15 || text.length > 320) return;
 
+        // 🌟 [강력 차단] '자는', '호는', '시는', '본관은' 포함 문장은 후보 등록 자체를 거부!
+        if (STRICT_GENEALOGY_REGEX.test(text)) return;
+
         let processedText = text;
         let targetIndex = index;
 
@@ -169,14 +180,17 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
             if (original.includes(kw)) score += 5;
         });
 
-        if (!NUTRITION_REGEX.test(original) && GENEALOGY_REGEX.test(original)) score -= 50;
+        if (GENEALOGY_REGEX.test(original)) score -= 80;
         if (MINOR_TMI_REGEX.test(original)) score -= 30;
         if (original.length >= 25 && original.length <= 150) score += 5;
 
         return { sentence: original, index, score };
-    });
+    })
+    // 🌟 [핵심] 점수가 0점 이하인 저품질/TMI 문장은 절대 최종 후보에 넣지 않음!
+    .filter(item => item.score > 0);
 
-    // 1. 점수 높은 순으로 상위 후보 추출
+    if (candidates.length === 0) return "";
+
     candidates.sort((a, b) => b.score - a.score);
     
     const seen = new Set();
@@ -189,11 +203,9 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         }
     }
 
-    // 2. 🌟 원래 글의 위치(index) 순서대로 재정렬하여 맥락 유지
     uniqueCandidates.sort((a, b) => a.index - b.index);
 
-    const result = uniqueCandidates.map(item => item.sentence).join(" ");
-    return result;
+    return uniqueCandidates.map(item => item.sentence).join(" ");
 }
 
 export function buildDescription(
@@ -207,13 +219,16 @@ export function buildDescription(
     let intro = cleanWikiText(introText);
     let body = cleanWikiText(bodyText);
 
+    // 🌟 [입구 차단] intro와 body에 들어있는 모든 '자는.. 시는.. 호는..' 문장 완벽 삭제
+    intro = purgeGenealogySentences(intro);
+    body = purgeGenealogySentences(body);
+
     if (intro && aliases.length > 0) intro = filterOtherPersonDeath(intro, aliases);
     if (body && aliases.length > 0) body = filterOtherPersonDeath(body, aliases);
 
     intro = normalizeSpace(intro || "");
     body = normalizeSpace(body || "");
 
-    // 🌟 cleanSlice 함수 정의를 위로 이동
     const cleanSlice = (text) => {
         if (text.length <= maxLength) return text;
         const sliced = text.slice(0, maxLength);
@@ -224,13 +239,13 @@ export function buildDescription(
         return sliced;
     };
 
-    // 🌟 15번째 줄 수정: 필터링 후 문장이 0개가 되어 탈락하는 것을 방지 (Fallback)
     if (!intro && !body) {
         const fallback = normalizeSpace(cleanWikiText(introText) || cleanWikiText(bodyText));
         if (!fallback) return "";
-        return cleanSlice(fallback);
+        return cleanSlice(purgeGenealogySentences(fallback));
     }
 
+    // 🌟 [수정] 350자 미만 short text 분기에서도 이미 purgeGenealogySentences로 지워진 깔끔한 텍스트만 전달
     const totalLength = intro.length + body.length;
     if (totalLength < 350) {
         const combined = normalizeSpace([intro, body].filter(Boolean).join(" "));
@@ -242,9 +257,7 @@ export function buildDescription(
     let usedSecondSentence = false;
 
     const secondSentence = introSentences[1] || "";
-    const isGenealogyTMI = GENEALOGY_REGEX.test(secondSentence);
-
-    if (!isGenealogyTMI && secondSentence) {
+    if (secondSentence && !STRICT_GENEALOGY_REGEX.test(secondSentence)) {
         if (firstSentence.length < 50 && introSentences.length > 1) {
             firstSentence += " " + secondSentence;
             usedSecondSentence = true;
