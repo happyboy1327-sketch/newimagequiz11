@@ -94,11 +94,20 @@ function isCulturalSiteImage(url) {
     if (!url || typeof url !== "string") return false;
 
     let filename = url.split('?')[0];
-    try {
-        filename = decodeURIComponent(filename);
-    } catch (e) {}
 
-    let clean = filename
+    // 🌟 1. 더 이상 % 인코딩이 남지 않을 때까지 반복 디코딩 (이중/삼중 인코딩 완전 해제)
+    let decoded = filename;
+    try {
+        while (decoded.includes('%')) {
+            const next = decodeURIComponent(decoded);
+            if (next === decoded) break;
+            decoded = next;
+        }
+    } catch (e) {
+        // 잘못된 % 문자로 인한 URIError 발생 시 catch로 안전 처리
+    }
+
+    let clean = decoded
         .replace(/^.*[\\/]/, '')
         .replace(/^파일:/i, '')
         .replace(/\.[^/.]+$/, '')
@@ -108,18 +117,20 @@ function isCulturalSiteImage(url) {
     const absoluteSiteRegex = /(palace|temple|shrine|tomb|heritage|sanctuary|sadaang|gyeongbok|bulguk|seokguram)/i;
     if (absoluteSiteRegex.test(clean)) return true;
 
+    // 🌟 2. 토큰으로 쪼개기 전, 전체 파일명(clean)에 '신도비', '서원', '유적지' 등이 포함되어 있다면 즉시 차단
+    const otherSiteRegex = /([가-힣]{2,}(궁|능|릉|묘|각|루)$|사찰|서원|신도비|유적지|행궁|[宮陵墓寺閣樓])/;
+    if (otherSiteRegex.test(clean)) return true;
+
     const tokens = clean.split(/[\s_.-]+/).filter(Boolean);
 
     const personTitles = new Set(['mother', 'king', 'queen', 'saint', 'president', 'actor', 'doctor', 'prof']);
     if (tokens.some(t => personTitles.has(t.toLowerCase()))) return false;
 
     const koreanSaRegex = /^[가-힣]{1,3}사$/;
-    const otherSiteRegex = /([가-힣]{2,}(궁|능|릉|묘|각|루)$|사찰|서원|신도비|유적지|행궁|[宮陵墓寺閣樓])/;
     const englishSiteSuffix = /(gung|neung|reung|myo|sadaang|hyeonsa|guksa)$/i;
 
     return tokens.some(token => 
         koreanSaRegex.test(token) || 
-        otherSiteRegex.test(token) || 
         englishSiteSuffix.test(token)
     );
 }
