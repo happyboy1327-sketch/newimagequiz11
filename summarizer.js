@@ -1,4 +1,5 @@
 
+
 // ==========================================================
 // 1. 전역 상수 및 정규식
 // ==========================================================
@@ -160,31 +161,63 @@ function resolveDemonstrativeReference(sentence, sentences, currentIndex) {
     return processedSentence;
 }
 
-function filterOtherPersonDeath(text, aliases = []) {
-    if (!text) return "";
-    const sentences = splitSentences(text);
-    const cleanSentences = sentences.filter((sentence, index) => {
-        if (index === 0) return true;
-        const match = sentence.match(/([가-힣a-zA-Z\s]{2,20})(?:이|가|은|는).*?(?:사망|별세|서거|타계|전사|시해|사사|병사|처형|살해|숨졌|목숨을\s*잃)/);
-        if (match) {
-            const subjectName = match[1].trim();
-            const isPronounOrContext = /^(그|그녀|본인|이들|해당\s*인물|이\s*인물)$/.test(subjectName) || /년|월|일|수용소|당시/.test(subjectName);
-            if (!isPronounOrContext) {
-                const isSelf = aliases.some(alias => {
-                    if (!alias) return false;
-                    const cleanAlias = alias.replace(/[\s_\-]/g, "");
-                    const cleanSubject = subjectName.replace(/[\s_\-]/g, "");
-                    return cleanSubject.includes(cleanAlias) || cleanAlias.includes(cleanSubject);
-                });
-                if (!isSelf) return false;
+function filterOtherPerson(rawSentences, aliases = []) {
+    return rawSentences.filter((sentence, index) => {
+        const processedText = sentence.trim();
+        if (!processedText) return false;
+
+        // ==========================================
+        // 1. 타인 사망 문장 필터링 (filterOtherPersonDeath)
+        // ==========================================
+        if (index > 0) {
+            const deathMatch = processedText.match(/([가-힣a-zA-Z\s]{2,20})(?:이|가|은|는).*?(?:사망|별세|서거|타계|전사|시해|사사|병사|처형|살해|숨졌|목숨을\s*잃)/);
+            if (deathMatch) {
+                const subjectName = deathMatch[1].trim();
+                const isPronounOrContext = /^(그|그녀|본인|이들|해당\s*인물|이\s*인물)$/.test(subjectName) || /년|월|일|수용소|당시/.test(subjectName);
+                
+                if (!isPronounOrContext) {
+                    const isSelf = aliases.some(alias => {
+                        if (!alias) return false;
+                        const cleanAlias = alias.replace(/[\s_\-]/g, "");
+                        const cleanSubject = subjectName.replace(/[\s_\-]/g, "");
+                        return cleanSubject.includes(cleanAlias) || cleanAlias.includes(cleanSubject);
+                    });
+                    if (!isSelf) return false; // 타인의 사망 문장이면 제거
+                }
+            }
+
+            if (typeof possessiveDeathRegex !== "undefined" && possessiveDeathRegex.test(processedText) && !/(그녀|그|본인|가족|식구|모두|함께)/.test(processedText)) {
+                return false;
             }
         }
-        if (possessiveDeathRegex.test(sentence) && !/(그녀|그|본인|가족|식구|모두|함께)/.test(sentence)) {
-            return false;
+
+        // ==========================================
+        // 2. 주인공(이름/별칭) 및 대명사 검증
+        // ==========================================
+        const hasTargetName = aliases && aliases.length > 0 
+            ? aliases.some(alias => alias && processedText.includes(alias)) 
+            : false;
+
+        const hasMainPronoun = /^(?:그는|그가|그의|그를|그에게)\b/.test(processedText);
+
+        if (!hasTargetName) {
+            // 이름도 없고 대명사도 없으면 버림
+            if (!hasMainPronoun) return false;
+
+            // 대명사만 있는 경우: 직전 문장에 주인공 이름이 있었는지 확인
+            if (index > 0) {
+                const prevText = rawSentences[index - 1];
+                const prevHasTargetName = aliases.some(alias => alias && prevText.includes(alias));
+                
+                // 직전 문장에 주인공 이름이 없었다면 타인을 가리키는 대명사이므로 버림
+                if (!prevHasTargetName) return false;
+            } else {
+                return false;
+            }
         }
+
         return true;
     });
-    return cleanSentences.join(" ");
 }
 
 function splitSentences(text) {
@@ -220,7 +253,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
     let cleanedBody = removeMetaBySearch(cleanWikiText(bodyText));
     if (aliases && aliases.length > 0) {
-        cleanedBody = filterOtherPersonDeath(cleanedBody, aliases);
+        cleanedBody = filterOtherPerson(cleanedBody, aliases);
     }
 
     const rawSentences = splitSentences(cleanedBody);
@@ -352,8 +385,8 @@ export function buildDescription(introText, bodyText, aliases = [], extraCount =
     let intro = removeMetaBySearch(cleanWikiText(introText));
     let body = removeMetaBySearch(cleanWikiText(bodyText));
 
-    if (intro && aliases.length > 0) intro = filterOtherPersonDeath(intro, aliases);
-    if (body && aliases.length > 0) body = filterOtherPersonDeath(body, aliases);
+    if (intro && aliases.length > 0) intro = filterOtherPerson(intro, aliases);
+    if (body && aliases.length > 0) body = filterOtherPerson(body, aliases);
 
     intro = normalizeSpace(intro || "");
     body = normalizeSpace(body || "");
