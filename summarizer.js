@@ -119,7 +119,7 @@ function splitSentences(text) {
         }, []);
 }
 
-export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 2) {
+export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 3) {
     if (!bodyText || typeof bodyText !== "string") return "";
 
     const rawSentences = splitSentences(bodyText);
@@ -200,7 +200,7 @@ export function buildDescription(
     introText,
     bodyText,
     aliases = [],
-    extraCount = 3,
+    extraCount = 4,
     introThreshold = 150,
     maxLength = 1100
 ) {
