@@ -6,44 +6,42 @@ const IMPORTANT_KEYWORDS = [
     "히로부미", "옥사", "고문", "투옥", "역임", "주석", "의병", "교육", "망명", "피살", "저항", "만세",
     "저술", "집대성", "창안", "고안", "편찬", "집필", "창제", "축조", "개혁", "기여",
     "주도", "총괄", "선출", "달성", "남겼", "남기", "평가받", "일컬어", "불린", "이끌",
-    "가담", "초석", "기틀", "개선", "전개", "주창", "체계화", "정립", "기여하", "성공"
+    "가담", "초석", "기틀", "개선", "전개", "주창", "체계화", "정립", "기여하", "성공",
+    // 🛠️ [추가] 진 시황제 및 제왕 관련 핵심 키워드
+    "통일", "멸망", "함락", "정복", "편입", "군현제", "도량형", "만리장성",
+    "분서갱유", "황제", "칭호", "제도", "토목", "능묘", "순행", "붕어"
 ];
 
 const GENEALOGY_REGEX = /(의\s*(?:아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|차녀|장녀|자녀|후손)(?:이다|이었다|이며|이고|으로서)?|슬하에|결혼하(?:여|였|고)|결혼했(?:다)?)/;
-const NUTRITION_REGEX = /(독립|전투|(?:독립|만세|민주화)?운동(?!\s*장)|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|전승|수상|발표|설립|창립|개발|발명가|순국|고문|(?!(?:여론|결론|방법론))(?:[가-힣]+론)|(?:[가-힣]+주의))/;
-const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노년|보냈|생활했|향리|소일|이름을\s*딴|체육관|유적|유래)/;
+
+// 🛠️ [수정] NUTRITION_REGEX에 정복/제도 관련 패턴 추가
+const NUTRITION_REGEX = /(독립|전투|(?:독립|만세|민주화)?운동(?!\s*장)|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|전승|수상|발표|설립|창립|개발|발명가|순국|고문|정복|멸망|편입|군현제|도량형|만리장성|분서갱유|황제|칭호|제도|토목|능묘|순행|붕어|(?!(?:여론|결론|방법론))(?:[가-힣A-Za-z]+론)|(?:[가-힣A-Za-z]+주의))/;
+
+const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노년|보냈|생활했|향리|소일|이름을\s*딴|체육관|유적)/;
 const DANGLING_START_REGEX = /^(이(후|러한|와\s+같이)?|따라서|이에|반면)\b/;
 
+// 🛠️ [추가] 이름 유래/개명 이력 감지용 정규식
+const NAME_ORIGIN_REGEX = /(이름은?\s*.*?(?:유래|뜻|불리다|붙이다|개명|바꾸다)|호는?\s*.*?(?:유래|뜻|불리다|칭하다))/;
+const NAME_CHANGE_REGEX = /(이름을\s*(?:바꾸다|개명하다|칭하다)|~에서\s*~로\s*(?:개명|변경))/;
 
-
-// 🌟 [추가] 누락되었던 removeMetaBySearch 함수 구현
-//function removeMetaBySearch(text) {/
 function removeMetaBySearch(text) {
     if (!text) return "";
 
     let result = text;
 
     // 1. 메타 키워드 정의
-    const keywords = "본관|자|호|아호|아명|태명|세례명|일명|당호|시호|법명|성명";
+    // 🛠️ [수정] "호" 키워드 제거하여 일반 서술문("호는 ~이다")과의 충돌 방지
+    const keywords = "본관|자|별호|아호|아명|태명|세례명|일명|당호|시호|법명|성명";
     
-    // 🛠️ [수정] 브로드캐스트 탐색으로 정확한 메타 정보만 매칭
-    // 조건: 
-    // 1. 키워드 뒤에 반드시 값(괄호 포함 이름 등)이 와야 함
-    // 2. "호는 미천한 백성을" 같은 일반 서술은 매칭되지 않도록
-    //    → 값 부분이 최소 2글자 이상의 고유명사 패턴이어야 함
-    const keyPattern = `(?<![가-힣])(?:${keywords})(?:은|는)`;
+    // 💡 수정: 선택적 부분을 필수로 변경
+    const keyPattern = `(?<![가-힣])(?:${keywords})(?:은|는|\\([^)]*\\))`;
     
-    // 값 패턴: 괄호가 있는 경우 또는 없는 경우 모두 허용하지만, 
-    // 최소한 한글/한자/영문이 포함되어야 함 (일반 서술어 방지)
-    const valToken = `(?:[가-힣a-zA-Z\\u4E00-\\u9FFF]{2,}(?:\\([^)]*\\))?)`; 
-    
-    // 중점(·)으로 연결된 복수 값
+    const valToken = `(?:[^\\s,.\\(\\)\\u00B7]+(?:\\([^)]*\\))?)`; 
     const valPattern = `${valToken}(?:\\s*[·ㆍ]\\s*${valToken})*`;
     
-    const singleMeta = `${keyPattern}\\s+${valPattern}`;
+    const singleMeta = `${keyPattern}\\s*${valPattern}`;
 
     // 2. 연속 메타 정보 체인 매칭 및 삭제
-    // 예: ", 자는 연하(蓮下), 호는 백범(白凡)·연상(蓮上)이다"
     const metaChainRegex = new RegExp(
         `(?:,\\s*|\\s+)*(?:${singleMeta}(?:,\\s*|\\s+이며|\\s+이고|\\s+)*)+(?:이다|였다|이었다)?`,
         "g"
@@ -51,7 +49,7 @@ function removeMetaBySearch(text) {
 
     result = result.replace(metaChainRegex, "");
 
-    // 3. 메타 제거 후 문장 끝 어미 연결 처리
+    // 3. 메타 제거 후 문장 끝 어미 연결 처리 (~으로. -> ~이다.)
     result = result
         .replace(/([가-힣]+)으로(?=\s*[\.!\?])/g, "$1이다")
         .replace(/([가-힣]+)이며(?=\s*[\.!\?])/g, "$1이다")
@@ -94,7 +92,7 @@ function findPrecedingTitle(sentences, currentIndex) {
     for (let i = currentIndex - 1; i >= Math.max(0, currentIndex - 3); i--) {
         const prevText = sentences[i];
         if (!prevText) continue;
-        const titleMatch = prevText.match(/《([^》]+)》|<([^>]+)>|〈([^〉]+)〉|“([^”]+)”|"([^"]+)"|'([^']+)'/);
+        const titleMatch = prevText.match(/《([^》]+)》|<([^>]+)>|〈([^〉]+)〉|"([^"]+)"|'([^']+)'/);
         if (titleMatch) return titleMatch[0];
     }
     return null;
@@ -134,7 +132,6 @@ function filterOtherPersonDeath(text, aliases = []) {
     if (!text) return "";
     const sentences = splitSentences(text);
     const cleanSentences = sentences.filter((sentence, index) => {
-        // 💡 첫 번째 문장(인물 개요)은 본인 생몰년 정보이므로 필터링 검사를 건너뛰고 무조건 유지
         if (index === 0) return true;
 
         const match = sentence.match(/([가-힣a-zA-Z\s]{2,20})(?:이|가|은|는).*?(?:사망|별세|서거|타계|전사|시해|사사|병사|처형|살해|숨졌|목숨을\s*잃)/);
@@ -177,7 +174,6 @@ function splitSentences(text) {
         }, []);
 }
 
-//export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 3) {//
 export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 3) {
     if (!bodyText || typeof bodyText !== "string") return "";
 
@@ -199,7 +195,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         if (!text) return;
 
         if (isIncompleteSentence(text)) return;
-        if (/^[《<〈“"'`].*[》>〉”"'`]$/.test(text)) return;
+        if (/^[《<〈""'`].*[》>〉""'`]$/.test(text)) return;
         if (text.length < 15) return;
 
         let processedText = text;
@@ -254,6 +250,13 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
             if (original.includes(kw)) score += 5;
         });
 
+        // 🛠️ [추가] 이름 유래/개명 이력 문장 감점
+        if (NAME_ORIGIN_REGEX.test(original)) {
+            score -= 15;
+        } else if (NAME_CHANGE_REGEX.test(original)) {
+            score -= 10;
+        }
+
         if (!NUTRITION_REGEX.test(original) && GENEALOGY_REGEX.test(original)) {
             score -= 50;
         }
@@ -306,7 +309,6 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
     const seen = new Set();
 
     // 1순위: 핵심 문장이 가장 많은 구역(maxZoneIndex)에서 최우선으로 선별
-    // count가 작아도(3~4) 다른 구역 자리를 최소 1개는 남기도록 상한 캡
     const zoneLimit = count > 1
         ? Math.min(Math.max(1, Math.ceil(count * 0.7)), count - 1)
         : count;
@@ -350,8 +352,6 @@ export function buildDescription(
     introThreshold = 150,
     maxLength = 1100
 ) { 
-    // 💡 [수정 1] 최상단에서 cleanWikiText 실행 직후 removeMetaBySearch로 재할당
-    // 이제 아래의 모든 로직(splitSentences, GENEALOGY_REGEX, extra 추출)에 깨끗한 텍스트가 들어갑니다.
     let intro = removeMetaBySearch(cleanWikiText(introText));
     let body = removeMetaBySearch(cleanWikiText(bodyText));
 
@@ -380,7 +380,7 @@ export function buildDescription(
     const totalLength = intro.length + body.length;
     if (totalLength < 350) {
         const combined = normalizeSpace([intro, body].filter(Boolean).join(" "));
-        return cleanSlice(combined); // 이미 최상단에서 메타가 제거되었으므로 그대로 슬라이스
+        return cleanSlice(combined);
     }
 
     const introSentences = splitSentences(intro).filter(Boolean);
@@ -404,8 +404,6 @@ export function buildDescription(
         }
     }
 
-    // 💡 [extra 추출 위치]
-    // 첫 문장(들)에 쓰이고 남은 remainingIntro와 body를 합쳐 targetBody를 생성
     let extra = "";
     const remainingIntro = introSentences
         .slice(usedSecondSentence ? 2 : 1)
@@ -414,7 +412,6 @@ export function buildDescription(
     const targetBody = normalizeSpace([remainingIntro, body].filter(Boolean).join(" "));
 
     if (targetBody && targetBody.length > 12) {
-        // 이미 최상단에서 메타가 완벽히 제거된 targetBody에서 extra 문장을 꺼냅니다.
         extra = extractImportantSentences(
             targetBody,
             "",
