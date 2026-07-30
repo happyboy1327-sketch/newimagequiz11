@@ -116,9 +116,12 @@ function cleanGenealogyClause(sentence) {
     let cleaned = sentence;
 
     // 1. 문장 내부/끝에 붙은 자, 호, 본관, 아명, 당호, 시호, 태명, 세례명 구문만 싹 오려냄
-    const genealogyPattern = /,?\s*(?:본관은|아명은|태명은|세례명은|자\(字\)는|자는|호\(號\)는|호는|당호는|시호는|시\(諡\)는|일명은)\s+[^.!?]+(?=[.!?]|$)/g;
-    cleaned = cleaned.replace(genealogyPattern, "");
+    const genealogyPattern = /,?\s*(?:본관은|아명은|태명은|세례명은|자\(字\)는|자는|호\(號\)는|호는|당호는|시호는|시\(諡\)는|일명은)\s+[^.!?]*?(?=\d+\.|\.|!|\?|$)/g;
 
+    cleaned = cleaned.replace(genealogyPattern, (match) => {
+        // 혹시 족보 구문 끝에 숫자(예: 3)가 말려 들어갔다면 숫자는 살려두고 앞부분만 지움
+        return match.replace(/\s*\d+$/, "");
+    });
     // 2. 구문을 오려내면서 문장 끝이 연결어미(~으로, ~이고, ~이며)로 남았으면 서술형(~이다.)으로 자동 마감
     cleaned = cleaned.replace(/(?:으로|이고|이며|였으며|였고|였으나),\s*$/i, "이다.");
     cleaned = cleaned.replace(/(?:으로|이고|이며|였으며|였고|였으나)\s*$/i, "이다.");
