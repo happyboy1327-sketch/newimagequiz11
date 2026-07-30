@@ -12,26 +12,40 @@ const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노
 const DANGLING_START_REGEX = /^(이(후|러한|와\s+같이)?|따라서|이에|반면)\b/;
 
 // 🌟 [추가] 누락되었던 removeMetaBySearch 함수 구현
-function removeMetaBySearch(text, mode = "all") {
+function removeMetaBySearch(text) {
     if (!text) return "";
 
-    const original = text;
+    // 1. 메타 키워드 및 값 패턴 정의
+    const keywords = "본관|자|호|아호|아명|태명|세례명|일명|당호|시호|법명|성명";
+    const keyPattern = `(?:(?:${keywords})(?:은|는|\\([^)]*\\))?)`;
+    
+    // 단일 값 (예: "백범(白凡)")
+    const valToken = `(?:[^\\s,.\\(\\)\\u00B7]+(?:\\([^)]*\\))?)`; 
+    // 중점(·)으로 연결된 값 (예: "백범(白凡)·연상(蓮上)")
+    const valPattern = `${valToken}(?:\\s*[·ㆍ]\\s*${valToken})*`;
+    
+    const singleMeta = `${keyPattern}\\s*${valPattern}`;
 
-    let result = text;
+    // 2. 연속된 메타 절(Chained Meta) 및 종결어미 통째로 매칭
+    // 예: ", 자는 연하(蓮下), 호는 백범(白凡)·연상(蓮上)이다"
+    const metaChainRegex = new RegExp(
+        `(?:,\\s*|\\s+)*(?:${singleMeta}(?:,\\s*|\\s+이며|\\s+이고|\\s+)*)+(?:이다|였다|이었다)?`,
+        "g"
+    );
 
-    const metaRegex =
-/(?:,\s*)?(본관은?|자는?|자\(字\)|호는?|호\(號\)|아호는?|아명은?|태명은?|세례명은?|일명은?|당호는?|시호는?)\s*[^,.]+(?:\([^)]*\))?\s*(?:이며|으로|이고|이다|였다|이었다)?/g;
-    result = result.replace(metaRegex, "");
+    let result = text.replace(metaChainRegex, "");
 
+    // 3. 메타 제거 후 남은 문장 끝 연결 어미 다듬기 (~으로. -> ~이다.)
     result = result
-    .replace(/\s+이\.$/, "이다.")
-    .replace(/\s+였\.$/, "였다.")
-    .replace(/\s+였이다\./, "였다.")
-    .replace(/\s+\.$/, ".")
-    .trim();
+        .replace(/([가-힣]+)으로(?=\s*[\.!\?])/g, "$1이다")
+        .replace(/([가-힣]+)이며(?=\s*[\.!\?])/g, "$1이다")
+        .replace(/([가-힣]+)이고(?=\s*[\.!\?])/g, "$1이다")
+        .replace(/,\s*\./g, ".")
+        .replace(/\s+,/g, ",")
+        .replace(/\s+/g, " ")
+        .trim();
 
-    // 삭제 후 문장 붕괴 방지
-     return result;
+    return result;
 }
 
 function normalizeSpace(text = "") {
