@@ -154,10 +154,12 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
     if (!bodyText || typeof bodyText !== "string") return "";
 
     const rawSentences = splitSentences(bodyText);
+    console.log(rawSentences);
     const cleanedSentences = [];
 
     rawSentences.forEach((sentence, index) => {
         let text = cleanWikiText(sentence);
+        console.log("AFTER CLEAN:", text);
 
         if (!text) return;
 
