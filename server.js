@@ -114,7 +114,7 @@ function isCulturalSiteImage(url) {
     if (tokens.some(t => personTitles.has(t.toLowerCase()))) return false;
 
     const koreanSaRegex = /^[가-힣]{1,3}사$/;
-    const otherSiteRegex = /([가-힣]{2,}(궁|능|릉|묘|각|루)$|사찰|서원|유적지|행궁|[宮陵墓寺閣樓])/;
+    const otherSiteRegex = /([가-힣]{2,}(궁|능|릉|묘|각|루)$|사찰|서원|신도비|유적지|행궁|[宮陵墓寺閣樓])/;
     const englishSiteSuffix = /(gung|neung|reung|myo|sadaang|hyeonsa|guksa)$/i;
 
     return tokens.some(token => 
