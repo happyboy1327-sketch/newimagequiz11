@@ -366,7 +366,6 @@ export function buildDescription(introText, bodyText, aliases = [], extraCount =
     let introClean = removeMetaBySearch(cleanWikiText(introText));
     let bodyClean = removeMetaBySearch(cleanWikiText(bodyText));
 
-    // 🛠️ [수정] intro/body 문자열을 문장 배열로 split 후 filterOtherPerson 적용
     if (introClean && aliases.length > 0) {
         const introSentences = splitSentences(introClean);
         introClean = filterOtherPerson(introSentences, aliases).join(" ");
@@ -400,32 +399,37 @@ export function buildDescription(introText, bodyText, aliases = [], extraCount =
         return cleanSlice(normalizeSpace([intro, body].filter(Boolean).join(" ")));
     }
 
+    // 🎯 [개선] 서문에 업적 키워드(NUTRITION_REGEX/KEYWORD_REGEX)가 있으면 최대 3문장(~250자)까지 계속 추출
     const introSentences = splitSentences(intro).filter(Boolean);
-    let firstSentence = introSentences[0] || "";
-    let usedSecondSentence = false;
+    const selectedIntroSentences = [];
 
-    const realFirstSentenceLength = firstSentence.replace(/\([^)]*\)/g, "").trim().length;
-    const secondSentence = introSentences[1] || "";
-    const isGenealogyTMI = GENEALOGY_REGEX.test(secondSentence);
+    if (introSentences.length > 0) {
+        selectedIntroSentences.push(introSentences[0]); // 첫 번째 문장은 기본 채택
 
-    if (!isGenealogyTMI && secondSentence) {
-        if (realFirstSentenceLength < 50 && introSentences.length > 1) {
-            firstSentence += " " + secondSentence;
-            usedSecondSentence = true;
-        } else if (introSentences.length > 1 && /(창시자|제정|대표|설립|창립|발명|발견|창안|업적|노벨|수상|혁명|독립|순국|고문|시위|3\.1|운동)/.test(secondSentence)) {
-            firstSentence += " " + secondSentence;
-            usedSecondSentence = true;
+        for (let i = 1; i < introSentences.length; i++) {
+            const sentence = introSentences[i];
+            const currentLen = selectedIntroSentences.join(" ").length;
+
+            if (currentLen >= 250 || selectedIntroSentences.length >= 3) break;
+
+            const isTMI = GENEALOGY_REGEX.test(sentence) || STORY_FLUFF_REGEX.test(sentence);
+            const isImportant = NUTRITION_REGEX.test(sentence) || KEYWORD_REGEX.test(sentence);
+
+            if (!isTMI && (isImportant || currentLen < 100)) {
+                selectedIntroSentences.push(sentence);
+            }
         }
     }
 
-    let extra = "";
-    const remainingIntro = introSentences.slice(usedSecondSentence ? 2 : 1).filter(Boolean).join(" ");
+    const introResultText = selectedIntroSentences.join(" ");
+    const remainingIntro = introSentences.slice(selectedIntroSentences.length).filter(Boolean).join(" ");
     const targetBody = normalizeSpace([remainingIntro, body].filter(Boolean).join(" "));
 
+    let extra = "";
     if (targetBody && targetBody.length > 12) {
         extra = extractImportantSentences(targetBody, "", aliases, extraCount);
     }
 
-    const merged = normalizeSpace([firstSentence, extra].filter(Boolean).join(" "));
+    const merged = normalizeSpace([introResultText, extra].filter(Boolean).join(" "));
     return cleanSlice(merged);
 }
