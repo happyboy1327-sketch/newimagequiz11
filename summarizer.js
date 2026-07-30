@@ -323,7 +323,7 @@ export function buildDescription(
     return cleanSlice(removeMetaBySearch(combined));
 }
 
-    cconst introSentences = splitSentences(intro).map(s => removeMetaBySearch(s));
+    const introSentences = splitSentences(intro).map(s => removeMetaBySearch(s));
 let firstSentence = removeMetaBySearch(introSentences[0] || "");
     let usedSecondSentence = false;
 
