@@ -30,51 +30,52 @@ function cleanWikiText(text) {
         .trim();
 }
 
-function removeMetaBySearch1(text) {
-    if (!text) return "";
-
-    // 문장 끝에 붙은 자·호·아명·본관 제거
-    // 예: "정치인으로, 자는 연하(蓮下), 호는 백범(白凡)·연상(蓮上)이다."
-    return text.replace(
-        /,\s*(자는|자\(字\)는|호는|호\(號\)는|아호는|아명은?|본관은?|태명은?|세례명은?|일명은?|당호|시호).*?(이다\.|이다$)/,
-        "."
-    )
-    .replace(/으로\.$/, "이다.");
-}
-
-
-function removeMetaBySearch2(text) {
+function removeMetaBySearch(text) {
     if (!text) return "";
 
     let result = text;
 
-    // 1. 앞 문장에 쉼표로 붙은 메타 제거
-    result = result.replace(
-        /,\s*(?:자는|자\(字\)|호는|호\(號\)|아호는|아명은|태명은|세례명은|일명은|본관은|시호는)[^.!?。]*(?:이다|이었다|이다\.)?/g,
-        ""
-    );
+    const metaRegex = /(태명은|세례명은|일명은|아명은|자는|자\(字\)|호는|호\(號\)|아호는|시호는)/g;
 
+    let match;
 
-    // 2. 독립 문장으로 된 메타 제거
-    const sentences = splitSentences(result);
+    while ((match = metaRegex.exec(result)) !== null) {
+        const start = match.index;
 
-    result = sentences.filter(sentence => {
+        // 앞부분 유지
+        const before = result.slice(0, start);
 
-        const isMetaSentence =
-            /^(본관은|자는|자\(字\)|호는|호\(號\)|아호는|아명은|태명은|세례명은|일명은|시호는)/
-            .test(sentence.trim());
+        // 메타 시작 이후
+        const after = result.slice(start);
 
-        if (isMetaSentence) {
-            return false;
+        // 다음 연결 지점 찾기
+        const end = after.search(
+            /(이며|이고|이고,|이다|이었다|였다)\.?/
+        );
+
+        if (end !== -1) {
+            const endLength = after.match(
+                /(이며|이고|이고,|이다|이었다|였다)\.?/
+            )[0].length;
+
+            result =
+                before.trimEnd() +
+                after.slice(end + endLength);
+
+            metaRegex.lastIndex = 0;
+        } else {
+            break;
         }
+    }
 
-        return true;
-
-    }).join(" ");
-
-    return result
+    // 앞뒤 쉼표 정리
+    result = result
+        .replace(/,\s*,/g, ",")
+        .replace(/\s+\./g, ".")
         .replace(/\s+/g, " ")
         .trim();
+
+    return result;
 }
 
 function isIncompleteSentence(sentence) {
@@ -182,8 +183,8 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         if (!text) return;
 
         // 먼저 메타 제거
-       text = removeMetaBySearch1(text);
-       text = removeMetaBySearch2(text);
+       text = removeMetaBySearch(text);
+       
 
         if (!text) return;
         if (isIncompleteSentence(text)) return;
@@ -231,8 +232,8 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         }
 
         // 참조 처리 후 다시 한번 메타 제거
-        processedText = removeMetaBySearch1(processedText);
-        processedText = removeMetaBySearch2(processedText);
+        processedText = removeMetaBySearch(processedText);
+     
 
         if (!processedText) return;
         if (processedText.length > 400) return;
