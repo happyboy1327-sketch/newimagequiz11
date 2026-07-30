@@ -233,6 +233,11 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         } else {
             processedText = resolveDemonstrativeReference(processedText, rawSentences, index);
         }
+        processedText = processedText.replace(/^(첫째|둘째|셋째|넷째|다섯째|마지막으로|우선|먼저|또한|그리고|한편|다음으로|결국),?\s*/g, "");
+        // 제거 후 다시 공백 정리        
+        processedText = processedText.trim();        
+        // 길이가 너무 짧아졌으면 스킵        
+        if (processedText.length < 15) return; 
 
         cleanedSentences.push({
             original: processedText,
