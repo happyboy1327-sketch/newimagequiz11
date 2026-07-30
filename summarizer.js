@@ -248,6 +248,10 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
             score += keywordMatches.length * 5;
         }
 
+        if (/자격루|측우기|혼천의|앙부일구|거북선|활자|인쇄|천문|의학|수학|공학|설계|고안|제작|개량/.test(original)) {            
+            score += 20;
+        }
+
         if (NAME_ORIGIN_REGEX.test(original)) {
             score -= 15;
         } else if (NAME_CHANGE_REGEX.test(original)) {
