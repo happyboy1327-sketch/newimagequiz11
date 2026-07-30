@@ -4,23 +4,11 @@ const IMPORTANT_KEYWORDS = [
     "연구", "증명", "설립", "창립", "개발", "제작", "기록", "영향", "업적", "졸업", "도입", "주장",
     "임명", "취임", "부정", "일기", "수용소", "유대인", "수필", "순국", "3.1운동", "이토",
     "히로부미", "옥사", "고문", "투옥",
-
-    // 추가 추천
-    "역임",
-    "주석",
-    "의병",
-    "교육",
-    "망명",
-    "피살",
-    "저항"
+    "역임", "주석", "의병", "교육", "망명", "피살", "저항"
 ];
 
 const META_RE = /(본관|아명|자는|자\(字\)|호는|호\(號\))/;
-
-// 📍 summ.js 상단 GENEALOGY_REGEX 수정
-// 기존 잘린 라인들을 아래처럼 바꿔주세요 (단어 유지, 누락된 끝부분 복원)
 const GENEALOGY_REGEX = /(의\s*(?:아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|차녀|장녀|자녀|후손)(?:이다|이었다|이며|이고|으로서)?|슬하에|결혼하(?:여|였|고)|결혼했(?:다)?)/;
-
 const NUTRITION_REGEX = /(독립|전투|운동|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|전승|수상|발표|설립|창립|개발|발명가)/;
 const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노년|보냈|생활했|향리|소일)/;
 const DANGLING_START_REGEX = /^(이(후|러한|와\s+같이)?|따라서|이에|반면)\b/;
@@ -70,7 +58,7 @@ function resolveVagueReference(sentence, foundTitle) {
 function resolveDemonstrativeReference(sentence, sentences, currentIndex) {
     let processedSentence = sentence;
     const targetRegex = /(이|그)\s+(작품|조각|그림|회화|동상|건축물|벽화|서적|책|화풍|시리즈|주장|사상|이론|업적|시기|운동|전쟁)/;
-    
+
     if (targetRegex.test(processedSentence)) {
         let foundTitle = null;
         for (let j = currentIndex - 1; j >= Math.max(0, currentIndex - 3); j--) {
@@ -94,10 +82,8 @@ function filterOtherPersonDeath(text, aliases = []) {
         const match = sentence.match(/([가-힣\s]{2,12})(?:이|가|은|는).*?(?:사망|별세|서거|타계|전사|시해|사사|병사|처형|살해|숨졌|목숨을\s*잃)/);
         if (match) {
             const subjectName = match[1].trim();
-            
-            // 🌟 [추가된 부분] 대명사(그, 그녀 등)나 날짜/장소가 주어로 잡힌 경우 본인 문장으로 인정
             const isPronounOrContext = /^(그|그녀|본인|이들|해당\s*인물|이\s*인물)$/.test(subjectName) || /년|월|일|수용소|당시/.test(subjectName);
-            
+
             if (!isPronounOrContext) {
                 const isSelf = aliases.some(alias => {
                     if (!alias) return false;
@@ -105,7 +91,7 @@ function filterOtherPersonDeath(text, aliases = []) {
                     const cleanSubject = subjectName.replace(/[\s\_\-]/g, "");
                     return cleanSubject.includes(cleanAlias) || cleanAlias.includes(cleanSubject);
                 });
-                if (!isSelf) return false; // 확실한 타인 이름일 때만 삭제
+                if (!isSelf) return false;
             }
         }
 
@@ -170,29 +156,28 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
         if (processedText.length > 300) return;
 
-// 자·호·본관만 있는 문장 제거
-if (META_RE.test(processedText)) {
-    const cleanedMeta = processedText
-        .replace(
-            /(?:본관은?|아명은?|자는?|자\(字\)|호는?|호\(號\))[^,，.。]+[,.，]?/g,
-            ""
-        )
-        .replace(/^이고\s*,?\s*/, "")
-        .trim();
+        // 자·호·본관만 있는 문장 제거
+        if (META_RE.test(processedText)) {
+            const cleanedMeta = processedText
+                .replace(
+                    /(?:본관은?|아명은?|자는?|자\(字\)|호는?|호\(號\))[^,，.。]+[,.，]?/g,
+                    ""
+                )
+                .replace(/^이고\s*,?\s*/, "")
+                .trim();
 
-    // 제거 후 의미 없는 문장이면 통째로 제외
-    if (cleanedMeta.length < 10) return;
+            if (cleanedMeta.length < 10) return;
+            processedText = cleanedMeta;
+        }
 
-    processedText = cleanedMeta;
-}
-
-cleanedSentences.push({ original: processedText, index: targetIndex });
+        cleanedSentences.push({ original: processedText, index: targetIndex });
+    }); // 👈 누락되어 있던 forEach 닫는 괄호 수정 완료
 
     if (cleanedSentences.length === 0) return "";
 
     const candidates = cleanedSentences.map(({ original, index }) => {
         let score = 10;
-        
+
         if (NUTRITION_REGEX.test(original)) score += 20;
         IMPORTANT_KEYWORDS.forEach(kw => {
             if (original.includes(kw)) score += 5;
@@ -205,9 +190,8 @@ cleanedSentences.push({ original: processedText, index: targetIndex });
         return { sentence: original, index, score };
     });
 
-    // 1. 점수 높은 순으로 상위 후보 추출
     candidates.sort((a, b) => b.score - a.score);
-    
+
     const seen = new Set();
     const uniqueCandidates = [];
     for (const item of candidates) {
@@ -218,13 +202,10 @@ cleanedSentences.push({ original: processedText, index: targetIndex });
         }
     }
 
-    // 2. 🌟 원래 글의 위치(index) 순서대로 재정렬하여 맥락 유지
     uniqueCandidates.sort((a, b) => a.index - b.index);
 
-    const result = uniqueCandidates.map(item => item.sentence).join(" ");
-    return result;
+    return uniqueCandidates.map(item => item.sentence).join(" ");
 }
-
 
 export function buildDescription(
     introText,
@@ -243,7 +224,6 @@ export function buildDescription(
     intro = normalizeSpace(intro || "");
     body = normalizeSpace(body || "");
 
-    // 🌟 cleanSlice 함수 정의를 위로 이동
     const cleanSlice = (text) => {
         if (text.length <= maxLength) return text;
         const sliced = text.slice(0, maxLength);
@@ -254,7 +234,6 @@ export function buildDescription(
         return sliced;
     };
 
-    // 🌟 15번째 줄 수정: 필터링 후 문장이 0개가 되어 탈락하는 것을 방지 (Fallback)
     if (!intro && !body) {
         const fallback = normalizeSpace(cleanWikiText(introText) || cleanWikiText(bodyText));
         if (!fallback) return "";
