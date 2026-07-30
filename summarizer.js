@@ -160,35 +160,24 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
         if (processedText.length > 300) return;
 
-        // 자·호·아명 정보 제거
-if (META_RE.test(processedText)) {
-// 메타 정보만 있는 문장 제거
+        if (META_RE.test(processedText)) {
+
+    // 문장 전체가 메타 정보뿐인 경우 제거
     if (
         /^(태명|세례명|일명|아명|본관|자는|호는|당호|아호|시호)/.test(processedText)
         &&
-        !/(활동|운동|출생|사망|설립|창립|발표|저서|작품|업적|연구)/.test(processedText)
+        /(이다|이었다|이다\.)$/.test(processedText)
+        &&
+        !/(활동|운동|출생|사망|설립|창립|발표|저서|작품|업적|연구|독립|순국|투옥|고문)/.test(processedText)
     ) {
-        processedText = processedText
-            .replace(
-                /^(태명|세례명|일명|아명|본관|자는|호는|당호|시호).*$/,
-                ""
-            )
-            .trim();
+        return;
     }
 
-    // 문장 중간에 붙은 메타 정보 제거
-    processedText = processedText
-        .replace(
-            /,\s*(태명|세례명|일명|아명|본관|자는|호는|당호|시호|아호)\s*[^,。.]+/g,
-            ""
-        )
-        .replace(
-            /\s+(태명|세례명|일명|아명|본관|자는|호는|당호|시호|아호)\s*[^,。.]+(이며|이고|이다)\.?/g,
-            ""
-        )
-        .replace(/,\s*,/g, ",")
-        .replace(/\s+/g, " ")
-        .trim();
+    // 앞부분 메타 제거
+    processedText = processedText.replace(
+        /^(태명|세례명|일명|아명|본관|자는|호는|당호|아호|시호)(은|는)?\s*.*?(이며|이고|이다|,)\s*/g,
+        ""
+    ).trim();
 
     if (!processedText) return;
 }
