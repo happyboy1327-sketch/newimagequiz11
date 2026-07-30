@@ -28,7 +28,6 @@ function cleanWikiText(text) {
         .replace(/\s+\./g, ".")
         .trim();
 }
-c
 
 function isIncompleteSentence(sentence) {
     if (!sentence) return true;
