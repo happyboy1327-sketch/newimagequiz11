@@ -372,7 +372,7 @@ async function fillCache() {
                                 action: "query",
                                 titles: batch.join("|"),
                                 prop: "extracts|pageimages",
-                                exintro: 1,
+                                exintro: 0,
                                 exlimit: "max",
                                 explaintext: 1,   
                                 redirects: 1,
