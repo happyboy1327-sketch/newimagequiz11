@@ -118,7 +118,10 @@ function resolveDemonstrativeReference(sentence, sentences, currentIndex) {
 function filterOtherPersonDeath(text, aliases = []) {
     if (!text) return "";
     const sentences = splitSentences(text);
-    const cleanSentences = sentences.filter(sentence => {
+    const cleanSentences = sentences.filter((sentence, index) => {
+        // 💡 첫 번째 문장(인물 개요)은 본인 생몰년 정보이므로 필터링 검사를 건너뛰고 무조건 유지
+        if (index === 0) return true;
+
         const match = sentence.match(/([가-힣a-zA-Z\s]{2,20})(?:이|가|은|는).*?(?:사망|별세|서거|타계|전사|시해|사사|병사|처형|살해|숨졌|목숨을\s*잃)/);
         if (match) {
             const subjectName = match[1].trim();
