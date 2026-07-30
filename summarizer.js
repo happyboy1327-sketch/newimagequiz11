@@ -254,7 +254,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         if (keywordMatches) score += keywordMatches.length * 5;
 
         if (bookTitles.some(title => original.includes(title))) score += 30;
-        if (/자격루|측우기|혼천의|앙부일구|거북선|활자/.test(original)) score += 25;
+        if (/자격루|거중기|측우기|혼천의|앙부일구|거북선|활자|화성/.test(original)) score += 25;
 
         if (NAME_ORIGIN_REGEX.test(original)) score -= 15;
         if (!NUTRITION_REGEX.test(original) && GENEALOGY_REGEX.test(original)) score -= 50;
@@ -312,7 +312,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
     return selected.map(item => item.sentence).join(" ");
 }
 
-export function buildDescription(introText, bodyText, aliases = [], extraCount = 4, introThreshold = 150, maxLength = 1100) { 
+export function buildDescription(introText, bodyText, aliases = [], extraCount = 3, introThreshold = 150, maxLength = 630) { 
     let intro = removeMetaBySearch(cleanWikiText(introText));
     let body = removeMetaBySearch(cleanWikiText(bodyText));
 
