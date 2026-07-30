@@ -30,54 +30,18 @@ function cleanWikiText(text) {
         .trim();
 }
 
-function removeMetaBySearch(text) {
-    const keywords = [
-        "본관",
-        "아명",
-        "태명",
-        "세례명",
-        "일명",
-        "자는",
-        "자(字)",
-        "호",
-        "아호",
-        "당호",
-        "시호"
-    ];
 
-    let result = text;
 
-    for (const key of keywords) {
-        let index = result.indexOf(key);
+   function removeMetaBySearch(text) {
+    if (!text) return "";
+    
+    // 쉼표로 구분된 메타 정보 구문 제거 (예: ", 자는 연하(蓮下)", ", 호는 백범(白凡)")
+    let result = text.replace(/,\s*(?:자는|자\(字\)는|호는|호\(號\)는|아호는|아명은?|본관은?|태명은?|세례명은?|일명은?|당호|시호)\s*[^,.]*/g, "");
 
-        while (index !== -1) {
-            let start = index;
+    // 문장 시작 부분에 바로 나오는 메타 구문 처리
+    result = result.replace(/^(?:자는|자\(字\)는|호는|호\(號\)는|아호는|아명은?|본관은?|태명은?|세례명은?|일명은?|당호|시호)\s*[^,.]*,\s*/g, "");
 
-            // 키워드 앞 쉼표까지 포함
-            if (start > 0 && result[start - 1] === ",") {
-                start--;
-            }
-
-            // 다음 쉼표 찾기
-            let end = result.indexOf(",", index);
-
-            if (end === -1) {
-                // 문장 끝이면 끝까지 제거
-                result = result.slice(0, start);
-            } else {
-                result = result.slice(0, start) + result.slice(end + 1);
-            }
-
-            result = result.trim();
-
-            index = result.indexOf(key);
-        }
-    }
-
-    return result
-        .replace(/,\s*,/g, ",")
-        .replace(/^\s*,/, "")
-        .trim();
+    return result.replace(/,\s*,/g, ",").replace(/^\s*,/, "").trim();
 }
 
 function isIncompleteSentence(sentence) {
