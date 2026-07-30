@@ -65,6 +65,8 @@ function cleanWikiText(text) {
                 .replace(/\\lim/g, "lim").replace(/\\infty/g, "∞")
                 .replace(/\\partial/g, "∂").replace(/\\nabla/g, "∇")
 
+                .replace(/(\d+)[\s·․ㆍ.]+(\d+)/g, "$1.$2") // 3 . 1, 3·1 -> 3.1
+
                 // 4. 연산자 & 관계 기호
                 .replace(/\\times/g, "×").replace(/\\cdot/g, "·")
                 .replace(/\\pm/g, "±").replace(/\\mp/g, "∓")
@@ -220,13 +222,21 @@ function filterOtherPersonDeath(text, aliases = []) {
 }
 
 function splitSentences(text) {
-    const normalized = normalizeSpace(text).replace(/\n+/g, " ");
-    return normalized
+    if (!text) return [];
+    
+    // split 전에 숫자 사이의 점(예: 3.1, 1919.3.1)을 임시 치환하여 쪼개짐 방지
+    const protectedText = normalizeSpace(text)
+        .replace(/\n+/g, " ")
+        .replace(/(\d+)\s*\.\s*(\d+)/g, "$1__DECIMAL_DOT__$2");
+
+    return protectedText
         .split(/(?<!\b[a-zA-Z])([.!?。])(?=\s+|$)/)
         .reduce((acc, curr, index, array) => {
             if (index % 2 === 0) {
                 const punctuation = array[index + 1] || "";
-                const sentence = (curr + punctuation).trim();
+                let sentence = (curr + punctuation).trim();
+                // 치환했던 소수점 복원
+                sentence = sentence.replace(/__DECIMAL_DOT__/g, ".");
                 if (sentence) acc.push(sentence);
             }
             return acc;
