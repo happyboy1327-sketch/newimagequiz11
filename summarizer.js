@@ -43,7 +43,7 @@ function removeMetaBySearch(text, mode = "all") {
 .*?
 (?=
 (?:,\s*(?:본관은?|자는?|호는?|아호는?|아명은?|태명은?|세례명은?|일명은?|당호는?|시호는?))
-|이다\b|였다\b|이었다\b|이며\b|이고\b|\.|$)/gx;
+|이다\b|였다\b|이었다\b|이며\b|이고\b|\.|$)/g;
     result = result.replace(metaRegex, "");
 
     result = result
