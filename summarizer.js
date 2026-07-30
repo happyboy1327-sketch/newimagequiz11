@@ -41,9 +41,12 @@ function removeMetaBySearch(text, mode = "all") {
     result = result.replace(metaRegex, "");
 
     result = result
-        .replace(/,\s*,/g, ",")
-        .replace(/\s+/g, " ")
-        .trim();
+            .replace(/\s+이며\s+/g, " ")
+            .replace(/\s+이고\s+/g, " ")
+            .replace(/\s+이다\s+/g, " ")
+            .replace(/,\s*,/g, ",")
+            .replace(/\s+/g, " ")
+            .trim();
 
     // 삭제 후 문장 붕괴 방지
     if (
