@@ -298,8 +298,8 @@ export function buildDescription(
     if (intro && aliases.length > 0) intro = filterOtherPersonDeath(intro, aliases);
     if (body && aliases.length > 0) body = filterOtherPersonDeath(body, aliases);
 
-    intro = removeMetaBySearch(intro);
-    body = removeMetaBySearch(body);
+    intro = normalizeSpace(intro || "");
+    body = normalizeSpace(body || "");
 
     const cleanSlice = (text) => {
         if (text.length <= maxLength) return text;
@@ -323,7 +323,7 @@ export function buildDescription(
     return cleanSlice(removeMetaBySearch(combined));
 }
 
-    const introSentences = splitSentences(intro);
+    cconst introSentences = splitSentences(intro).map(s => removeMetaBySearch(s));
 let firstSentence = removeMetaBySearch(introSentences[0] || "");
     let usedSecondSentence = false;
 
@@ -363,9 +363,6 @@ let firstSentence = removeMetaBySearch(introSentences[0] || "");
         );
     }
 
-   const merged = removeMetaBySearch(
-    normalizeSpace([firstSentence, extra].filter(Boolean).join(" "))
-);
-
+   const merged = normalizeSpace([firstSentence, extra].filter(Boolean).join(" "));
 return cleanSlice(merged);
 }
