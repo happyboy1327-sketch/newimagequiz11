@@ -190,7 +190,7 @@ export function extractImportantSentences(bodyText, count = 2) {
 }
 
 // 11. 최종 요약문 생성
-export function buildDescription(introText, bodyText, maxLength = 1000) {
+export function buildDescription(introText, bodyText, maxLength = 1100) {
     const cleanIntro = cleanGenealogyClause(cleanWikiText(introText));
     const cleanBody = cleanWikiText(bodyText);
 
