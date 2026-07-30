@@ -160,19 +160,30 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
         if (processedText.length > 300) return;
 
-        if (META_RE.test(processedText)) {
-            const cleanedMeta = processedText
-                .replace(
-                    /(?:본관은?|아명은?|자는?|자\(字\)|호는?|호\(號\))[^,，.。]+[,.，]?/g,
-                    ""
-                )
-                .replace(/^이고\s*,?\s*/, "")
-                .trim();
+        // 자·호·아명 정보 제거
+if (META_INFO_REGEX.test(processedText)) {
+    processedText = processedText
+        .replace(
+            /,\s*(?:자는|자\(字\)는|호는|호\(號\)는|아명은|아명)\s*[^.。,]+(?:,\s*(?:호는|호\(號\)는)\s*[^.。,]+)?(?:이다\.?|이다)?/g,
+            ""
+        )
+        .replace(
+            /\s*(?:자는|자\(字\)는|호는|호\(號\)는|아명은|아명)\s*[^.。,]+(?:,\s*(?:호는|호\(號\)는)\s*[^.。,]+)?(?:이다\.?|이다)?/g,
+            ""
+        )
+        .replace(/으로\.$/, "이다.")
+        .replace(/,\s*\./g, ".")
+        .replace(/\s+/g, " ")
+        .trim();
 
-            if (cleanedMeta.length < 10) return;
-            processedText = cleanedMeta;
-        }
-
+    // 제거 후 문장이 깨지면 원문 유지
+    if (
+        processedText.length < 10 ||
+        /^(이다\.?|이다)$/.test(processedText)
+    ) {
+        return;
+    }
+}
         cleanedSentences.push({ original: processedText, index: targetIndex });
     });
 
