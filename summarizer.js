@@ -287,14 +287,8 @@ export function buildDescription(
     introThreshold = 150,
     maxLength = 1100
 ) {
-    console.log("BUILD INTRO:", intro);
-    console.log("BUILD BODY:", body);
-    
     let intro = cleanWikiText(introText);
     let body = cleanWikiText(bodyText);
-
-    console.log("INTRO BEFORE:", intro);
-   console.log("BODY BEFORE:", body);
 
     if (intro && aliases.length > 0) intro = filterOtherPersonDeath(intro, aliases);
     if (body && aliases.length > 0) body = filterOtherPersonDeath(body, aliases);
