@@ -433,50 +433,55 @@ async function fillCache() {
                         if (LAST_PLAYED.includes(pageData.title)) continue;
                         if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) continue;
 
-                        const fullExtract = pageData.extract;
-                        console.log("원본 extract:", pageData.title, "\n", pageData.extract);
-                        const firstHeaderIndex = fullExtract.search(/==+/);
-                        
-                        let exintro = fullExtract;
-                        let extractBody = "";
+                        const fullExtract = pageData.extract || "";
+                        console.log("원본 extract:", pageData.title, "\n", fullExtract);
 
-                        if (firstHeaderIndex !== -1) {
-                            exintro = fullExtract.substring(0, firstHeaderIndex).trim();
-                            extractBody = fullExtract.substring(firstHeaderIndex).trim();
-                        }
+// 1. 첫 번째 목차(==) 기준으로 서론과 본문 분리
+                      const firstHeaderIndex = fullExtract.search(/==+/);
 
-                        const cutIndex = extractBody.search(/==\s*(각주|같이 보기|참고 문헌|외부 링크)\s*==/i);
-                        if (cutIndex !== -1) {
-                            extractBody = extractBody.substring(0, cutIndex);
-                        }
+                     let exintro = fullExtract;
+                     let extractBody = "";
 
-                        let cleanExtract = extractBody
-                            .replace(/=+\s*.*?\s*=+/g, " ")
-                            .replace(/\s+/g, " ")
-                            .trim();
+                 if (firstHeaderIndex !== -1) {
+    exintro = fullExtract.substring(0, firstHeaderIndex).trim();
+    extractBody = fullExtract.substring(firstHeaderIndex).trim();
+}
 
-                        let cleanIntro = exintro.replace(/\s+/g, " ").trim();
+// 2. 불필요한 하단 섹션 제거 (줄바꿈 고려)
+const cutIndex = extractBody.search(/\n==\s*(각주|같이 보기|참고 문헌|외부 링크|주석)\s*==/i);
+if (cutIndex !== -1) {
+    extractBody = extractBody.substring(0, cutIndex);
+}
 
-                        
+// 3. 본문 정제: 헤더(= == === 등)만 지우고, 줄바꿈은 유지하여 문장 분리가 잘 되도록 처리
+let cleanExtract = extractBody
+    .replace(/^=+.*?=+$/gm, "") // 줄 단위로 헤더 제목만 제거
+    .replace(/\n{3,}/g, "\n\n") // 과도한 공백 줄 정리
+    .trim();
 
-                        const finalDescription = buildDescription(
-                            cleanIntro, 
-                            cleanExtract || "",
-                            aliases, 
-                            4,   
-                            150, 
-                            1100  
-                        );
+// 4. 서론 정제 (한 줄로 다듬기)
+let cleanIntro = exintro.replace(/\s+/g, " ").trim();
 
-                        console.log("캐시 추가 직전:", pageData.title, imageUrl, finalDescription?.length);
-                        if (finalDescription) {
-                            QUIZ_CACHE.push({
-                                name: pageData.title,
-                                image: imageUrl,
-                                hint: createMaskedHint(pageData.title, finalDescription),
-                                description: finalDescription 
-                            });
-                        }
+// 5. 설명 및 힌트 생성
+const finalDescription = buildDescription(
+    cleanIntro, 
+    cleanExtract || "",
+    aliases, 
+    4,   
+    150, 
+    1100  
+);
+
+console.log("캐시 추가 직전:", pageData.title, imageUrl, finalDescription?.length);
+
+if (finalDescription) {
+    QUIZ_CACHE.push({
+        name: pageData.title,
+        image: imageUrl,
+        hint: createMaskedHint(pageData.title, finalDescription),
+        description: finalDescription 
+    });
+}
                     }
                 }
                 console.log("현재 캐시:", QUIZ_CACHE.length);
