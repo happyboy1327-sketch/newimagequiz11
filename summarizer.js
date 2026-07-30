@@ -95,6 +95,7 @@ function cleanWikiText(text) {
     return text
         .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
         .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "")
+        .replace(/^(첫째|둘째|셋째|넷째|다섯째|마지막으로|우선|먼저|또한|그리고),?\s*/g, "")
         .replace(/\(\s*\)/g, "")
         .replace(/\s+/g, " ")
         .replace(/\s+\./g, ".")
