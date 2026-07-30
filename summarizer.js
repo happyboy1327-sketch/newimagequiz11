@@ -29,41 +29,58 @@ const DANGLING_START_REGEX = /^(이(후|러한|와\s+같이)?|따라서|이에|�
 const NAME_ORIGIN_REGEX = /(이름은?\s*.*?(?:유래|뜻|불리다|붙이다|개명|바꾸다)|호는?\s*.*?(?:유래|뜻|불리다|칭하다))/;
 const NAME_CHANGE_REGEX = /(이름을\s*(?:바꾸다|개명하다|칭하다)|~에서\s*~로\s*(?:개명|변경))/;
 
+
 // ==========================================================
-// 2. 전처리 함수 (중복 호출 방지를 위한 구조 개선)
+// 1. 호(號) 전용 초정밀 정규식 추가
 // ==========================================================
+const HO_META_REGEX = /호는\s+[가-힣]{2,6}(?:\([^)]*\))?(?:\s*[·ㆍ]\s+[가-힣]{2,6}(?:\([^)]*\))?)*(?:\s*(?:이다|였다|이었|이며|이고|\.|$))/g;
+
+// ==========================================================
+// 2. 저서명 추출 함수 추가
+// ==========================================================
+function extractBookTitles(text) {
+    const titles = [];
+    const regex = /《([^》]+)》/g;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+        titles.push(match[1]);
+    }
+    return titles;
+}
+
+// ==========================================================
+// 3. 전처리 함수 (호 메타 제거 추가)
+// ==========================================================
+function normalizeSpace(text = "") {
+    return String(text)
+        .replace(/([.!?。])([가-힣a-zA-Z])/g, "$1 $2")  // 문장부호 뒤 공백 강제
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
 function removeMetaBySearch(text) {
     if (!text) return "";
     let result = text;
 
+    // 🎯 호(號) 메타 정보 전용 제거
+    result = result.replace(HO_META_REGEX, "");
+
+    // 기존 메타 정보 제거 (본관, 자, 시호 등)
     const keywords = "본관|자|별호|아호|아명|태명|세례명|일명|당호|시호|법명|성명";
     const keyPattern = `(?<![가-힣])(?:${keywords})(?:은|는|\\([^)]*\\))`;
     const valToken = `(?:[^\\s,.\\(\\)\\u00B7]+(?:\\([^)]*\\))?)`; 
     const valPattern = `${valToken}(?:\\s*[·ㆍ]\\s*${valToken})*`;
     const singleMeta = `${keyPattern}\\s+${valPattern}`;
 
-    // 1. 정상 메타 정보 체인 제거
     const metaChainRegex = new RegExp(
         `(?:,\\s*|\\s+)*(?:${singleMeta}(?:,\\s*|\\s+이며|\\s+이고|\\s+)*)+(?:이다|였다|이었다|이며|이고|이자|으로)?`,
         "g"
     );
     result = result.replace(metaChainRegex, "");
 
-    // 2. 값이 없는/구두점만 남은 메타 정보 제거 (",시호는.. 이다." 처리)
-    const emptyMetaRegex = new RegExp(
-        `(?:,\\s*|\\s+)*(?:${keyPattern})\\s*[,.\\s]*(?:이다|였다|이었다|이며|이고|이자|으로)?`,
-        "g"
-    );
-    result = result.replace(emptyMetaRegex, "");
-
-    // 3. 문장 끝 어미 및 찌꺼기 정리
+    // 찌꺼기 정리
     result = result
-        .replace(/([가-힣]+)으로(?=\s*[\.!\?])/g, "$1이다")
-        .replace(/([가-힣]+)이며(?=\s*[\.!\?])/g, "$1이다")
-        .replace(/([가-힣]+)이고(?=\s*[\.!\?])/g, "$1이다")
-        .replace(/([가-힣]+)이자(?=\s*[\.!\?])/g, "$1이다")
         .replace(/([\.!\?])\s*(?:이었(?:으며|지만|으나|다)?|였(?:으며|지만|으나|다)?|이며|이고|이자|으로|며|는데|지만|으나)\.?/g, "$1")
-        .replace(/([\.!\?])\s*,+/g, "$1 ")
         .replace(/\.{2,}/g, ".")
         .replace(/,\s*\./g, ".")
         .replace(/\s+\./g, ".")
@@ -71,10 +88,6 @@ function removeMetaBySearch(text) {
         .trim();
 
     return result;
-}
-
-function normalizeSpace(text = "") {
-    return String(text).replace(/\s+/g, " ").trim();
 }
 
 function cleanWikiText(text) {
@@ -179,13 +192,13 @@ function splitSentences(text) {
         }, []);
 }
 
-// ==========================================================
-// 3. 핵심 추출 로직 (성능 최적화 적용)
+
+ // ==========================================================
+// 4. 스코어링 로직 수정 (저서명 연관 문장 우선 선택)
 // ==========================================================
 export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 3) {
     if (!bodyText || typeof bodyText !== "string") return "";
 
-    // 🚀 최적화 1: 전처리 단계에서 한 번만 실행
     let cleanedBody = removeMetaBySearch(cleanWikiText(bodyText));
     if (aliases && aliases.length > 0) {
         cleanedBody = filterOtherPersonDeath(cleanedBody, aliases);
@@ -195,13 +208,15 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
     const totalCount = rawSentences.length;
     if (totalCount === 0) return "";
 
+    // 📚 본문에서 저서명 추출
+    const bookTitles = extractBookTitles(cleanedBody);
+
     const cleanedSentences = [];
 
     rawSentences.forEach((sentence, index) => {
         let text = sentence.trim();
-        if (!text || text.length < 15 || text.length > 400) return; // 🚀 최적화 2: 길이 체크로 불필요한 연산 차단
+        if (!text || text.length < 15 || text.length > 400) return;
         if (isIncompleteSentence(text)) return;
-        if (/^[《<〈""'`].*[》>〉""'`]$/.test(text)) return;
 
         let processedText = text;
         let targetIndex = index;
@@ -214,18 +229,9 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
             } else {
                 return;
             }
-        } else if (/^(이|그)\s*중\b/.test(processedText)) {
-            const foundTitle = findPrecedingTitle(rawSentences, index);
-            if (foundTitle) {
-                processedText = resolveVagueReference(processedText, foundTitle);
-            } else {
-                return;
-            }
         } else {
             processedText = resolveDemonstrativeReference(processedText, rawSentences, index);
         }
-
-        // 🚀 최적화 3: 이미 본문 전체에 removeMetaBySearch를 실행했으므로, 여기서는 중복 실행 제거!
 
         cleanedSentences.push({
             original: processedText,
@@ -235,59 +241,52 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
     if (cleanedSentences.length === 0) return "";
 
-    // 4. 스코어링 계산 (🚀 최적화 4: forEach 대신 단일 Regex match 사용)
+    // 스코어링
     const scoredCandidates = cleanedSentences.map(({ original, index }) => {
         let score = 10;
 
         if (NUTRITION_REGEX.test(original)) score += 20;
 
-        // 기존: IMPORTANT_KEYWORDS.forEach(kw => { if (original.includes(kw)) score += 5; });
-        // 개선: 단일 정규식으로 매칭된 횟수만큼 점수 부여 (속도 10배 이상 향상)
         const keywordMatches = original.match(KEYWORD_REGEX);
         if (keywordMatches) {
             score += keywordMatches.length * 5;
         }
 
-        if (/자격루|측우기|혼천의|앙부일구|거북선|활자|인쇄|천문|의학|수학|공학|설계|고안|제작|개량/.test(original)) {            
-            score += 20;
+        // 🎯 [핵심] 저서명이 언급된 문장은 무조건 고득점 (+30)
+        if (bookTitles.some(title => original.includes(title))) {
+            score += 30;
         }
 
-        if (NAME_ORIGIN_REGEX.test(original)) {
-            score -= 15;
-        } else if (NAME_CHANGE_REGEX.test(original)) {
-            score -= 10;
+        // 과학자 발명품 언급
+        if (/자격루|측우기|혼천의|앙부일구|거북선|활자/.test(original)) {
+            score += 25;
         }
 
-        if (!NUTRITION_REGEX.test(original) && GENEALOGY_REGEX.test(original)) {
-            score -= 50;
-        }
-
+        if (NAME_ORIGIN_REGEX.test(original)) score -= 15;
+        if (!NUTRITION_REGEX.test(original) && GENEALOGY_REGEX.test(original)) score -= 50;
         if (MINOR_TMI_REGEX.test(original)) score -= 30;
-
-        if (original.length >= 25 && original.length <= 150) {
-            score += 5;
-        }
+        if (original.length >= 25 && original.length <= 150) score += 5;
 
         return { sentence: original, index, score };
     });
 
-    // 5. 구역 분할 및 선별 로직 (기존 유지)
+    // 구역 분할 및 선별
     const boundary1 = Math.floor(totalCount / 3);
     const boundary2 = Math.floor((totalCount * 2) / 3);
 
-    const zones = [{ id: 1, candidates: [] }, { id: 2, candidates: [] }, { id: 3, candidates: [] }];
-
+    const zones = [{ candidates: [] }, { candidates: [] }, { candidates: [] }];
     scoredCandidates.forEach(item => {
         if (item.index < boundary1) zones[0].candidates.push(item);
         else if (item.index < boundary2) zones[1].candidates.push(item);
         else zones[2].candidates.push(item);
     });
 
+    // 가장 중요한 문장이 많은 구역 찾기
     let maxZoneIndex = 0;
-    let maxCandidateCount = -1;
+    let maxCount = -1;
     zones.forEach((zone, idx) => {
-        if (zone.candidates.length > maxCandidateCount) {
-            maxCandidateCount = zone.candidates.length;
+        if (zone.candidates.length > maxCount) {
+            maxCount = zone.candidates.length;
             maxZoneIndex = idx;
         }
     });
@@ -305,11 +304,11 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         }
     }
 
-    const remainingCandidates = [];
-    zones.forEach(zone => remainingCandidates.push(...zone.candidates));
-    remainingCandidates.sort((a, b) => b.score - a.score);
+    const remaining = [];
+    zones.forEach(zone => remaining.push(...zone.candidates));
+    remaining.sort((a, b) => b.score - a.score);
 
-    for (const item of remainingCandidates) {
+    for (const item of remaining) {
         if (selected.length >= count) break;
         if (!seen.has(item.sentence)) {
             seen.add(item.sentence);
