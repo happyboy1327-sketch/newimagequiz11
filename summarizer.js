@@ -43,6 +43,7 @@ function cleanWikiText(text) {
         .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
         .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "")
         .replace(/\(\s*\)/g, "")
+        .replace(/[()]/g, "")
         .replace(/\s+/g, " ")
         .replace(/\s+\./g, ".")
         .trim();
