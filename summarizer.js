@@ -279,6 +279,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         .join(" ");
 }
 
+
 export function buildDescription(
     introText,
     bodyText,
@@ -287,8 +288,10 @@ export function buildDescription(
     introThreshold = 150,
     maxLength = 1100
 ) { 
-    let intro = cleanWikiText(introText);
-    let body = cleanWikiText(bodyText);
+    // 💡 [수정 1] 최상단에서 cleanWikiText 실행 직후 removeMetaBySearch로 재할당
+    // 이제 아래의 모든 로직(splitSentences, GENEALOGY_REGEX, extra 추출)에 깨끗한 텍스트가 들어갑니다.
+    let intro = removeMetaBySearch(cleanWikiText(introText));
+    let body = removeMetaBySearch(cleanWikiText(bodyText));
 
     if (intro && aliases.length > 0) intro = filterOtherPersonDeath(intro, aliases);
     if (body && aliases.length > 0) body = filterOtherPersonDeath(body, aliases);
@@ -307,7 +310,7 @@ export function buildDescription(
     };
 
     if (!intro && !body) {
-        const fallback = normalizeSpace(cleanWikiText(introText) || cleanWikiText(bodyText));
+        const fallback = normalizeSpace(removeMetaBySearch(cleanWikiText(introText) || cleanWikiText(bodyText)));
         if (!fallback) return "";
         return cleanSlice(fallback);
     }
@@ -315,7 +318,7 @@ export function buildDescription(
     const totalLength = intro.length + body.length;
     if (totalLength < 350) {
         const combined = normalizeSpace([intro, body].filter(Boolean).join(" "));
-        return cleanSlice(removeMetaBySearch(combined));
+        return cleanSlice(combined); // 이미 최상단에서 메타가 제거되었으므로 그대로 슬라이스
     }
 
     const introSentences = splitSentences(intro).filter(Boolean);
@@ -339,6 +342,8 @@ export function buildDescription(
         }
     }
 
+    // 💡 [extra 추출 위치]
+    // 첫 문장(들)에 쓰이고 남은 remainingIntro와 body를 합쳐 targetBody를 생성
     let extra = "";
     const remainingIntro = introSentences
         .slice(usedSecondSentence ? 2 : 1)
@@ -347,6 +352,7 @@ export function buildDescription(
     const targetBody = normalizeSpace([remainingIntro, body].filter(Boolean).join(" "));
 
     if (targetBody && targetBody.length > 12) {
+        // 이미 최상단에서 메타가 완벽히 제거된 targetBody에서 extra 문장을 꺼냅니다.
         extra = extractImportantSentences(
             targetBody,
             "",
