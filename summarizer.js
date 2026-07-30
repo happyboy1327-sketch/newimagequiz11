@@ -1,110 +1,38 @@
-/**
- * 범용 텍스트 요약 모듈 (외부 설치 불필요, 순수 자바스크립트 버전)
- */
+const IMPORTANT_KEYWORDS = [
+    "태어났다", "출생", "사망", "활동", "노력", "독점", "정벌", "발표", "창시", "발명",
+    "발견", "폐지", "수상", "노벨", "대표", "저서", "저자", "작품", "전쟁", "독립", "혁명",
+    "연구", "증명", "설립", "창립", "개발", "제작", "기록", "영향", "업적", "졸업",
+    "임명", "취임", "부정", "일기", "수용소", "유대인", "수필"
+];
 
-// 1. [스택 기반] 괄호 제거 함수 (외국어 인명/원어명/생몰년은 보존)
-function removeGenealogyParentheses(text) {
-    if (!text) return "";
-    let result = "";
-    let i = 0;
+// 📍 summ.js 상단 GENEALOGY_REGEX 수정
+const GENEALOGY_REGEX = /(의\s*(아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|차녀|장녀)(이다|이었다|이며|이고|\s|\.))|(슬하에)|(결혼하(여|였|고))|(출생하|태어났)|(본관은|아명은|자\(字\)는|자\s*는|호\(號\)는|호\s*는|당호는|시호는)/;
+const NUTRITION_REGEX = /(독립|전투|운동|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|승리|패배|결성|폐지|창립|설립|의병|관찰사|벼슬|임진왜란|제정|창간|조직|주도|도입|확립|개척|(?!(?:여론|결론|방법론))(?:[가-힣A-Za-z]+론)|(?:[가-힣A-Za-z]+주의))/;
+const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노년|보냈|생활했|향리|소일)/;
+const DANGLING_START_REGEX = /^(이(후|러한|와\s+같이)?|따라서|이에|반면)\b/;
 
-    while (i < text.length) {
-        if (text[i] === '(' || text[i] === '[') {
-            const openChar = text[i];
-            const closeChar = openChar === '(' ? ')' : ']';
-            let depth = 1;
-            let j = i + 1;
-            let innerText = "";
-
-            while (j < text.length && depth > 0) {
-                if (text[j] === openChar) depth++;
-                else if (text[j] === closeChar) depth--;
-                
-                if (depth > 0) innerText += text[j];
-                j++;
-            }
-
-            const isMultilingualOrName = /[a-zA-Z\u4e00-\u9fa5\u3040-\u30ff]/.test(innerText) || /\d{4}년/.test(innerText);
-
-            if (isMultilingualOrName) {
-                result += text.slice(i, j);
-            } else {
-                result += " ";
-            }
-            i = j;
-        } else {
-            result += text[i];
-            i++;
-        }
-    }
-    return result;
+function normalizeSpace(text = "") {
+    return String(text).replace(/\s+/g, " ").trim();
 }
 
-// 2. 위키 문법 및 주석 정제
-export function cleanWikiText(text) {
+function cleanWikiText(text) {
     if (!text) return "";
     return text
         .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
-        .replace(/\{\\displaystyle\s*([^}]+)\}/g, " $1 ")
-        .replace(/\\[a-zA-Z]+/g, "")
-        .replace(/(?:작품으로|저서로)\s*,\s*등이/g, "여러 작품이")
+        .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "")
+        .replace(/\(\s*\)/g, "")
         .replace(/\s+/g, " ")
+        .replace(/\s+\./g, ".")
         .trim();
 }
 
-// 3. 순수 JS 기반 한국어 문장 분리기 (소수점, 3.1운동 마침표 완벽 보호)
-export function splitSentences(text) {
-    if (!text) return [];
-    const normalized = cleanWikiText(text);
-
-    // 숫자 뒤 마침표나 소수점, 3.1운동 등의 마침표가 문장 분리로 오인되지 않도록 임시 치환
-    const protectedText = normalized
-        .replace(/(\d+)\s*\.\s*(\d+)/g, "$1__DECIMAL__$2")
-        .replace(/(\d+)\s*\.\s*(?=[가-힣a-zA-Z])/g, "$1__DECIMAL__");
-
-    // 문장 마침표/물음표/느낌표 기준으로 분할
-    const rawSentences = protectedText.split(/(?<=[.!?。])(?=\s+|$)/);
-
-    return rawSentences
-        .map(s => s.replace(/__DECIMAL__/g, ".").trim())
-        .filter(Boolean);
-}
-
-// 4. 족보/신상정보 및 파편 문장 정제
-export function cleanGenealogyClause(sentence) {
-    if (!sentence) return "";
-
-    let cleaned = removeGenealogyParentheses(sentence).trim();
-
-    const genealogyPattern = /(?:,\s*|\s+)?(?:본관은|본관이|아명은|태명은|세례명은|당호는|시호는|일명은|묘호는|휘는|자\(字\)는|호\(號\)는|시\(諡\)는|자는|호는)\s+[가-힣A-Za-z0-9\s]+(?=[,.!?]|$)/g;
-    cleaned = cleaned.replace(genealogyPattern, "");
-
-    cleaned = cleaned.replace(/\s+/g, " ").replace(/^[,.\s]+/, "").replace(/[.,\s]+$/, "").trim();
-
-    if (!cleaned) return "";
-
-    if (!/[.!?]$/.test(cleaned)) {
-        cleaned += ".";
-    }
-
-    if (cleaned.length < 10 || /(따옴|연유함|에서\s*따왔다)/.test(cleaned)) return "";
-
-    return cleaned;
-}
-
-// 5. 완결 검증
-function isValidSentence(sentence) {
-    if (!sentence || sentence.length < 12 || sentence.length > 350) return false;
-
-    if (/^\d+(운동|월|일|년|회)\b/.test(sentence) && !/^(19|20)\d\d년/.test(sentence)) {
-        return false;
-    }
-
+function isIncompleteSentence(sentence) {
+    if (!sentence) return true;
+    const text = sentence.trim();
     const validEndingRegex = /(다|냐|까|요|죠|자|라|며|음|임|함|됨|성|상|위|중)\.?$/;
-    return validEndingRegex.test(sentence.trim());
+    return !validEndingRegex.test(text);
 }
 
-// 6. 지시어/명칭 복원 관련 함수들
 function findPrecedingTitle(sentences, currentIndex) {
     for (let i = currentIndex - 1; i >= Math.max(0, currentIndex - 3); i--) {
         const prevText = sentences[i];
@@ -118,20 +46,20 @@ function findPrecedingTitle(sentences, currentIndex) {
 function resolveVagueReference(sentence, foundTitle) {
     if (!foundTitle) return sentence;
     let text = sentence.trim();
+
     if (/^(이|그)\s*중\b/.test(text)) {
         return text.replace(/^(이|그)\s*중\b/, `${foundTitle} 중`);
     }
     return `${foundTitle}의 ${text}`;
 }
 
-export function resolveDemonstrativeReference(sentence, sentences, currentIndex) {
+function resolveDemonstrativeReference(sentence, sentences, currentIndex) {
     let processedSentence = sentence;
     const targetRegex = /(이|그)\s+(작품|조각|그림|회화|동상|건축물|벽화|서적|책|화풍|시리즈|주장|사상|이론|업적|시기|운동|전쟁)/;
     
     if (targetRegex.test(processedSentence)) {
         let foundTitle = null;
         for (let j = currentIndex - 1; j >= Math.max(0, currentIndex - 3); j--) {
-            if (!sentences[j]) continue;
             const match = sentences[j].match(/《([^》]+)》/) || sentences[j].match(/〈([^〉]+)〉/);
             if (match) {
                 foundTitle = match[0];
@@ -145,91 +73,205 @@ export function resolveDemonstrativeReference(sentence, sentences, currentIndex)
     return processedSentence;
 }
 
-// 7. 점수 산출
-function calculateSentenceScore(sentence, isFirstSentence = false) {
-    let score = 10;
+function filterOtherPersonDeath(text, aliases = []) {
+    if (!text) return "";
+    const sentences = text.split(/(?<=[.!?])\s+/);
+    const cleanSentences = sentences.filter(sentence => {
+        const match = sentence.match(/([가-힣\s]{2,12})(?:이|가|은|는).*?(?:사망|별세|서거|타계|전사|시해|사사|병사|처형|살해|숨졌|목숨을\s*잃)/);
+        if (match) {
+            const subjectName = match[1].trim();
+            
+            // 🌟 [추가된 부분] 대명사(그, 그녀 등)나 날짜/장소가 주어로 잡힌 경우 본인 문장으로 인정
+            const isPronounOrContext = /^(그|그녀|본인|이들|해당\s*인물|이\s*인물)$/.test(subjectName) || /년|월|일|수용소|당시/.test(subjectName);
+            
+            if (!isPronounOrContext) {
+                const isSelf = aliases.some(alias => {
+                    if (!alias) return false;
+                    const cleanAlias = alias.replace(/[\s\_\-]/g, "");
+                    const cleanSubject = subjectName.replace(/[\s\_\-]/g, "");
+                    return cleanSubject.includes(cleanAlias) || cleanAlias.includes(cleanSubject);
+                });
+                if (!isSelf) return false; // 확실한 타인 이름일 때만 삭제
+            }
+        }
 
-    if (/(은|는|이|가)\s+.*(이다|하였다|주장하였다|수립하였다|건설하였다|집대성하였다|특징이다|의미한다|의거|순국|창시|개발|설립|발행|발표)/.test(sentence)) {
-        score += 20;
-    }
+        const possessiveDeathRegex = /(아버지|부친|어머니|모친|아내|부인|남편|아들|딸|형|동생|스승|친구|동료|통역가)의\s*(사망|별세|서거|타계|처형|죽음)/;
+        if (possessiveDeathRegex.test(sentence) && !/(그녀|그|본인|가족|식구|모두|함께)/.test(sentence)) {
+            return false;
+        }
 
-    if (/(사상|이론|주장|체계|혁명|독립|운동|지향|해명|개혁|지주|정책|기여|영향|대표|원인|결과|수필|희곡|신문|잡지)/.test(sentence)) {
-        score += 15;
-    }
-
-    if (isFirstSentence) score += 10;
-
-    if (/(통계|백분율|소작료|아내|부인|아들|딸|친인척|노년|은퇴|향리)/.test(sentence)) {
-        score -= 20;
-    }
-
-    if (sentence.length >= 30 && sentence.length <= 180) {
-        score += 10;
-    }
-
-    return score;
+        return true;
+    });
+    return cleanSentences.join(" ");
 }
 
-// 8. 중요 문장 추출
-export function extractImportantSentences(bodyText, count = 2) {
-    if (!bodyText) return "";
+function splitSentences(text) {
+    const normalized = normalizeSpace(text).replace(/\n+/g, " ");
+    return normalized
+        .split(/(?<!\b[a-zA-Z])([.!?。])(?=\s+|$)/)
+        .reduce((acc, curr, index, array) => {
+            if (index % 2 === 0) {
+                const punctuation = array[index + 1] || "";
+                const sentence = (curr + punctuation).trim();
+                if (sentence) acc.push(sentence);
+            }
+            return acc;
+        }, []);
+}
+
+export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 2) {
+    if (!bodyText || typeof bodyText !== "string") return "";
 
     const rawSentences = splitSentences(bodyText);
-    const validCandidates = [];
+    const cleanedSentences = [];
 
-    rawSentences.forEach((raw, idx) => {
-        let cleaned = cleanGenealogyClause(raw);
+    rawSentences.forEach((sentence, index) => {
+        let text = cleanWikiText(sentence);
 
-        if (!isValidSentence(cleaned)) return;
+        if (!text || isIncompleteSentence(text)) return;
+        if (/^[《<〈“"'`].*[》>〉”"'`]$/.test(text)) return;
+        if (text.length < 15 || text.length > 320) return;
 
-        if (/^(이|그)\s*중\b/.test(cleaned)) {
-            const foundTitle = findPrecedingTitle(rawSentences, idx);
+        let processedText = text;
+        let targetIndex = index;
+
+        if (DANGLING_START_REGEX.test(processedText) && index > 0) {
+            const prevText = cleanWikiText(rawSentences[index - 1]);
+            if (prevText && !isIncompleteSentence(prevText) && prevText.length >= 10 && prevText.length <= 150) {
+                processedText = `${prevText} ${processedText}`;
+                targetIndex = index - 1;
+            } else {
+                return;
+            }
+        } else if (/^(이|그)\s*중\b/.test(processedText)) {
+            const foundTitle = findPrecedingTitle(rawSentences, index);
             if (foundTitle) {
-                cleaned = resolveVagueReference(cleaned, foundTitle);
+                processedText = resolveVagueReference(processedText, foundTitle);
+            } else {
+                return;
             }
         } else {
-            cleaned = resolveDemonstrativeReference(cleaned, rawSentences, idx);
+            processedText = resolveDemonstrativeReference(processedText, rawSentences, index);
         }
 
-        const score = calculateSentenceScore(cleaned, idx === 0);
-        validCandidates.push({ sentence: cleaned, score, index: idx });
+        if (processedText.length > 300) return;
+
+        cleanedSentences.push({ original: processedText, index: targetIndex });
     });
 
-    if (validCandidates.length === 0) return "";
+    if (cleanedSentences.length === 0) return "";
 
-    validCandidates.sort((a, b) => b.score - a.score);
-    const selected = validCandidates.slice(0, count);
+    const candidates = cleanedSentences.map(({ original, index }) => {
+        let score = 10;
+        
+        if (NUTRITION_REGEX.test(original)) score += 20;
+        IMPORTANT_KEYWORDS.forEach(kw => {
+            if (original.includes(kw)) score += 5;
+        });
 
-    selected.sort((a, b) => a.index - b.index);
+        if (!NUTRITION_REGEX.test(original) && GENEALOGY_REGEX.test(original)) score -= 50;
+        if (MINOR_TMI_REGEX.test(original)) score -= 30;
+        if (original.length >= 25 && original.length <= 150) score += 5;
 
-    return selected.map(item => item.sentence).join(" ");
-}
+        return { sentence: original, index, score };
+    });
 
-// 9. 최종 요약문 생성
-export function buildDescription(introText, bodyText, maxLength = 1000) {
-    const cleanIntro = cleanGenealogyClause(cleanWikiText(introText));
-    const cleanBody = cleanWikiText(bodyText);
-
-    let summaryParts = [];
-
-    if (cleanIntro && isValidSentence(cleanIntro)) {
-        summaryParts.push(cleanIntro);
-    }
-
-    const bodySummary = extractImportantSentences(cleanBody, 2);
-    if (bodySummary) {
-        summaryParts.push(bodySummary);
-    }
-
-    let result = summaryParts.join(" ").trim();
-
-    if (result.length > maxLength) {
-        result = result.slice(0, maxLength);
-        const lastDot = result.lastIndexOf(".");
-        if (lastDot > maxLength * 0.5) {
-            result = result.slice(0, lastDot + 1);
+    // 1. 점수 높은 순으로 상위 후보 추출
+    candidates.sort((a, b) => b.score - a.score);
+    
+    const seen = new Set();
+    const uniqueCandidates = [];
+    for (const item of candidates) {
+        if (!seen.has(item.sentence)) {
+            seen.add(item.sentence);
+            uniqueCandidates.push(item);
+            if (uniqueCandidates.length >= count) break;
         }
     }
 
+    // 2. 🌟 원래 글의 위치(index) 순서대로 재정렬하여 맥락 유지
+    uniqueCandidates.sort((a, b) => a.index - b.index);
+
+    const result = uniqueCandidates.map(item => item.sentence).join(" ");
     return result;
+}
+
+export function buildDescription(
+    introText,
+    bodyText,
+    aliases = [],
+    extraCount = 3,
+    introThreshold = 150,
+    maxLength = 1100
+) {
+    let intro = cleanWikiText(introText);
+    let body = cleanWikiText(bodyText);
+
+    if (intro && aliases.length > 0) intro = filterOtherPersonDeath(intro, aliases);
+    if (body && aliases.length > 0) body = filterOtherPersonDeath(body, aliases);
+
+    intro = normalizeSpace(intro || "");
+    body = normalizeSpace(body || "");
+
+    // 🌟 cleanSlice 함수 정의를 위로 이동
+    const cleanSlice = (text) => {
+        if (text.length <= maxLength) return text;
+        const sliced = text.slice(0, maxLength);
+        const lastPeriod = sliced.lastIndexOf(".");
+        if (lastPeriod > maxLength * 0.5) {
+            return sliced.slice(0, lastPeriod + 1).trim();
+        }
+        return sliced;
+    };
+
+    // 🌟 15번째 줄 수정: 필터링 후 문장이 0개가 되어 탈락하는 것을 방지 (Fallback)
+    if (!intro && !body) {
+        const fallback = normalizeSpace(cleanWikiText(introText) || cleanWikiText(bodyText));
+        if (!fallback) return "";
+        return cleanSlice(fallback);
+    }
+
+    const totalLength = intro.length + body.length;
+    if (totalLength < 350) {
+        const combined = normalizeSpace([intro, body].filter(Boolean).join(" "));
+        return cleanSlice(combined);
+    }
+
+    const introSentences = splitSentences(intro);
+    let firstSentence = introSentences[0] || "";
+    let usedSecondSentence = false;
+
+    const secondSentence = introSentences[1] || "";
+    const isGenealogyTMI = GENEALOGY_REGEX.test(secondSentence);
+
+    if (!isGenealogyTMI && secondSentence) {
+        if (firstSentence.length < 50 && introSentences.length > 1) {
+            firstSentence += " " + secondSentence;
+            usedSecondSentence = true;
+        } else if (
+            introSentences.length > 1 &&
+            /(창시자|제정|대표|설립|창립|발명|발견|창안|업적|노벨|수상|혁명|독립|창조|고안)/.test(secondSentence)
+        ) {
+            firstSentence += " " + secondSentence;
+            usedSecondSentence = true;
+        }
+    }
+
+    let extra = "";
+    const remainingIntro = introSentences
+        .slice(usedSecondSentence ? 2 : 1)
+        .join(" ");
+    const targetBody = normalizeSpace([remainingIntro, body].filter(Boolean).join(" "));
+
+    if (targetBody && targetBody.length > 12) {
+        extra = extractImportantSentences(
+            targetBody,
+            "",
+            aliases,
+            extraCount
+        );
+    }
+
+    const merged = normalizeSpace([firstSentence, extra].filter(Boolean).join(" "));
+    return cleanSlice(merged);
 }
