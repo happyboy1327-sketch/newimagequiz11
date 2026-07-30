@@ -50,7 +50,7 @@ function removeMetaBySearch(text) {
     let result = text; // 🛠️ [오류 수정] result 변수 선언 확실히 포함
 
     // 1. "호는 ..." 패턴 제거 (단, '시호는' 등은 제외하기 위해 앞글자 한글 체크)
-    const hoMetaRegex = /(?<![가-힣])호는\s+[^。.]{1,200}?(?:이다|였다|이었|이며|이고|\.|$)/g;
+    const hoMetaRegex = /((?<![가-힣])호는\s+[^。.]{1,200}?(?:이다|였다|이었|이며|이고|\.|$))/g;
     result = result.replace(hoMetaRegex, "");
 
     // 2. "시호는", "자는", "본관은" 등 다른 메타 정보 제거
