@@ -466,9 +466,9 @@ const finalDescription = buildDescription(
     cleanIntro, 
     cleanExtract || "",
     aliases, 
-    4,   
+    3,   
     150, 
-    1100  
+    630  
 );
 
 console.log("캐시 추가 직전:", pageData.title, imageUrl, finalDescription?.length);
