@@ -7,12 +7,19 @@ const IMPORTANT_KEYWORDS = [
 ];
 
 const GENEALOGY_REGEX = /(의\s*(?:아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|차녀|장녀|자녀|후손)(?:이다|이었다|이며|이고|으로서)?|슬하에|결혼하(?:여|였|고)|결혼했(?:다)?)/;
-
-// 🌟 [수정] '운동장' 등 장소 명칭을 제외하도록 룩어헤드(?!\s*장) 적용 및 '순국', '고문' 추가
 const NUTRITION_REGEX = /(독립|전투|(?:독립|만세|민주화)?운동(?!\s*장)|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|전승|수상|발표|설립|창립|개발|발명가|순국|고문)/;
-// 🌟 [수정] 체육관, 유적, 이름을 딴 등 단순 기념 시설 TMI 감점 추가
 const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노년|보냈|생활했|향리|소일|이름을\s*딴|체육관|유적)/;
 const DANGLING_START_REGEX = /^(이(후|러한|와\s+같이)?|따라서|이에|반면)\b/;
+
+// 🌟 [추가] 누락되었던 removeMetaBySearch 함수 구현
+function removeMetaBySearch(text = "") {
+    if (!text) return "";
+    return text
+        .replace(/분류:[^\]]+/g, "")
+        .replace(/파일:[^\]]+/g, "")
+        .replace(/\[\s*메타[\s\S]*?\]/g, "")
+        .trim();
+}
 
 function normalizeSpace(text = "") {
     return String(text).replace(/\s+/g, " ").trim();
@@ -76,12 +83,11 @@ function resolveDemonstrativeReference(sentence, sentences, currentIndex) {
     return processedSentence;
 }
 
-// 🌟 [수정] 문장 분리 함수 안전화 적용
 function filterOtherPersonDeath(text, aliases = []) {
     if (!text) return "";
     const sentences = splitSentences(text);
     const cleanSentences = sentences.filter(sentence => {
-        const match = sentence.match(/([가-힣\s]{2,12})(?:이|가|은|는).*?(?:사망|별세|서거|타계|전사|시해|사사|병사|처형|살해|숨졌|목숨을\s*잃)/);
+        const match = sentence.match(/([가-힣a-zA-Z\s]{2,20})(?:이|가|은|는).*?(?:사망|별세|서거|타계|전사|시해|사사|병사|처형|살해|숨졌|목숨을\s*잃)/);
         if (match) {
             const subjectName = match[1].trim();
             const isPronounOrContext = /^(그|그녀|본인|이들|해당\s*인물|이\s*인물)$/.test(subjectName) || /년|월|일|수용소|당시/.test(subjectName);
@@ -107,7 +113,6 @@ function filterOtherPersonDeath(text, aliases = []) {
     return cleanSentences.join(" ");
 }
 
-// 🌟 [수정] 숫자/날짜 속 마침표(3.1, 1902.12.16 등)를 잘라먹지 않도록 정규식 강화
 function splitSentences(text) {
     const normalized = normalizeSpace(text).replace(/\n+/g, " ");
     return normalized
@@ -123,22 +128,16 @@ function splitSentences(text) {
 }
 
 export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 3) {
-    console.log("SUMMARY INPUT:", bodyText.slice(0,300));
     if (!bodyText || typeof bodyText !== "string") return "";
 
     const rawSentences = splitSentences(bodyText);
-    console.log(rawSentences);
     const cleanedSentences = [];
 
     rawSentences.forEach((sentence, index) => {
         let text = cleanWikiText(sentence);
-        console.log("AFTER CLEAN:", text);
-
         if (!text) return;
 
-        // 먼저 메타 제거
-       text = removeMetaBySearch(text);
-       
+        text = removeMetaBySearch(text);
 
         if (!text) return;
         if (isIncompleteSentence(text)) return;
@@ -185,9 +184,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
             );
         }
 
-        // 참조 처리 후 다시 한번 메타 제거
         processedText = removeMetaBySearch(processedText);
-     
 
         if (!processedText) return;
         if (processedText.length > 400) return;
@@ -198,9 +195,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         });
     });
 
-
     if (cleanedSentences.length === 0) return "";
-
 
     const candidates = cleanedSentences.map(({ original, index }) => {
         let score = 10;
@@ -228,9 +223,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         };
     });
 
-
     candidates.sort((a, b) => b.score - a.score);
-
 
     const seen = new Set();
     const uniqueCandidates = [];
@@ -243,7 +236,6 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
             if (uniqueCandidates.length >= count) break;
         }
     }
-
 
     uniqueCandidates.sort((a, b) => a.index - b.index);
 
@@ -286,19 +278,16 @@ export function buildDescription(
     }
 
     const totalLength = intro.length + body.length;
-   if (totalLength < 350) {
-    const combined = normalizeSpace([intro, body].filter(Boolean).join(" "));
-    return cleanSlice(removeMetaBySearch(combined));
-}
+    if (totalLength < 350) {
+        const combined = normalizeSpace([intro, body].filter(Boolean).join(" "));
+        return cleanSlice(removeMetaBySearch(combined));
+    }
 
-    const introSentences = splitSentences(intro)
-    .filter(Boolean);
-let firstSentence = introSentences[0] || "";
+    const introSentences = splitSentences(intro).filter(Boolean);
+    let firstSentence = introSentences[0] || "";
     let usedSecondSentence = false;
 
-    // 🌟 [수정] 한자/생몰년 괄호를 빼고 계산한 '실질 텍스트 길이' 기준 적용
     const realFirstSentenceLength = firstSentence.replace(/\([^)]*\)/g, "").trim().length;
-
     const secondSentence = introSentences[1] || "";
     const isGenealogyTMI = GENEALOGY_REGEX.test(secondSentence);
 
@@ -316,10 +305,10 @@ let firstSentence = introSentences[0] || "";
     }
 
     let extra = "";
-   const remainingIntro = introSentences
-    .slice(usedSecondSentence ? 2 : 1)
-    .filter(Boolean)
-    .join(" ");
+    const remainingIntro = introSentences
+        .slice(usedSecondSentence ? 2 : 1)
+        .filter(Boolean)
+        .join(" ");
     const targetBody = normalizeSpace([remainingIntro, body].filter(Boolean).join(" "));
 
     if (targetBody && targetBody.length > 12) {
@@ -331,6 +320,6 @@ let firstSentence = introSentences[0] || "";
         );
     }
 
-   const merged = normalizeSpace([firstSentence, extra].filter(Boolean).join(" "));
-return cleanSlice(merged);
+    const merged = normalizeSpace([firstSentence, extra].filter(Boolean).join(" "));
+    return cleanSlice(merged);
 }
