@@ -1,5 +1,3 @@
-
-
 // ==========================================================
 // 1. 전역 상수 및 정규식
 // ==========================================================
@@ -22,20 +20,12 @@ const KEYWORD_REGEX = new RegExp(IMPORTANT_KEYWORDS.join('|'), 'g');
 const GENEALOGY_REGEX = /(의\s*(?:아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|차녀|장녀|자녀|후손)(?:이다|이었다|이며|이고|으로서)?|슬하에|결혼하(?:여|였|고)|결혼했(?:다)?)/;
 const NUTRITION_REGEX = /(독립|전투|(?:독립|만세|민주화)?운동(?!\s*장)|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|전승|수상|발표|설립|창립|개발|발명가|순국|고문|정복|멸망|편입|군현제|도량형|만리장성|분서갱유|황제|칭호|제도|토목|능묘|순행|붕어|고안|제작|창제|개량|설계|과학|기술|천문|의학|수학|공학|헌신|보급|창설|주창|구제|지원|관측|발명품|이론|법칙|원리|측우기|혼천의|자격루|유학|철학|성현|사상가|유학자|성선설|경전|성리학|실학|경세|목민|실용|실사구시|이용후생)/;
 const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노년|보냈|생활했|향리|소일|이름을\s*딴|체육관|유적)/;
-// 단순 과정/정치 일화/배경 서사 감점용 정규식
 const STORY_FLUFF_REGEX = /(관직에\s*올라|벼슬에|신임을\s*받아|모함을\s*받아|상소를\s*올려|벼슬을|시절에|계기가\s*되어|도착하여|이르렀다|좌천|파직|소환|참석)/;
-
-// 호, 이름의 유래/배경 설명 문장 감지용
 const NAME_ORIGIN_REGEX = /(호는|호가|호\s*|이름은|이름에서|따왔다는|지었다는|유래|설이\s*있다|뜻을\s*담아|칭하였다|이름을\s*(?:바꾸다|개명하다|칭하다)|~에서\s*~로\s*(?:개명|변경))/;
 const possessiveDeathRegex = /((아버지|부친|어머니|모친|아내|부인|남편|아들|딸|형|동생|스승|친구|동료|통역가)의\s*(사망|별세|서거|타계|처형|죽음))/;
 
-// ==========================================================
-//  정규식 파일 상단(Global Scope) 상수화 - V8 엔진 재컴파일 방지 (연산 속도 극대화)
-// ==========================================================
 const REGEX_QUOTE_WRAPPED = /^[《<〈""'`].*[》>〉""'`]$/;
 const REGEX_IN_WHICH = /^(이|그)\s*중\b/;
-
-// 접속어 + 시간 지시어 단일 패스 통합 정규식 (replace 2번 돌리던 걸 1번으로 단축)
 const REGEX_PREFIX_CLEAN = /^(?:첫째|둘째|셋째|넷째|다섯째|마지막으로|우선|먼저|또한|그리고|한편|다음으로|결국|그\s*뒤|그\s*후|그\s*이후|이때|이처럼|이로\s*인해),?\s*/;
 const REGEX_FRAGMENTS = /^(기습공격을|전투에서|이유는|까닭은)/;
 const REGEX_INVENTIONS = /자격루|거중기|측우기|혼천의|앙부일구|거북선|활자|화성/;
@@ -43,11 +33,11 @@ const REGEX_EXTERNAL_SUBJECT = /(?:중국인|일본인|관람객|학자들|후�
 
 
 // ==========================================================
-// 2. 전처리 함수 (호/시호 완벽 제거 + 문장 부호 공백 보정)
+// 2. 전처리 및 필터 함수
 // ==========================================================
 function normalizeSpace(text = "") {
     return String(text)
-        .replace(/([.!?。])([가-힣a-zA-Z])/g, "$1 $2") // 문장부호 뒤 공백 강제 삽입
+        .replace(/([.!?。])([가-힣a-zA-Z])/g, "$1 $2")
         .replace(/\s+/g, " ")
         .trim();
 }
@@ -66,24 +56,16 @@ function cleanWikiText(text) {
 
 function removeMetaBySearch(text) {
     if (!text) return "";
-    let result = text; // 🛠️ [오류 수정] result 변수 선언 확실히 포함
+    let result = text;
 
-    // 1. "호는 ..." 패턴 제거 (단, '시호는' 등은 제외하기 위해 앞글자 한글 체크)
     const hoMetaRegex = /(?<![가-힣])호는\s+[^。.]{1,200}?(?:이다|였다|이었|이며|이고|\.|$)/g;
     result = result.replace(hoMetaRegex, "");
 
-    // 2. "시호는", "자는", "본관은" 등 다른 메타 정보 제거
     const keywords = "시호|본관|자|별호|아호|아명|태명|세례명|일명|당호|법명|성명";
     const keyPattern = `(?<![가-힣])(?:${keywords})(?:은|는|\\([^)]*\\))`;
-
-// 3. valToken 수정 (괄호 불일치 해결)
-const valToken = `(?:[^\\s,.\\(\\)\\u00B7]+(?:\\([^)]*\\)?)?)`;
-
-// 4. valPattern
-const valPattern = `${valToken}(?:\\s*[·ㆍ]\\s*${valToken})*`;
-
-// 5. singleMeta
-const singleMeta = `${keyPattern}\\s*${valPattern}`;
+    const valToken = `(?:[^\\s,.\\(\\)\\u00B7]+(?:\\([^)]*\\)?)?)`;
+    const valPattern = `${valToken}(?:\\s*[·ㆍ]\\s*${valToken})*`;
+    const singleMeta = `${keyPattern}\\s*${valPattern}`;
 
     const metaChainRegex = new RegExp(
         `(?:,\\s*|\\s+)*(?:${singleMeta}(?:,\\s*|\\s+이며|\\s+이고|\\s+)*)+(?:이다|였다|이었다|이며|이고|이자|으로)?`,
@@ -91,14 +73,12 @@ const singleMeta = `${keyPattern}\\s*${valPattern}`;
     );
     result = result.replace(metaChainRegex, "");
 
-    // 3. 빈 메타 정보 찌꺼기 제거 (", 시호는 . 이다." 등)
     const emptyMetaRegex = new RegExp(
         `(?:,\\s*|\\s+)*(?:${keyPattern})\\s*[,.\\s]*(?:이다|였다|이었다|이며|이고|이자|으로)?`,
         "g"
     );
     result = result.replace(emptyMetaRegex, "");
 
-    // 4. 문장 끝 어미 및 찌꺼기 정리
     result = result
         .replace(/([가-힣]+)으로(?=\s*[\.!\?])/g, "$1이다")
         .replace(/([가-힣]+)이며(?=\s*[\.!\?])/g, "$1이다")
@@ -162,10 +142,11 @@ function resolveDemonstrativeReference(sentence, sentences, currentIndex) {
 }
 
 function filterOtherPerson(rawSentences, aliases = []) {
-    // 1. aliases 방어 처리 (undefined/null 대응 및 공백 제거)
+    // 🛠️ [타입 방어] 배열이 아니면 빈 배열 반환
+    if (!Array.isArray(rawSentences)) return [];
+
     const safeAliases = Array.isArray(aliases) ? aliases.filter(Boolean) : [];
 
-    // 2. 풀네임에서 2글자 이상 단어 분할 ("윌리엄 셰익스피어" -> "윌리엄", "셰익스피어" 포함)
     const expandedAliases = new Set(safeAliases);
     safeAliases.forEach(alias => {
         alias.split(/\s+/).forEach(part => {
@@ -178,9 +159,6 @@ function filterOtherPerson(rawSentences, aliases = []) {
         const processedText = sentence.trim();
         if (!processedText) return false;
 
-        // ==========================================
-        // 1. 타인 사망 문장 필터링 (filterOtherPersonDeath)
-        // ==========================================
         if (index > 0) {
             const deathMatch = processedText.match(/([가-힣a-zA-Z\s]{2,20})(?:이|가|은|는).*?(?:사망|별세|서거|타계|전사|시해|사사|병사|처형|살해|숨졌|목숨을\s*잃)/);
             if (deathMatch) {
@@ -193,7 +171,7 @@ function filterOtherPerson(rawSentences, aliases = []) {
                         const cleanSubject = subjectName.replace(/[\s_\-]/g, "");
                         return cleanSubject.includes(cleanAlias) || cleanAlias.includes(cleanSubject);
                     });
-                    if (!isSelf) return false; // 타인의 사망 문장이면 제거
+                    if (!isSelf) return false;
                 }
             }
 
@@ -202,27 +180,16 @@ function filterOtherPerson(rawSentences, aliases = []) {
             }
         }
 
-        // ==========================================
-        // 2. 주인공(이름/별칭) 및 대명사 검증
-        // ==========================================
-        // 만약 aliases 정보가 아예 전달되지 않았으면 검증 스킵(안전 장치)
         if (aliasList.length === 0) return true;
 
-        // 1) 주인공 이름/성/별칭 포함 여부
         const hasTargetName = aliasList.some(alias => processedText.includes(alias));
-
-        // 2) 대명사 검증 (남성 '그' + 여성 '그녀' 포함)
         const hasMainPronoun = /(?:^|\s)(?:그는|그가|그의|그를|그에게|그녀는|그녀가|그녀의|그녀를|그녀에게)\b/.test(processedText);
 
         if (!hasTargetName) {
-            // 이름도 없고 대명사도 없으면 버림
             if (!hasMainPronoun) return false;
-
-            // 대명사만 있는 경우: 직전 문장에 주인공 이름/성이 있었는지 확인
             if (index > 0) {
                 const prevText = rawSentences[index - 1];
                 const prevHasTargetName = aliasList.some(alias => prevText.includes(alias));
-                
                 if (!prevHasTargetName) return false;
             } else {
                 return false;
@@ -234,6 +201,7 @@ function filterOtherPerson(rawSentences, aliases = []) {
 }
 
 function splitSentences(text) {
+    if (!text || typeof text !== "string") return [];
     const normalized = normalizeSpace(text).replace(/\n+/g, " ");
     return normalized
         .split(/(?<!\b[a-zA-Z]|\d)([.!?。])(?=\s+|$)/)
@@ -259,17 +227,21 @@ function extractBookTitles(text) {
 
 
 // ==========================================================
-// 2. 메인 함수
+// 3. 메인 추출 및 요약 생성 함수
 // ==========================================================
 export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 3) {
     if (!bodyText || typeof bodyText !== "string") return "";
 
-    let cleanedBody = removeMetaBySearch(cleanWikiText(bodyText));
+    const cleanedBody = removeMetaBySearch(cleanWikiText(bodyText));
+    
+    // 🛠️ [수정] 1. 먼저 문장 단위 배열로 split
+    let rawSentences = splitSentences(cleanedBody);
+
+    // 🛠️ [수정] 2. 배열 상태로 filterOtherPerson 전달
     if (aliases && aliases.length > 0) {
-        cleanedBody = filterOtherPerson(cleanedBody, aliases);
+        rawSentences = filterOtherPerson(rawSentences, aliases);
     }
 
-    const rawSentences = splitSentences(cleanedBody);
     const totalCount = rawSentences.length;
     if (totalCount === 0) return "";
 
@@ -277,7 +249,6 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
     const hasBookTitles = bookTitles.length > 0;
     const cleanedSentences = [];
 
-    // [최적화 1] forEach 대신 빠른 for 문 사용 및 정규식 평가 단축
     for (let index = 0; index < totalCount; index++) {
         const text = rawSentences[index].trim();
         const len = text.length;
@@ -299,7 +270,6 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
             processedText = resolveDemonstrativeReference(processedText, rawSentences, index);
         }
 
-        // 접속어 및 시간 지시어 1번의 replace로 통합 제거
         processedText = processedText.replace(REGEX_PREFIX_CLEAN, "").trim();
 
         if (REGEX_FRAGMENTS.test(processedText)) continue;
@@ -313,13 +283,9 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
     if (cleanedSentences.length === 0) return "";
 
-    // ==========================================================
-    // 🎯 [점수 계산 영역] (중복 연산 제거 최적화)
-    // ==========================================================
     const scoredCandidates = cleanedSentences.map(({ original, index }) => {
         let score = 10;
 
-        // [최적화 2] NUTRITION_REGEX 결과를 변수에 담아 중복 실행(2회->1회) 방지
         const isNutrition = NUTRITION_REGEX.test(original);
         if (isNutrition) score += 20;
 
@@ -328,7 +294,6 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
         const isNameOrigin = NAME_ORIGIN_REGEX.test(original);
 
-        // [최적화 3] 호/이름 유래 문장이 아니고 책 제목 목록이 실제로 있을 때만 .some() 실행
         if (!isNameOrigin && hasBookTitles) {
             if (bookTitles.some(title => original.includes(title))) score += 30;
         }
@@ -347,9 +312,6 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         return { sentence: original, index, score };
     });
 
-    // ==========================================================
-    // 🎯 [Zone 구역 분할 및 최종 선발]
-    // ==========================================================
     const boundary1 = Math.floor(totalCount / 3);
     const boundary2 = Math.floor((totalCount * 2) / 3);
     const zones = [{ candidates: [] }, { candidates: [] }, { candidates: [] }];
@@ -364,7 +326,6 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
     const selected = [];
     const seen = new Set();
 
-    // Zone별 최고점 선발
     for (let z = 0; z < 3; z++) {
         const candidates = zones[z].candidates;
         if (candidates.length > 0) {
@@ -375,7 +336,6 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         }
     }
 
-    // 부족한 문장 보충 (배열 복사 없이 바로 전체 후보에서 고득점 탐색)
     if (selected.length < count) {
         scoredCandidates.sort((a, b) => b.score - a.score);
         for (let i = 0; i < scoredCandidates.length; i++) {
@@ -388,21 +348,27 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         }
     }
 
-    // 원문 순서(index) 정렬 후 합치기
     selected.sort((a, b) => a.index - b.index);
     return selected.map(item => item.sentence).join(" ");
 }
 
 
 export function buildDescription(introText, bodyText, aliases = [], extraCount = 3, introThreshold = 150, maxLength = 630) { 
-    let intro = removeMetaBySearch(cleanWikiText(introText));
-    let body = removeMetaBySearch(cleanWikiText(bodyText));
+    let introClean = removeMetaBySearch(cleanWikiText(introText));
+    let bodyClean = removeMetaBySearch(cleanWikiText(bodyText));
 
-    if (intro && aliases.length > 0) intro = filterOtherPerson(intro, aliases);
-    if (body && aliases.length > 0) body = filterOtherPerson(body, aliases);
+    // 🛠️ [수정] intro/body 문자열을 문장 배열로 split 후 filterOtherPerson 적용
+    if (introClean && aliases.length > 0) {
+        const introSentences = splitSentences(introClean);
+        introClean = filterOtherPerson(introSentences, aliases).join(" ");
+    }
+    if (bodyClean && aliases.length > 0) {
+        const bodySentences = splitSentences(bodyClean);
+        bodyClean = filterOtherPerson(bodySentences, aliases).join(" ");
+    }
 
-    intro = normalizeSpace(intro || "");
-    body = normalizeSpace(body || "");
+    let intro = normalizeSpace(introClean || "");
+    let body = normalizeSpace(bodyClean || "");
 
     const cleanSlice = (text) => {
         if (text.length <= maxLength) return text;
