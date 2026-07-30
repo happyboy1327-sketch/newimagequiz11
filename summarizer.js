@@ -50,17 +50,21 @@ function removeMetaBySearch(text) {
     let result = text; // 🛠️ [오류 수정] result 변수 선언 확실히 포함
 
     // 1. "호는 ..." 패턴 제거 (단, '시호는' 등은 제외하기 위해 앞글자 한글 체크)
-    const hoMetaRegex = /((?<![가-힣])호는\s+[^。.]{1,200}?(?:이다|였다|이었|이며|이고|\.|$))/g;
+    const hoMetaRegex = /(?<![가-힣])호는\s+[^。.]{1,200}?(?:이다|였다|이었|이며|이고|\.|$)/g;
     result = result.replace(hoMetaRegex, "");
 
     // 2. "시호는", "자는", "본관은" 등 다른 메타 정보 제거
     const keywords = "시호|본관|자|별호|아호|아명|태명|세례명|일명|당호|법명|성명";
-    const keyPattern = `(?<![가-힣])(?:${keywords})(?:은|는|\\[(^)]*\\))`;
-    
-    const valToken = `(?:[^\\s,.\\(\\)\\u00B7]+(?:\\[(^)]*\\)?)`; 
-    const valPattern = `${valToken}(?:\\s*[·ㆍ]\\s*${valToken})*`;
-    
-    const singleMeta = `${keyPattern}\\s*${valPattern}`;
+    const keyPattern = `(?<![가-힣])(?:${keywords})(?:은|는|\\([^)]*\\))`;
+
+// 3. valToken 수정 (괄호 불일치 해결)
+const valToken = `(?:[^\\s,.\\(\\)\\u00B7]+(?:\\([^)]*\\)?)?)`;
+
+// 4. valPattern
+const valPattern = `${valToken}(?:\\s*[·ㆍ]\\s*${valToken})*`;
+
+// 5. singleMeta
+const singleMeta = `${keyPattern}\\s*${valPattern}`;
 
     const metaChainRegex = new RegExp(
         `(?:,\\s*|\\s+)*(?:${singleMeta}(?:,\\s*|\\s+이며|\\s+이고|\\s+)*)+(?:이다|였다|이었다|이며|이고|이자|으로)?`,
