@@ -33,51 +33,29 @@ function cleanWikiText(text) {
 function removeMetaBySearch(text, mode = "all") {
     if (!text) return "";
 
+    const original = text;
+
     let result = text;
 
-    const metaPattern =
-        "(본관은?|아호는?|호는?|자는?|자\\(字\\)는?|시호는?|태명은?|아명은?|세례명은?|일명은?|당호는?)";
+    const metaRegex =
+        /(?:,\s*)?(본관|자는|자\(字\)|호는|호\(號\)|아호는|아명은|아명|태명은|태명|세례명은|일명은|당호|시호)\s*[^,.。]+/g;
 
+    result = result.replace(metaRegex, "");
 
-    // 메타 제거
-    result = result.replace(
-        new RegExp(
-            `,?\\s*${metaPattern}\\s*[^.。]+?(?:이다|였다|이었다)\\.?`,
-            "g"
-        ),
-        ""
-    );
-
-
-    // 제거 후 끊긴 연결어 복원
     result = result
-        .replace(
-            /(정치인|문신|학자|시인|저술가|독립운동가|사상가|장군|왕|황제|화가|작가)으로\s*,?\s*$/,
-            "$1이다."
-        )
-        .replace(
-            /,\s*$/,
-            "."
-        );
-
-
-    // 첫 문장 날아가는 경우 방지
-    if (!result && text.length > 0) {
-        result = text;
-    }
-
-
-    return result
-        .replace(
-        /,\s*(?:$)/,
-        ""
-        )
-        .replace(
-        /(이고|이며|이고)\s*$/,
-        "$1.")
         .replace(/,\s*,/g, ",")
         .replace(/\s+/g, " ")
         .trim();
+
+    // 삭제 후 문장 붕괴 방지
+    if (
+        result.length < original.length * 0.5 ||
+        !/[은는이가].*(이다|였다|한다|했다|하였다)\.?$/.test(result)
+    ) {
+        return original;
+    }
+
+    return result;
 }
 
 function isIncompleteSentence(sentence) {
