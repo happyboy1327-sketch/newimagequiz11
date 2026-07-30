@@ -324,7 +324,7 @@ export function buildDescription(
     }
 
     const introSentences = splitSentences(intro);
-    let firstSentence = introSentences[0] || "";
+let firstSentence = removeMetaBySearch(introSentences[0] || "");
     let usedSecondSentence = false;
 
     // 🌟 [수정] 한자/생몰년 괄호를 빼고 계산한 '실질 텍스트 길이' 기준 적용
