@@ -162,6 +162,18 @@ function resolveDemonstrativeReference(sentence, sentences, currentIndex) {
 }
 
 function filterOtherPerson(rawSentences, aliases = []) {
+    // 1. aliases 방어 처리 (undefined/null 대응 및 공백 제거)
+    const safeAliases = Array.isArray(aliases) ? aliases.filter(Boolean) : [];
+
+    // 2. 풀네임에서 2글자 이상 단어 분할 ("윌리엄 셰익스피어" -> "윌리엄", "셰익스피어" 포함)
+    const expandedAliases = new Set(safeAliases);
+    safeAliases.forEach(alias => {
+        alias.split(/\s+/).forEach(part => {
+            if (part.length >= 2) expandedAliases.add(part);
+        });
+    });
+    const aliasList = Array.from(expandedAliases);
+
     return rawSentences.filter((sentence, index) => {
         const processedText = sentence.trim();
         if (!processedText) return false;
@@ -175,9 +187,8 @@ function filterOtherPerson(rawSentences, aliases = []) {
                 const subjectName = deathMatch[1].trim();
                 const isPronounOrContext = /^(그|그녀|본인|이들|해당\s*인물|이\s*인물)$/.test(subjectName) || /년|월|일|수용소|당시/.test(subjectName);
                 
-                if (!isPronounOrContext) {
-                    const isSelf = aliases.some(alias => {
-                        if (!alias) return false;
+                if (!isPronounOrContext && aliasList.length > 0) {
+                    const isSelf = aliasList.some(alias => {
                         const cleanAlias = alias.replace(/[\s_\-]/g, "");
                         const cleanSubject = subjectName.replace(/[\s_\-]/g, "");
                         return cleanSubject.includes(cleanAlias) || cleanAlias.includes(cleanSubject);
@@ -194,22 +205,24 @@ function filterOtherPerson(rawSentences, aliases = []) {
         // ==========================================
         // 2. 주인공(이름/별칭) 및 대명사 검증
         // ==========================================
-        const hasTargetName = aliases && aliases.length > 0 
-            ? aliases.some(alias => alias && processedText.includes(alias)) 
-            : false;
+        // 만약 aliases 정보가 아예 전달되지 않았으면 검증 스킵(안전 장치)
+        if (aliasList.length === 0) return true;
 
-        const hasMainPronoun = /^(?:그는|그가|그의|그를|그에게)\b/.test(processedText);
+        // 1) 주인공 이름/성/별칭 포함 여부
+        const hasTargetName = aliasList.some(alias => processedText.includes(alias));
+
+        // 2) 대명사 검증 (남성 '그' + 여성 '그녀' 포함)
+        const hasMainPronoun = /(?:^|\s)(?:그는|그가|그의|그를|그에게|그녀는|그녀가|그녀의|그녀를|그녀에게)\b/.test(processedText);
 
         if (!hasTargetName) {
             // 이름도 없고 대명사도 없으면 버림
             if (!hasMainPronoun) return false;
 
-            // 대명사만 있는 경우: 직전 문장에 주인공 이름이 있었는지 확인
+            // 대명사만 있는 경우: 직전 문장에 주인공 이름/성이 있었는지 확인
             if (index > 0) {
                 const prevText = rawSentences[index - 1];
-                const prevHasTargetName = aliases.some(alias => alias && prevText.includes(alias));
+                const prevHasTargetName = aliasList.some(alias => prevText.includes(alias));
                 
-                // 직전 문장에 주인공 이름이 없었다면 타인을 가리키는 대명사이므로 버림
                 if (!prevHasTargetName) return false;
             } else {
                 return false;
