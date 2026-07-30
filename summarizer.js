@@ -30,6 +30,56 @@ function cleanWikiText(text) {
         .trim();
 }
 
+function removeMetaBySearch(text) {
+    const keywords = [
+        "본관",
+        "아명",
+        "태명",
+        "세례명",
+        "일명",
+        "자는",
+        "자(字)",
+        "호",
+        "아호",
+        "당호",
+        "시호"
+    ];
+
+    let result = text;
+
+    for (const key of keywords) {
+        let index = result.indexOf(key);
+
+        while (index !== -1) {
+            let start = index;
+
+            // 키워드 앞 쉼표까지 포함
+            if (start > 0 && result[start - 1] === ",") {
+                start--;
+            }
+
+            // 다음 쉼표 찾기
+            let end = result.indexOf(",", index);
+
+            if (end === -1) {
+                // 문장 끝이면 끝까지 제거
+                result = result.slice(0, start);
+            } else {
+                result = result.slice(0, start) + result.slice(end + 1);
+            }
+
+            result = result.trim();
+
+            index = result.indexOf(key);
+        }
+    }
+
+    return result
+        .replace(/,\s*,/g, ",")
+        .replace(/^\s*,/, "")
+        .trim();
+}
+
 function isIncompleteSentence(sentence) {
     if (!sentence) return true;
     const text = sentence.trim();
@@ -158,29 +208,12 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
             processedText = resolveDemonstrativeReference(processedText, rawSentences, index);
         }
 
-        if (processedText.length > 500) return;
+        if (processedText.length > 400) return;
 
-        if (META_RE.test(processedText)) {
-
-    // 문장 전체가 메타 정보뿐인 경우 제거
-    if (
-        /^(태명|세례명|일명|아명|본관|자는|호는|당호|아호|시호)/.test(processedText)
-        &&
-        /(이다|이었다|이다\.)$/.test(processedText)
-        &&
-        !/(활동|운동|출생|사망|설립|창립|발표|저서|작품|업적|연구|독립|순국|투옥|고문)/.test(processedText)
-    ) {
-        return;
-    }
-
-    // 앞부분 메타 제거
-    processedText = processedText.replace(
-        /^(태명|세례명|일명|아명|본관|자는|호는|당호|아호|시호)(은|는)?\s*.*?(이며|이고|이다|,)\s*/g,
-        ""
-    ).trim();
+       processedText = removeMetaBySearch(processedText);
 
     if (!processedText) return;
-}
+        
         cleanedSentences.push({ original: processedText, index: targetIndex });
     });
 
