@@ -66,7 +66,7 @@ const COMMONS_BATCH_SIZE = 14;
 
 const VIP_IMAGE_FALLBACKS = {
     "이순신": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/%EC%9D%B4%EC%88%9C%EC%8B%A0.jpg/1280px-%EC%9D%B4%EC%88%9C%EC%8B%A0.jpg"
-}
+};
 
 function shuffle(array) {
     const arr = [...array];
@@ -80,13 +80,17 @@ function shuffle(array) {
 function makeNameAliases(title) {
     const cleanKo = title.replace(/\(.+?\)/g, "").trim();
     const lowerKo = cleanKo.toLowerCase();
-    let aliases = [lowerKo, lowerKo.replace(/\s+/g, "_"), lowerKo.replace(/\s+/g, "-")];
-    if (/모차르트/.test(cleanKo)) aliases.push("mozart");
-    if (/베토벤/.test(cleanKo)) aliases.push("beethoven");
-    if (/피카소/.test(cleanKo)) aliases.push("picasso");
-    if (/간디/.test(cleanKo)) aliases.push("gandhi");
-    if (/고흐/.test(cleanKo)) aliases.push("gogh");
-    if (/나폴레옹/.test(cleanKo)) aliases.push("napoleon");
+
+    // 🛠️ [수정] 원본 cleanKo도 포함하여 filterOtherPerson의 대소문자 검사 통과 보장
+    let aliases = [cleanKo, lowerKo, lowerKo.replace(/\s+/g, "_"), lowerKo.replace(/\s+/g, "-")];
+    
+    if (/모차르트/.test(cleanKo)) aliases.push("mozart", "Mozart");
+    if (/베토벤/.test(cleanKo)) aliases.push("beethoven", "Beethoven");
+    if (/피카소/.test(cleanKo)) aliases.push("picasso", "Picasso");
+    if (/간디/.test(cleanKo)) aliases.push("gandhi", "Gandhi");
+    if (/고흐/.test(cleanKo)) aliases.push("gogh", "Gogh");
+    if (/나폴레옹/.test(cleanKo)) aliases.push("napoleon", "Napoleon");
+    
     return [...new Set(aliases)];
 }
 
@@ -95,7 +99,6 @@ function isCulturalSiteImage(url) {
 
     let filename = url.split('?')[0];
 
-    // 🌟 1. 더 이상 % 인코딩이 남지 않을 때까지 반복 디코딩 (이중/삼중 인코딩 완전 해제)
     let decoded = filename;
     try {
         while (decoded.includes('%')) {
@@ -103,9 +106,7 @@ function isCulturalSiteImage(url) {
             if (next === decoded) break;
             decoded = next;
         }
-    } catch (e) {
-        // 잘못된 % 문자로 인한 URIError 발생 시 catch로 안전 처리
-    }
+    } catch (e) {}
 
     let clean = decoded
         .replace(/^.*[\\/]/, '')
@@ -117,7 +118,6 @@ function isCulturalSiteImage(url) {
     const absoluteSiteRegex = /(palace|temple|shrine|tomb|heritage|sanctuary|sadaang|gyeongbok|bulguk|seokguram)/i;
     if (absoluteSiteRegex.test(clean)) return true;
 
-    // 🌟 2. 토큰으로 쪼개기 전, 전체 파일명(clean)에 '신도비', '서원', '유적지' 등이 포함되어 있다면 즉시 차단
     const otherSiteRegex = /([가-힣]{2,}(궁|능|릉|묘|각|루)$|사찰|서원|신도비|유적지|행궁|[宮陵墓寺閣樓])/;
     if (otherSiteRegex.test(clean)) return true;
 
@@ -163,11 +163,10 @@ function isValidImageUrl(url) {
         return decodedUrl.includes(keyword);
     });
 
-    if (hasKeyword) return false; // 💡 오타 수정됨 (hasForbiddenKeyword -> hasKeyword)
+    if (hasKeyword) return false;
 
     return /\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(decodedUrl);
 }
-
 
 function extractInfoboxImage(html) {
     const $ = load(html);
@@ -181,18 +180,14 @@ function extractInfoboxImage(html) {
         if (url.startsWith("//")) {
             url = "https:" + url;
         }
-        console.log(`인포박스 이미지 발견`, url); // ← 이거 추가
 
         const name = decodeURIComponent(url.toLowerCase());
 
         if (name.includes("picto_infobox") || name.includes("signature") || name.endsWith(".svg")) {
-        console.log(`스킵: 픽토 또는 svg/si`, name); // ← 이것도
-        continue;
-    }
+            continue;
+        }
 
-        // ✅ 여기서 바로 return하지 말고, 실제로 유효한지 검증 후 아니면 다음 이미지로
         if (!isValidImageUrl(url) || isCulturalSiteImage(url)) {
-            console.log(`[미유효 인포박스 이미지 스킵] ${name}`);
             continue;
         }
 
@@ -201,7 +196,6 @@ function extractInfoboxImage(html) {
 
     return null;
 }
-
 
 async function findAlternativeHumanImage(title, aliases) {
     console.time(`🖼️ 이미지 탐색 ${title}`);
@@ -270,11 +264,11 @@ async function findAlternativeHumanImage(title, aliases) {
         }
     }
     console.timeEnd(`🖼️ 이미지 탐색 ${title}`);
-    console.log("대체 이미지 실패:", title, "targets:", targets.length);
     return null;
 }
 
-function createMaskedHint(title, extract) {
+function createMaskedHint(title, extract = "") {
+    if (!extract) return "";
     let hintText = extract.substring(0, 350);
     const cleanTitle = title.trim();
     
@@ -361,45 +355,49 @@ async function fillCache() {
             targetTitles = shuffle([...vipTitles, ...newTitles]);
 
             if (targetTitles.length > 0) {
-    for (let i = 0; i < targetTitles.length; i += 4) { 
-        const batch = targetTitles.slice(i, i + 4);
-        let detailRes;
+                for (let i = 0; i < targetTitles.length; i += 4) { 
+                    const batch = targetTitles.slice(i, i + 4);
+                    let detailRes;
 
-        try {
-            // 🎯 4개 타이틀을 개별 병렬(Promise.all)로 요청하여 본문 전체 수집
-            const results = await Promise.all(
-                batch.map(async (title) => {
-                    const res = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                        ...WIKI_AXIOS_CONFIG,
-                        params: {
-                            action: "query",
-                            titles: title,
-                            prop: "extracts|pageimages",
-                            explaintext: 1,   // 전체 본문 가져오기
-                            redirects: 1,
-                            pithumbsize: 800,
-                            format: "json",
-                            origin: "*"
+                    try {
+                        // 🛠️ [수정] 개별 async 함수 내부 try-catch를 적용하여 1개 실패 시 나머지 성공 항목 유지
+                        const results = await Promise.all(
+                            batch.map(async (title) => {
+                                try {
+                                    const res = await axios.get("https://ko.wikipedia.org/w/api.php", {
+                                        ...WIKI_AXIOS_CONFIG,
+                                        params: {
+                                            action: "query",
+                                            titles: title,
+                                            prop: "extracts|pageimages",
+                                            explaintext: 1,
+                                            redirects: 1,
+                                            pithumbsize: 800,
+                                            format: "json",
+                                            origin: "*"
+                                        }
+                                    });
+                                    return res.data.query?.pages || {};
+                                } catch (e) {
+                                    return {};
+                                }
+                            })
+                        );
+
+                        detailRes = {
+                            data: {
+                                query: {
+                                    pages: Object.assign({}, ...results)
+                                }
+                            }
+                        };
+                    } catch (e) {
+                        if (e.response?.status === 429 || e.code === "ECONNABORTED") {
+                            await new Promise(resolve => setTimeout(resolve, 3000));
                         }
-                    });
-                    return res.data.query?.pages || {};
-                })
-            );
-
-            // 🎯 가져온 결과를 기존 detailRes 구조로 합쳐서 아래 코드와 완벽 호환되게 만듦
-            detailRes = {
-                data: {
-                    query: {
-                        pages: Object.assign({}, ...results)
+                        continue;
                     }
-                }
-            };
-        } catch (e) {
-            if (e.response?.status === 429 || e.code === "ECONNABORTED") {
-                await new Promise(resolve => setTimeout(resolve, 3000));
-            }
-            continue;
-        }
+
                     const pages = Object.values(detailRes.data.query?.pages || {});
                     const normalizedPages = pages.filter(p => !p.missing);
 
@@ -424,13 +422,12 @@ async function fillCache() {
                                 imageUrl = null;
                             }
                         }
+
                         if (VIP_IMAGE_FALLBACKS[pageData.title]) {
-    imageUrl = VIP_IMAGE_FALLBACKS[pageData.title];
+                            imageUrl = VIP_IMAGE_FALLBACKS[pageData.title];
                         }
 
                         imageUrl = imageUrl || null;
-
-
 
                         if (!isValidImageUrl(imageUrl)) {
                             console.log("최종탈락: isValidImageUrl", pageData.title, imageUrl);
@@ -446,54 +443,53 @@ async function fillCache() {
                         if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) continue;
 
                         const fullExtract = pageData.extract || "";
-                        console.log("원본 extract:", pageData.title, "\n", fullExtract);
 
-// 1. 첫 번째 목차(==) 기준으로 서론과 본문 분리
-                      const firstHeaderIndex = fullExtract.search(/==+/);
+                        // 1. 첫 번째 목차(==) 기준으로 서론과 본문 분리
+                        const firstHeaderIndex = fullExtract.search(/==+/);
 
-                     let exintro = fullExtract;
-                     let extractBody = "";
+                        let exintro = fullExtract;
+                        let extractBody = "";
 
-                 if (firstHeaderIndex !== -1) {
-    exintro = fullExtract.substring(0, firstHeaderIndex).trim();
-    extractBody = fullExtract.substring(firstHeaderIndex).trim();
-}
+                        if (firstHeaderIndex !== -1) {
+                            exintro = fullExtract.substring(0, firstHeaderIndex).trim();
+                            extractBody = fullExtract.substring(firstHeaderIndex).trim();
+                        }
 
-// 2. 불필요한 하단 섹션 제거 (줄바꿈 고려)
-const cutIndex = extractBody.search(/\n==\s*(각주|같이 보기|참고 문헌|외부 링크|주석)\s*==/i);
-if (cutIndex !== -1) {
-    extractBody = extractBody.substring(0, cutIndex);
-}
+                        // 2. 불필요한 하단 섹션 제거
+                        const cutIndex = extractBody.search(/\n==\s*(각주|같이 보기|참고 문헌|외부 링크|주석)\s*==/i);
+                        if (cutIndex !== -1) {
+                            extractBody = extractBody.substring(0, cutIndex);
+                        }
 
-// 3. 본문 정제: 헤더(= == === 등)만 지우고, 줄바꿈은 유지하여 문장 분리가 잘 되도록 처리
-let cleanExtract = extractBody
-    .replace(/^=+.*?=+$/gm, "") // 줄 단위로 헤더 제목만 제거
-    .replace(/\n{3,}/g, "\n\n") // 과도한 공백 줄 정리
-    .trim();
+                        // 3. 본문 정제
+                        let cleanExtract = extractBody
+                            .replace(/^=+.*?=+$/gm, "")
+                            .replace(/\n{3,}/g, "\n\n")
+                            .trim();
 
-// 4. 서론 정제 (한 줄로 다듬기)
-let cleanIntro = exintro.replace(/\s+/g, " ").trim();
+                        // 4. 서론 정제
+                        let cleanIntro = exintro.replace(/\s+/g, " ").trim();
 
-// 5. 설명 및 힌트 생성//
-const finalDescription = buildDescription(
-    cleanIntro, 
-    cleanExtract || "",
-    aliases, 
-    3,   
-    150, 
-    630  
-);
+                        // 5. 설명 및 힌트 생성 (수정된 summarizer.js와 안전 연동)
+                        const finalDescription = buildDescription(
+                            cleanIntro, 
+                            cleanExtract || "",
+                            aliases, 
+                            3,   
+                            150, 
+                            630  
+                        );
 
-console.log("캐시 추가 직전:", pageData.title, imageUrl, finalDescription?.length);
-
-if (finalDescription) {
-    QUIZ_CACHE.push({
-        name: pageData.title,
-        image: imageUrl,
-        hint: createMaskedHint(pageData.title, finalDescription),
-        description: finalDescription 
-    });
-}
+                        if (finalDescription) {
+                            QUIZ_CACHE.push({
+                                name: pageData.title,
+                                image: imageUrl,
+                                hint: createMaskedHint(pageData.title, finalDescription),
+                                description: finalDescription 
+                            });
+                        } else {
+                            console.log(`탈락: description 생성 실패 (${pageData.title})`);
+                        }
                     }
                 }
                 console.log("현재 캐시:", QUIZ_CACHE.length);
@@ -548,7 +544,6 @@ app.get("/api/quiz", async (req, res) => {
 app.use(express.static(path.join(process.cwd(), "public")));
 app.get("/", (req, res) => res.sendFile(path.join(process.cwd(), "public", "index.html")));
 
-// 서버 시작 직후 최초 캐시 초기화 진행
 fillCache();
 
 if (process.env.NODE_ENV !== 'production') {
