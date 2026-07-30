@@ -434,6 +434,7 @@ async function fillCache() {
                         if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) continue;
 
                         const fullExtract = pageData.extract;
+                        console.log("원본 extract:", pageData.title, "\n", pageData.extract);
                         const firstHeaderIndex = fullExtract.search(/==+/);
                         
                         let exintro = fullExtract;
