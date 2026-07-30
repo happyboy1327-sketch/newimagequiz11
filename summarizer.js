@@ -23,7 +23,8 @@ const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노
 // 단순 과정/정치 일화/배경 서사 감점용 정규식
 const STORY_FLUFF_REGEX = /(관직에\s*올라|벼슬에|신임을\s*받아|모함을\s*받아|상소를\s*올려|벼슬을|시절에|계기가\s*되어|도착하여|이르렀다|좌천|파직|소환|참석)/;
 
-const NAME_ORIGIN_REGEX = /(이름은?\s*.*?(?:유래|뜻|불리다|붙이다|개명|바꾸다)|호는?\s*.*?(?:유래|뜻|불리다|칭하다))/;
+// 호, 이름의 유래/배경 설명 문장 감지용
+const NAME_ORIGIN_REGEX = /(호는|호가|호\s*|이름은|이름에서|따왔다는|지었다는|유래|설이\s*있다|뜻을\s*담아|칭하였다)/;
 const NAME_CHANGE_REGEX = /(이름을\s*(?:바꾸다|개명하다|칭하다)|~에서\s*~로\s*(?:개명|변경))/;
 
 // ==========================================================
@@ -265,14 +266,19 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         const keywordMatches = original.match(KEYWORD_REGEX);
         if (keywordMatches) score += keywordMatches.length * 5;
 
-        if (bookTitles.some(title => original.includes(title))) score += 30;
+        const isNameOrigin = NAME_ORIGIN_REGEX.test(original);
+
+    // 🎯 [수정 2] 호/이름 유래 문장이 "아닐 때만" 책 이름 가산점(+30) 부여!
+    if (bookTitles.some(title => original.includes(title))) {
+        if (!isNameOrigin) score += 30;
+    }
         if (/자격루|거중기|측우기|혼천의|앙부일구|거북선|활자|화성/.test(original)) score += 25;
 
         // 🎯 [신규 추가 3] "중국인들은 ~라 묻는다" 같은 외부인 관람평 문장 감점(-40점)
         // 위인 본인의 행적이 아닌 외부 반응 문장이 점수 1등 먹는 현상을 방지합니다.
         if (/(중국인|일본인|관람객|학자들|후대|외신|사람들)(?:은|는|이|가)/.test(original)) score -= 40;
 
-        if (NAME_ORIGIN_REGEX.test(original)) score -= 15;
+        if (isNameOrigin) score -= 60;
         if (!NUTRITION_REGEX.test(original) && GENEALOGY_REGEX.test(original)) score -= 50;
         if (MINOR_TMI_REGEX.test(original)) score -= 30;
         if (STORY_FLUFF_REGEX.test(original)) score -= 20;
