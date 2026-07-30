@@ -150,6 +150,7 @@ function splitSentences(text) {
 }
 
 export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 3) {
+    console.log("SUMMARY INPUT:", bodyText.slice(0,300));
     if (!bodyText || typeof bodyText !== "string") return "";
 
     const rawSentences = splitSentences(bodyText);
