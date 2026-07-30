@@ -2,15 +2,17 @@ const IMPORTANT_KEYWORDS = [
     "태어났다", "출생", "사망", "활동", "노력", "독점", "정벌", "발표", "창시", "발명",
     "발견", "폐지", "수상", "노벨", "대표", "저서", "저자", "작품", "전쟁", "독립", "혁명",
     "연구", "증명", "설립", "창립", "개발", "제작", "기록", "영향", "업적", "졸업", "도입", "주장",
-    "임명", "취임", "부정", "일기", "수용소", "유대인", "수필", "순국", "3.1운동", "이토",
-    "히로부미", "옥사", "고문", "투옥",
-    "역임", "주석", "의병", "교육", "망명", "피살", "저항"
+    "임명", "취임", "부정", "일기", "수용소", "유대인", "수필", "순국", "3.1운동", "3.1 운동", "이토",
+    "히로부미", "옥사", "고문", "투옥", "역임", "주석", "의병", "교육", "망명", "피살", "저항", "만세"
 ];
 
 const META_RE = /(본관|아명|자는|자\(字\)|호는|호\(號\))/;
 const GENEALOGY_REGEX = /(의\s*(?:아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|차녀|장녀|자녀|후손)(?:이다|이었다|이며|이고|으로서)?|슬하에|결혼하(?:여|였|고)|결혼했(?:다)?)/;
-const NUTRITION_REGEX = /(독립|전투|운동|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|전승|수상|발표|설립|창립|개발|발명가)/;
-const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노년|보냈|생활했|향리|소일)/;
+
+// 🌟 [수정] '운동장' 등 장소 명칭을 제외하도록 룩어헤드(?!\s*장) 적용 및 '순국', '고문' 추가
+const NUTRITION_REGEX = /(독립|전투|(?:독립|만세|민주화)?운동(?!\s*장)|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|전승|수상|발표|설립|창립|개발|발명가|순국|고문)/;
+// 🌟 [수정] 체육관, 유적, 이름을 딴 등 단순 기념 시설 TMI 감점 추가
+const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노년|보냈|생활했|향리|소일|이름을\s*딴|체육관|유적)/;
 const DANGLING_START_REGEX = /^(이(후|러한|와\s+같이)?|따라서|이에|반면)\b/;
 
 function normalizeSpace(text = "") {
@@ -75,9 +77,10 @@ function resolveDemonstrativeReference(sentence, sentences, currentIndex) {
     return processedSentence;
 }
 
+// 🌟 [수정] 문장 분리 함수 안전화 적용
 function filterOtherPersonDeath(text, aliases = []) {
     if (!text) return "";
-    const sentences = text.split(/(?<=[.!?])\s+/);
+    const sentences = splitSentences(text);
     const cleanSentences = sentences.filter(sentence => {
         const match = sentence.match(/([가-힣\s]{2,12})(?:이|가|은|는).*?(?:사망|별세|서거|타계|전사|시해|사사|병사|처형|살해|숨졌|목숨을\s*잃)/);
         if (match) {
@@ -105,10 +108,11 @@ function filterOtherPersonDeath(text, aliases = []) {
     return cleanSentences.join(" ");
 }
 
+// 🌟 [수정] 숫자/날짜 속 마침표(3.1, 1902.12.16 등)를 잘라먹지 않도록 정규식 강화
 function splitSentences(text) {
     const normalized = normalizeSpace(text).replace(/\n+/g, " ");
     return normalized
-        .split(/(?<!\b[a-zA-Z])([.!?。])(?=\s+|$)/)
+        .split(/(?<!\b[a-zA-Z]|\d)([.!?。])(?=\s+|$)/)
         .reduce((acc, curr, index, array) => {
             if (index % 2 === 0) {
                 const punctuation = array[index + 1] || "";
@@ -156,7 +160,6 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
         if (processedText.length > 300) return;
 
-        // 자·호·본관만 있는 문장 제거
         if (META_RE.test(processedText)) {
             const cleanedMeta = processedText
                 .replace(
@@ -171,7 +174,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         }
 
         cleanedSentences.push({ original: processedText, index: targetIndex });
-    }); // 👈 누락되어 있던 forEach 닫는 괄호 수정 완료
+    });
 
     if (cleanedSentences.length === 0) return "";
 
@@ -250,16 +253,19 @@ export function buildDescription(
     let firstSentence = introSentences[0] || "";
     let usedSecondSentence = false;
 
+    // 🌟 [수정] 한자/생몰년 괄호를 빼고 계산한 '실질 텍스트 길이' 기준 적용
+    const realFirstSentenceLength = firstSentence.replace(/\([^)]*\)/g, "").trim().length;
+
     const secondSentence = introSentences[1] || "";
     const isGenealogyTMI = GENEALOGY_REGEX.test(secondSentence);
 
     if (!isGenealogyTMI && secondSentence) {
-        if (firstSentence.length < 50 && introSentences.length > 1) {
+        if (realFirstSentenceLength < 50 && introSentences.length > 1) {
             firstSentence += " " + secondSentence;
             usedSecondSentence = true;
         } else if (
             introSentences.length > 1 &&
-            /(창시자|제정|대표|설립|창립|발명|발견|창안|업적|노벨|수상|혁명|독립|창조|고안)/.test(secondSentence)
+            /(창시자|제정|대표|설립|창립|발명|발견|창안|업적|노벨|수상|혁명|독립|순국|고문|시위|3\.1|운동)/.test(secondSentence)
         ) {
             firstSentence += " " + secondSentence;
             usedSecondSentence = true;
