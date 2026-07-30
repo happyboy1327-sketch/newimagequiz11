@@ -17,9 +17,90 @@ function normalizeSpace(text = "") {
     return String(text).replace(/\s+/g, " ").trim();
 }
 
+// 유니코드 윗첨자 맵
+function toSuperscript(str) {
+    const superMap = {
+        '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+        '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+        '+': '⁺', '-': '⁻', '=': '⁼', '(': '⁽', ')': '⁾',
+        'n': 'ⁿ', 'i': 'ⁱ', 'x': 'ˣ', 'y': 'ʸ', 'a': 'ᵃ',
+        'b': 'ᵇ', 'c': 'ᶜ', 'd': 'ᵈ', 'e': 'ᵉ', 'k': 'ᵏ',
+        'm': 'ᵐ', 'p': 'ᵖ', 'r': 'ʳ', 't': 'ᵗ'
+    };
+    return str.split('').map(ch => superMap[ch] || ch).join('');
+}
+
+// 🌟 [추가] 유니코드 아래첨자 맵
+function toSubscript(str) {
+    const subMap = {
+        '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
+        '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉',
+        '+': '₊', '-': '₋', '=': '₌', '(': '₍', ')': '₎',
+        'a': 'ₐ', 'e': 'ₑ', 'h': 'ₕ', 'i': 'ᵢ', 'j': 'ⱼ',
+        'k': 'ₖ', 'l': 'ₗ', 'm': 'ₘ', 'n': 'ₙ', 'o': '⒒',
+        'p': 'ₚ', 'r': 'ᵣ', 's': 'ₛ', 't': 'ₜ', 'u': 'ᵤ',
+        'v': 'ᵥ', 'x': 'ₓ'
+    };
+    return str.split('').map(ch => subMap[ch] || ch).join('');
+}
+
 function cleanWikiText(text) {
     if (!text) return "";
     return text
+        // 🌟 위키백과 수식(Math) 종합 유니코드 정제
+        .replace(/([a-zA-Z0-9\s+,=\-*\/^()_]*)\{\\displaystyle\s*([^}]+)\}/g, (match, fallback, latex) => {
+            let cleaned = latex
+                // 1. 폰트/스타일 래퍼 제거
+                .replace(/\\(mathrm|text|mathbf|mathit)\{([^}]+)\}/g, "$2")
+                
+                // 2. 분수 & 제곱근 변환
+                .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, "($1/$2)")
+                .replace(/\\sqrt\[([^\]]+)\]\{([^}]+)\}/g, (_, root, val) => toSuperscript(root) + "√(" + val + ")")
+                .replace(/\\sqrt\{([^}]+)\}/g, "√($1)")
+
+                // 3. 적분, 시그마, 극한, 미분기호
+                .replace(/\\iiiint/g, "⨌").replace(/\\iiint/g, "∭")
+                .replace(/\\iint/g, "∬").replace(/\\oint/g, "∮").replace(/\\int/g, "∫")
+                .replace(/\\sum/g, "∑").replace(/\\prod/g, "∏")
+                .replace(/\\lim/g, "lim").replace(/\\infty/g, "∞")
+                .replace(/\\partial/g, "∂").replace(/\\nabla/g, "∇")
+
+                // 4. 연산자 & 관계 기호
+                .replace(/\\times/g, "×").replace(/\\cdot/g, "·")
+                .replace(/\\pm/g, "±").replace(/\\mp/g, "∓")
+                .replace(/\\ne(?:q)?/g, "≠").replace(/\\le(?:q)?/g, "≤").replace(/\\ge(?:q)?/g, "≥")
+                .replace(/\\approx/g, "≈").replace(/\\equiv/g, "≡")
+                .replace(/\\(?:to|rightarrow)/g, "→").replace(/\\leftarrow/g, "←")
+
+                // 5. 집합 & 논리 기호
+                .replace(/\\in/g, "∈").replace(/\\notin/g, "∉")
+                .replace(/\\subset/g, "⊂").replace(/\\supset/g, "⊃")
+                .replace(/\\cap/g, "∩").replace(/\\cup/g, "∪")
+                .replace(/\\forall/g, "∀").replace(/\\exists/g, "∃")
+
+                // 6. 그리스 문자
+                .replace(/\\alpha/g, "α").replace(/\\beta/g, "β").replace(/\\gamma/g, "γ")
+                .replace(/\\delta/g, "δ").replace(/\\epsilon/g, "ε").replace(/\\theta/g, "θ")
+                .replace(/\\lambda/g, "λ").replace(/\\mu/g, "μ").replace(/\\pi/g, "π")
+                .replace(/\\sigma/g, "σ").replace(/\\phi/g, "φ").replace(/\\omega/g, "ω")
+                .replace(/\\Delta/g, "Δ").replace(/\\Sigma/g, "Σ").replace(/\\Omega/g, "Ω")
+
+                // 7. 지수(윗첨자) 및 아래첨자 변환
+                .replace(/\^{(.*?)}/g, (_, exp) => toSuperscript(exp))
+                .replace(/\^([a-zA-Z0-9]+)/g, (_, exp) => toSuperscript(exp))
+                .replace(/_{(.*?)}/g, (_, sub) => toSubscript(sub))
+                .replace(/_([a-zA-Z0-9]+)/g, (_, sub) => toSubscript(sub))
+
+                // 8. 찌꺼기 백슬래시/중괄호 정리
+                .replace(/\\[,;!\s]/g, " ")
+                .replace(/\\/g, "")
+                .replace(/[{}]/g, "")
+                .replace(/,([^\s])/g, ", ")
+                .replace(/\s+/g, " ")
+                .trim();
+
+            return " " + cleaned + " ";
+        })
         .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
         .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "")
         .replace(/\(\s*\)/g, "")
