@@ -35,35 +35,51 @@ function removeMetaBySearch(text, mode = "all") {
 
     let result = text;
 
-    const metaPattern = 
+    const metaPattern =
         "(본관은?|아호는?|호는?|자는?|자\\(字\\)는?|시호는?|태명은?|아명은?|세례명은?|일명은?|당호는?)";
 
-    if (mode === "all") {
-        // 전체 문자열에서 메타 구간 제거
-        result = result.replace(
-            new RegExp(
-                `,?\\s*${metaPattern}\\s*[^.。]+?(?:이다|였다|이었다)\\.?`,
-                "g"
-            ),
-            ""
+
+    // 메타 제거
+    result = result.replace(
+        new RegExp(
+            `,?\\s*${metaPattern}\\s*[^.。]+?(?:이다|였다|이었다)\\.?`,
+            "g"
+        ),
+        ""
+    );
+
+
+    // 제거 후 끊긴 연결어 복원
+    result = result
+        .replace(
+            /(정치인|문신|학자|시인|저술가|독립운동가|사상가|장군|왕|황제|화가|작가)으로\s*,?\s*$/,
+            "$1이다."
+        )
+        .replace(
+            /,\s*$/,
+            "."
         );
+
+
+    // 첫 문장 날아가는 경우 방지
+    if (!result && text.length > 0) {
+        result = text;
     }
 
-    if (mode === "first") {
-        result = result.replace(
-            new RegExp(
-                `${metaPattern}\\s*[^.。]+?(?:이다|였다|이었다)\\.?`,
-                "g"
-            ),
-            ""
-        );
-    }
 
     return result
+        .replace(
+        /,\s*(?:$)/,
+        ""
+        )
+        .replace(
+        /(이고|이며|이고)\s*$/,
+        "$1."
         .replace(/,\s*,/g, ",")
         .replace(/\s+/g, " ")
         .trim();
 }
+
 function isIncompleteSentence(sentence) {
     if (!sentence) return true;
     const text = sentence.trim();
