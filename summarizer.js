@@ -318,10 +318,10 @@ export function buildDescription(
     }
 
     const totalLength = intro.length + body.length;
-    if (totalLength < 350) {
-        const combined = normalizeSpace([intro, body].filter(Boolean).join(" "));
-        return cleanSlice(combined);
-    }
+   if (totalLength < 350) {
+    const combined = normalizeSpace([intro, body].filter(Boolean).join(" "));
+    return cleanSlice(removeMetaBySearch(combined));
+}
 
     const introSentences = splitSentences(intro);
 let firstSentence = removeMetaBySearch(introSentences[0] || "");
