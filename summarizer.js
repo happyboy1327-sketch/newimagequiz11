@@ -26,6 +26,7 @@ const STORY_FLUFF_REGEX = /(관직에\s*올라|벼슬에|신임을\s*받아|모�
 // 호, 이름의 유래/배경 설명 문장 감지용
 const NAME_ORIGIN_REGEX = /(호는|호가|호\s*|이름은|이름에서|따왔다는|지었다는|유래|설이\s*있다|뜻을\s*담아|칭하였다)/;
 const NAME_CHANGE_REGEX = /(이름을\s*(?:바꾸다|개명하다|칭하다)|~에서\s*~로\s*(?:개명|변경))/;
+const possessiveDeathRegex = /((아버지|부친|어머니|모친|아내|부인|남편|아들|딸|형|동생|스승|친구|동료|통역가)의\s*(사망|별세|서거|타계|처형|죽음))/;
 
 // ==========================================================
 // 2. 전처리 함수 (호/시호 완벽 제거 + 문장 부호 공백 보정)
@@ -165,7 +166,6 @@ function filterOtherPersonDeath(text, aliases = []) {
                 if (!isSelf) return false;
             }
         }
-        const possessiveDeathRegex = /((아버지|부친|어머니|모친|아내|부인|남편|아들|딸|형|동생|스승|친구|동료|통역가)의\s*(사망|별세|서거|타계|처형|죽음))/;
         if (possessiveDeathRegex.test(sentence) && !/(그녀|그|본인|가족|식구|모두|함께)/.test(sentence)) {
             return false;
         }
