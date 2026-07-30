@@ -361,18 +361,20 @@ export function buildDescription(
         return cleanSlice(combined);
     }
 
+    
     const introSentences = splitSentences(intro);
     let firstSentence = introSentences[0] || "";
     let usedSecondSentence = false;
 
     const secondSentence = introSentences[1] || "";
     if (secondSentence && !STRICT_GENEALOGY_REGEX.test(secondSentence)) {
-        if (firstSentence.length < 50 && introSentences.length > 1) {
+        // 🌟 [수정] 첫 문장 글자 수 기준을 50자 -> 80자로 완화 (생몰년도 포함 문장 대응)
+        if (firstSentence.length < 80 && introSentences.length > 1) {
             firstSentence += " " + secondSentence;
             usedSecondSentence = true;
         } else if (
             introSentences.length > 1 &&
-            /(창시자|제정|대표|설립|창립|발명|발견|창안|업적|노벨|수상|혁명|독립|창조|고안)/.test(secondSentence)
+            /(창시자|제정|대표|설립|창립|발명|발견|창안|업적|노벨|수상|혁명|독립|창조|고안|순국|옥사)/.test(secondSentence)
         ) {
             firstSentence += " " + secondSentence;
             usedSecondSentence = true;
