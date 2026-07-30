@@ -42,16 +42,25 @@ function normalizeSpace(text = "") {
         .trim();
 }
 
+function removeUnpairedParentheses(str) {
+    const stack = [];
+    const toRemove = new Set();
+    for (let i = 0; i < str.length; i++) {
+        if (str[i] === '(') stack.push(i);
+        else if (str[i] === ')') stack.length ? stack.pop() : toRemove.add(i);
+    }
+    stack.forEach(i => toRemove.add(i));
+    return str.split('').filter((_, i) => !toRemove.has(i)).join('');
+}
+
 function cleanWikiText(text) {
     if (!text) return "";
-    return text
-        .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
-        .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "")
-        .replace(/\(\s*\)/g, "")
-        .replace(/[()]/g, "")
-        .replace(/\s+/g, " ")
-        .replace(/\s+\./g, ".")
-        .trim();
+    return removeUnpairedParentheses(
+        text
+            .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
+            .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "")
+            .replace(/\(\s*\)/g, "")
+    ).replace(/\s+/g, " ").replace(/\s+\./g, ".").trim();
 }
 
 function removeMetaBySearch(text) {
