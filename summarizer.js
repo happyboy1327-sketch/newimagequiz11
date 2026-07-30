@@ -292,7 +292,6 @@ export function buildDescription(
 }
 
     const introSentences = splitSentences(intro)
-    .map(s => s.trim())
     .filter(Boolean);
 let firstSentence = introSentences[0] || "";
     let usedSecondSentence = false;
