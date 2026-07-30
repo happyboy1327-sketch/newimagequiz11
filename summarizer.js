@@ -49,6 +49,7 @@ function removeMetaBySearch(text) {
         .replace(/([가-힣]+)이고(?=\s*[\.!\?])/g, "$1이다")
         .replace(/([가-힣]+)이자(?=\s*[\.!\?])/g, "$1이다")
         .replace(/([\.!\?])\s*(?:이며|이고|이자|으로|며)\.?/g, "$1")
+        .replace(/([\.!\?])\s*,+/g, "$1 ")
         .replace(/\.{2,}/g, ".")
         .replace(/,\s*\./g, ".")
         .replace(/\s+\./g, ".")
