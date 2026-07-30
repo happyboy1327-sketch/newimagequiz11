@@ -30,18 +30,34 @@ function cleanWikiText(text) {
         .trim();
 }
 
-
-
-   function removeMetaBySearch(text) {
+function removeMetaBySearch1(text) {
     if (!text) return "";
-    
-    // 쉼표로 구분된 메타 정보 구문 제거 (예: ", 자는 연하(蓮下)", ", 호는 백범(白凡)")
-    let result = text.replace(/,\s*(?:자는|자\(字\)는|호는|호\(號\)는|아호는|아명은?|본관은?|태명은?|세례명은?|일명은?|당호|시호)\s*[^,.]*/g, "");
 
-    // 문장 시작 부분에 바로 나오는 메타 구문 처리
-    result = result.replace(/^(?:자는|자\(字\)는|호는|호\(號\)는|아호는|아명은?|본관은?|태명은?|세례명은?|일명은?|당호|시호)\s*[^,.]*,\s*/g, "");
+    // 문장 끝에 붙은 자·호·아명·본관 제거
+    // 예: "정치인으로, 자는 연하(蓮下), 호는 백범(白凡)·연상(蓮上)이다."
+    return text.replace(
+        /,\s*(자는|자\(字\)는|호는|호\(號\)는|아호는|아명은?|본관은?|태명은?|세례명은?|일명은?|당호|시호).*?(이다\.|이다$)/,
+        "."
+    )
+    .replace(/으로\.$/, "이다.");
+}
 
-    return result.replace(/,\s*,/g, ",").replace(/^\s*,/, "").trim();
+
+function removeMetaBySearch2(text) {
+    if (!text) return "";
+
+    let result = text;
+
+    // 문장 중간 메타 제거
+    // 예: "아명은 윤우의(尹禹儀), 호는 매헌(梅軒)이고, 충청남도 덕산 출생이다."
+    const regex = /(아명은?|태명은?|세례명은?|일명은?|본관은?|자는|자\(字\)는|호는|호\(號\)는|아호는|당호|시호)\s*[^,。.]+(,|이며|이고)\s*/g;
+
+    result = result.replace(regex, "");
+
+    return result
+        .replace(/,\s*,/g, ",")
+        .replace(/^\s*,/, "")
+        .trim();
 }
 
 function isIncompleteSentence(sentence) {
@@ -146,7 +162,14 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
     rawSentences.forEach((sentence, index) => {
         let text = cleanWikiText(sentence);
 
-        if (!text || isIncompleteSentence(text)) return;
+        if (!text) return;
+
+        // 먼저 메타 제거
+       text = removeMetaBySearch1(text);
+       text = removeMetaBySearch2(text);
+
+        if (!text) return;
+        if (isIncompleteSentence(text)) return;
         if (/^[《<〈“"'`].*[》>〉”"'`]$/.test(text)) return;
         if (text.length < 15) return;
 
@@ -155,64 +178,106 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
         if (DANGLING_START_REGEX.test(processedText) && index > 0) {
             const prevText = cleanWikiText(rawSentences[index - 1]);
-            if (prevText && !isIncompleteSentence(prevText) && prevText.length >= 10 && prevText.length <= 150) {
+
+            if (
+                prevText &&
+                !isIncompleteSentence(prevText) &&
+                prevText.length >= 10 &&
+                prevText.length <= 150
+            ) {
                 processedText = `${prevText} ${processedText}`;
                 targetIndex = index - 1;
             } else {
                 return;
             }
+
         } else if (/^(이|그)\s*중\b/.test(processedText)) {
+
             const foundTitle = findPrecedingTitle(rawSentences, index);
+
             if (foundTitle) {
-                processedText = resolveVagueReference(processedText, foundTitle);
+                processedText = resolveVagueReference(
+                    processedText,
+                    foundTitle
+                );
             } else {
                 return;
             }
+
         } else {
-            processedText = resolveDemonstrativeReference(processedText, rawSentences, index);
+
+            processedText = resolveDemonstrativeReference(
+                processedText,
+                rawSentences,
+                index
+            );
         }
 
+        // 참조 처리 후 다시 한번 메타 제거
+        processedText = removeMetaBySearch1(processedText);
+        processedText = removeMetaBySearch2(processedText);
+
+        if (!processedText) return;
         if (processedText.length > 400) return;
 
-       processedText = removeMetaBySearch(processedText);
-
-    if (!processedText) return;
-        
-        cleanedSentences.push({ original: processedText, index: targetIndex });
+        cleanedSentences.push({
+            original: processedText,
+            index: targetIndex
+        });
     });
 
+
     if (cleanedSentences.length === 0) return "";
+
 
     const candidates = cleanedSentences.map(({ original, index }) => {
         let score = 10;
 
         if (NUTRITION_REGEX.test(original)) score += 20;
+
         IMPORTANT_KEYWORDS.forEach(kw => {
             if (original.includes(kw)) score += 5;
         });
 
-        if (!NUTRITION_REGEX.test(original) && GENEALOGY_REGEX.test(original)) score -= 50;
-        if (MINOR_TMI_REGEX.test(original)) score -= 30;
-        if (original.length >= 25 && original.length <= 150) score += 5;
+        if (!NUTRITION_REGEX.test(original) && GENEALOGY_REGEX.test(original)) {
+            score -= 50;
+        }
 
-        return { sentence: original, index, score };
+        if (MINOR_TMI_REGEX.test(original)) score -= 30;
+
+        if (original.length >= 25 && original.length <= 150) {
+            score += 5;
+        }
+
+        return {
+            sentence: original,
+            index,
+            score
+        };
     });
+
 
     candidates.sort((a, b) => b.score - a.score);
 
+
     const seen = new Set();
     const uniqueCandidates = [];
+
     for (const item of candidates) {
         if (!seen.has(item.sentence)) {
             seen.add(item.sentence);
             uniqueCandidates.push(item);
+
             if (uniqueCandidates.length >= count) break;
         }
     }
 
+
     uniqueCandidates.sort((a, b) => a.index - b.index);
 
-    return uniqueCandidates.map(item => item.sentence).join(" ");
+    return uniqueCandidates
+        .map(item => item.sentence)
+        .join(" ");
 }
 
 export function buildDescription(
