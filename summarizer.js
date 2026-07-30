@@ -12,13 +12,26 @@ const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노
 const DANGLING_START_REGEX = /^(이(후|러한|와\s+같이)?|따라서|이에|반면)\b/;
 
 // 🌟 [추가] 누락되었던 removeMetaBySearch 함수 구현
-function removeMetaBySearch(text = "") {
+function removeMetaBySearch(text, mode = "all") {
     if (!text) return "";
-    return text
-        .replace(/분류:[^\]]+/g, "")
-        .replace(/파일:[^\]]+/g, "")
-        .replace(/\[\s*메타[\s\S]*?\]/g, "")
-        .trim();
+
+    const original = text;
+
+    let result = text;
+
+    const metaRegex =
+/(?:,\s*)?(본관은?|자는?|자\(字\)|호는?|호\(號\)|아호는?|아명은?|태명은?|세례명은?|일명은?|당호는?|시호는?)\s*[^,.]+(?:\([^)]*\))?\s*(?:이며|으로|이고|이다|였다|이었다)?/g;
+    result = result.replace(metaRegex, "");
+
+    result = result
+    .replace(/\s+이\.$/, "이다.")
+    .replace(/\s+였\.$/, "였다.")
+    .replace(/\s+였이다\./, "였다.")
+    .replace(/\s+\.$/, ".")
+    .trim();
+
+    // 삭제 후 문장 붕괴 방지
+     return result;
 }
 
 function normalizeSpace(text = "") {
