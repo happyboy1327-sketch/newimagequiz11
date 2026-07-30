@@ -48,46 +48,31 @@ function removeMetaBySearch2(text) {
 
     let result = text;
 
-    const metaWords = [
-        "태명은",
-        "세례명은",
-        "일명은",
-        "아명은",
-        "본관은",
-        "자는",
-        "자(字)는",
-        "호는",
-        "호(號)는",
-        "아호는",
-        "당호는",
-        "시호는"
-    ];
+    // 1. 앞 문장에 쉼표로 붙은 메타 제거
+    result = result.replace(
+        /,\s*(?:자는|자\(字\)|호는|호\(號\)|아호는|아명은|태명은|세례명은|일명은|본관은|시호는)[^.!?。]*(?:이다|이었다|이다\.)?/g,
+        ""
+    );
 
-    for (const word of metaWords) {
-        let start = result.indexOf(word);
 
-        while (start !== -1) {
-            // 앞 문장이면 시작점부터 제거
-            let end = result.indexOf(",", start);
+    // 2. 독립 문장으로 된 메타 제거
+    const sentences = splitSentences(result);
 
-            const nextSentence = result.indexOf(".", start);
+    result = sentences.filter(sentence => {
 
-            if (end === -1 || (nextSentence !== -1 && nextSentence < end)) {
-                end = nextSentence;
-            }
+        const isMetaSentence =
+            /^(본관은|자는|자\(字\)|호는|호\(號\)|아호는|아명은|태명은|세례명은|일명은|시호는)/
+            .test(sentence.trim());
 
-            if (end === -1) break;
-
-            result =
-                result.slice(0, start) +
-                result.slice(end + 1).trim();
-
-            start = result.indexOf(word);
+        if (isMetaSentence) {
+            return false;
         }
-    }
+
+        return true;
+
+    }).join(" ");
 
     return result
-        .replace(/,\s*,/g, ",")
         .replace(/\s+/g, " ")
         .trim();
 }
