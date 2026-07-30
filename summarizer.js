@@ -162,19 +162,23 @@ function splitSentences(text) {
         }, []);
 }
 
+//export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 3) {//
 export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 3) {
     if (!bodyText || typeof bodyText !== "string") return "";
 
-    const rawSentences = splitSentences(bodyText);
+    // 💡 [수정 1] 최상단 전처리: 메타 제거 및 타인 사망 필터링을 '문장 분할 전'에 적용
+    let cleanedBody = removeMetaBySearch(cleanWikiText(bodyText));
+    if (aliases && aliases.length > 0) {
+        cleanedBody = filterOtherPersonDeath(cleanedBody, aliases);
+    }
+
+    const rawSentences = splitSentences(cleanedBody);
     const cleanedSentences = [];
 
     rawSentences.forEach((sentence, index) => {
-        let text = cleanWikiText(sentence);
+        let text = sentence.trim();
         if (!text) return;
 
-        text = removeMetaBySearch(text);
-
-        if (!text) return;
         if (isIncompleteSentence(text)) return;
         if (/^[《<〈“"'`].*[》>〉”"'`]$/.test(text)) return;
         if (text.length < 15) return;
@@ -182,8 +186,9 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         let processedText = text;
         let targetIndex = index;
 
+        // 지시대명사 및 문장 연결 보정 로직
         if (DANGLING_START_REGEX.test(processedText) && index > 0) {
-            const prevText = cleanWikiText(rawSentences[index - 1]);
+            const prevText = rawSentences[index - 1];
 
             if (
                 prevText &&
@@ -219,6 +224,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
             );
         }
 
+        // 지시대명사 치환 후 한번 더 미세 메타 정제 및 길이 검사
         processedText = removeMetaBySearch(processedText);
 
         if (!processedText) return;
@@ -232,6 +238,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
     if (cleanedSentences.length === 0) return "";
 
+    // 스코어링 계산
     const candidates = cleanedSentences.map(({ original, index }) => {
         let score = 10;
 
@@ -260,6 +267,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
     candidates.sort((a, b) => b.score - a.score);
 
+    // 중복 제거 및 상위 N개 추출
     const seen = new Set();
     const uniqueCandidates = [];
 
@@ -272,6 +280,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         }
     }
 
+    // 원래 문장 순서대로 재정렬
     uniqueCandidates.sort((a, b) => a.index - b.index);
 
     return uniqueCandidates
