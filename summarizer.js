@@ -28,38 +28,7 @@ function cleanWikiText(text) {
         .replace(/\s+\./g, ".")
         .trim();
 }
-function removeMetaBySearch(text) {
-    if (!text) return "";
-
-    let result = text;
-
-    const fields = [
-        "본관은?", "자는?", "자\\(字\\)",
-        "호는?", "호\\(號\\)", "아호는?",
-        "아명은?", "태명은?", "세례명은?",
-        "일명은?", "당호는?", "시호는?"
-    ];
-
-    for (const field of fields) {
-        result = result.replace(
-            new RegExp(
-                `(?:,\\s*)?${field}\\s*[^,.]+(?:\\([^)]*\\))?(?=,|\\.|이며|이고|이다|였다|이었다|$)`,
-                "g"
-            ),
-            ""
-        );
-    }
-
-    result = result
-        .replace(/,\s*,/g, ",")
-        .replace(/^,\s*/, "")
-        .replace(/\s+,/g, ",")
-        .replace(/\s+\./g, ".")
-        .replace(/\s{2,}/g, " ")
-        .trim();
-
-    return result;
-}
+c
 
 function isIncompleteSentence(sentence) {
     if (!sentence) return true;
@@ -324,7 +293,7 @@ export function buildDescription(
 }
 
     const introSentences = splitSentences(intro)
-    .map(s => removeMetaBySearch(s))
+    .map(s => s.trim())
     .filter(Boolean);
 let firstSentence = introSentences[0] || "";
     let usedSecondSentence = false;
@@ -351,7 +320,6 @@ let firstSentence = introSentences[0] || "";
     let extra = "";
    const remainingIntro = introSentences
     .slice(usedSecondSentence ? 2 : 1)
-    .map(sentence => removeMetaBySearch(sentence))
     .filter(Boolean)
     .join(" ");
     const targetBody = normalizeSpace([remainingIntro, body].filter(Boolean).join(" "));
