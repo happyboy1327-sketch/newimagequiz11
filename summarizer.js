@@ -323,14 +323,16 @@ export function buildDescription(
     return cleanSlice(removeMetaBySearch(combined));
 }
 
-    const introSentences = splitSentences(intro).map(s => removeMetaBySearch(s));
-let firstSentence = removeMetaBySearch(introSentences[0] || "");
+    const introSentences = splitSentences(intro)
+    .map(s => removeMetaBySearch(s))
+    .filter(Boolean);
+let firstSentence = introSentences[0] || "";
     let usedSecondSentence = false;
 
     // 🌟 [수정] 한자/생몰년 괄호를 빼고 계산한 '실질 텍스트 길이' 기준 적용
     const realFirstSentenceLength = firstSentence.replace(/\([^)]*\)/g, "").trim().length;
 
-    const secondSentence = removeMetaBySearch(introSentences[1] || "");
+    const secondSentence = introSentences[1] || "";
     const isGenealogyTMI = GENEALOGY_REGEX.test(secondSentence);
 
     if (!isGenealogyTMI && secondSentence) {
