@@ -234,9 +234,16 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
             processedText = resolveDemonstrativeReference(processedText, rawSentences, index);
         }
 
-        // 🚨 [핵심 수정] 문장 맨 앞의 열거형 접속사("둘째,", "먼저," 등)를 무조건 제거
+        // 🚨 [기존 접속사 제거 유지]
         processedText = processedText.replace(/^(첫째|둘째|셋째|넷째|다섯째|마지막으로|우선|먼저|또한|그리고|한편|다음으로|결국),?\s*/g, "");
+        
+        // 🎯 [신규 추가 1] 문맥 없이 혼자 쓰이면 어색한 시간 지시어 정리 ("그 뒤", "이때" 등)
+        // 지시어 복원으로 해결 안 된 문장 맨 앞 "그 뒤,", "이때," 만 깔끔하게 잘라냅니다.
+        processedText = processedText.replace(/^(그\s*뒤|그\s*후|그\s*이후|이때|이처럼|이로\s*인해),?\s*/, "");
         processedText = processedText.trim();
+
+        // 🎯 [신규 추가 2] 앞 맥락 없이는 주어가 불분명한 파편 문장 필터링
+        if (/^(기습공격을|전투에서|이유는|까닭은)/.test(processedText)) return;
 
         if (processedText.length < 15) return;
 
@@ -248,6 +255,9 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
     if (cleanedSentences.length === 0) return "";
 
+    // ==========================================================
+    // 🎯 [점수 계산 영역] 기존 작성하신 모든 가산점/감점 100% 살림!
+    // ==========================================================
     const scoredCandidates = cleanedSentences.map(({ original, index }) => {
         let score = 10;
         if (NUTRITION_REGEX.test(original)) score += 20;
@@ -258,6 +268,10 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         if (bookTitles.some(title => original.includes(title))) score += 30;
         if (/자격루|거중기|측우기|혼천의|앙부일구|거북선|활자|화성/.test(original)) score += 25;
 
+        // 🎯 [신규 추가 3] "중국인들은 ~라 묻는다" 같은 외부인 관람평 문장 감점(-40점)
+        // 위인 본인의 행적이 아닌 외부 반응 문장이 점수 1등 먹는 현상을 방지합니다.
+        if (/(중국인|일본인|관람객|학자들|후대|외신|사람들)(?:은|는|이|가)/.test(original)) score -= 40;
+
         if (NAME_ORIGIN_REGEX.test(original)) score -= 15;
         if (!NUTRITION_REGEX.test(original) && GENEALOGY_REGEX.test(original)) score -= 50;
         if (MINOR_TMI_REGEX.test(original)) score -= 30;
@@ -267,6 +281,9 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         return { sentence: original, index, score };
     });
 
+    // ==========================================================
+    // 🎯 [Zone 구역 분할] 기존 3구역 나눔 100% 유지
+    // ==========================================================
     const boundary1 = Math.floor(totalCount / 3);
     const boundary2 = Math.floor((totalCount * 2) / 3);
     const zones = [{ candidates: [] }, { candidates: [] }, { candidates: [] }];
@@ -277,12 +294,13 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         else zones[2].candidates.push(item);
     });
 
-    // ❌ 기존 maxZoneIndex 몰아주기 로직을 지우고 아래 코드로 교체합니다.
-
-    // ✅ 각 Zone(초반/중반/후반)에서 점수가 가장 높은 1위 문장을 균등하게 선발
+    // ==========================================================
+    // 🎯 [최종 선발 및 정렬] 각 Zone별 최고점 추출
+    // ==========================================================
     const selected = [];
     const seen = new Set();
 
+    // 각 구역(Zone 0, 1, 2)에서 지시어 보정 & 최고점을 받은 문장 1개씩 선발
     zones.forEach(zone => {
         zone.candidates.sort((a, b) => b.score - a.score);
         if (zone.candidates.length > 0) {
@@ -292,7 +310,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         }
     });
 
-    // 혹시 문장이 부족해서 count(3개)를 못 채운 경우, 남은 후보 중 전체 점수 높은 순으로 채움
+    // 문장이 부족하면 나머지 후보 중 고득점순 보충
     if (selected.length < count) {
         const remaining = [];
         zones.forEach(zone => remaining.push(...zone.candidates));
@@ -307,7 +325,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         }
     }
 
-    // 최종 출력은 다시 원본 글 흐름(index) 순서대로 정렬
+    // 원문 글 순서(index)대로 다시 재정렬하여 반환
     selected.sort((a, b) => a.index - b.index);
     return selected.map(item => item.sentence).join(" ");
 }
