@@ -37,7 +37,13 @@ function removeMetaBySearch(text, mode = "all") {
     let result = text;
 
     const metaRegex =
-/(?:,\s*)?(본관은?|자는?|자\(字\)|호는?|호\(號\)|아호는?|아명은?|태명은?|세례명은?|일명은?|당호는?|시호는?)\s*[^,.]+(?:\([^)]*\))?\s*(?:이며|으로|이고|이다|였다|이었다)?/g;
+/(?:^|,\s*)
+(?:본관은?|자는?|자\(字\)|호는?|호\(號\)|아호는?|아명은?|태명은?|세례명은?|일명은?|당호는?|시호는?)
+\s*
+.*?
+(?=
+(?:,\s*(?:본관은?|자는?|호는?|아호는?|아명은?|태명은?|세례명은?|일명은?|당호는?|시호는?))
+|이다\b|였다\b|이었다\b|이며\b|이고\b|\.|$)/gx;
     result = result.replace(metaRegex, "");
 
     result = result
@@ -48,12 +54,9 @@ function removeMetaBySearch(text, mode = "all") {
     .trim();
 
     // 삭제 후 문장 붕괴 방지
-    if (
-        result.length < original.length * 0.5 ||
-        !/[은는이가].*(이다|였다|한다|했다|하였다)\.?$/.test(result)
-    ) {
-        return original;
-    }
+    if (result.replace(/[., ]/g,"").length < 15) {
+    return original;
+}
 
     return result;
 }
