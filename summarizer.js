@@ -35,49 +35,35 @@ function removeMetaBySearch(text) {
 
     let result = text;
 
-    const metaRegex = /(태명은|세례명은|일명은|아명은|자는|자\(字\)|호는|호\(號\)|아호는|시호는)/g;
+    // 자/호/아호/시호 제거 (앞 쉼표 포함)
+    result = result.replace(
+        /,\s*(자는|자\(字\)|호는|호\(號\)|아호는|시호는)\s*[^.。]+?(?:이다|였다|이었다)\.?/g,
+        ""
+    );
 
-    let match;
+    // 제거 후 "으로"로 끝나는 문장 보정
+    result = result.replace(
+        /(정치인|문신|학자|시인|저술가|독립운동가|정치 사상가)으로\s*$/,
+        "$1이다."
+    );
 
-    while ((match = metaRegex.exec(result)) !== null) {
-        const start = match.index;
+    // 본관 처리
+    result = result.replace(
+        /본관은\s*[^,.。]+(?:이고|이며|이다)?\s*/g,
+        ""
+    );
 
-        // 앞부분 유지
-        const before = result.slice(0, start);
+    // 태명/세례명/일명/아명 처리
+    result = result.replace(
+        /(태명은|세례명은|일명은|아명은)\s*[^.。]+?(?:이다|였다|이었다)\.?/g,
+        ""
+    );
 
-        // 메타 시작 이후
-        const after = result.slice(start);
-
-        // 다음 연결 지점 찾기
-        const end = after.search(
-            /(이며|이고|이고,|이다|이었다|였다)\.?/
-        );
-
-        if (end !== -1) {
-            const endLength = after.match(
-                /(이며|이고|이고,|이다|이었다|였다)\.?/
-            )[0].length;
-
-            result =
-                before.trimEnd() +
-                after.slice(end + endLength);
-
-            metaRegex.lastIndex = 0;
-        } else {
-            break;
-        }
-    }
-
-    // 앞뒤 쉼표 정리
-    result = result
+    return result
         .replace(/,\s*,/g, ",")
-        .replace(/\s+\./g, ".")
         .replace(/\s+/g, " ")
         .trim();
-
-    return result;
 }
-
 function isIncompleteSentence(sentence) {
     if (!sentence) return true;
     const text = sentence.trim();
