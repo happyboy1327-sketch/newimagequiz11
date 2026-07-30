@@ -48,6 +48,12 @@ function removeMetaBySearch(text) {
 
     result = result.replace(metaChainRegex, "");
 
+    const emptyMetaRegex = new RegExp(
+        `(?:,\\s*|\\s+)*(?:${keyPattern})\\s*[,.\\s]*(?:이다|였다|이었다|이며|이고|이자|으로)?`,        
+    "g"    
+    );    
+    result = result.replace(emptyMetaRegex, "");
+
     result = result
         .replace(/([가-힣]+)으로(?=\s*[\.!\?])/g, "$1이다")
         .replace(/([가-힣]+)이며(?=\s*[\.!\?])/g, "$1이다")
