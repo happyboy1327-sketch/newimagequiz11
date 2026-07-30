@@ -55,10 +55,12 @@ function removeMetaBySearch(text) {
 
     // 2. "시호는", "자는", "본관은" 등 다른 메타 정보 제거
     const keywords = "시호|본관|자|별호|아호|아명|태명|세례명|일명|당호|법명|성명";
-    const keyPattern = `(?<![가-힣])(?:${keywords})(?:은|는)`;
-    const valToken = `(?:[^\\s,.\\(\\)\\u00B7]+(?:\\([^)]*\\))?)`; 
+    const keyPattern = `(?<![가-힣])(?:${keywords})(?:은|는|\\[(^)]*\\))`;
+    
+    const valToken = `(?:[^\\s,.\\(\\)\\u00B7]+(?:\\[(^)]*\\)?)`; 
     const valPattern = `${valToken}(?:\\s*[·ㆍ]\\s*${valToken})*`;
-    const singleMeta = `${keyPattern}\\s+${valPattern}`;
+    
+    const singleMeta = `${keyPattern}\\s*${valPattern}`;
 
     const metaChainRegex = new RegExp(
         `(?:,\\s*|\\s+)*(?:${singleMeta}(?:,\\s*|\\s+이며|\\s+이고|\\s+)*)+(?:이다|였다|이었다|이며|이고|이자|으로)?`,
