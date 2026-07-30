@@ -172,15 +172,19 @@ function splitSentences(text) {
 export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 3) {
     if (!bodyText || typeof bodyText !== "string") return "";
 
-    // 💡 [수정 1] 최상단 전처리: 메타 제거 및 타인 사망 필터링을 '문장 분할 전'에 적용
+    // 1. 최상단 전처리
     let cleanedBody = removeMetaBySearch(cleanWikiText(bodyText));
     if (aliases && aliases.length > 0) {
         cleanedBody = filterOtherPersonDeath(cleanedBody, aliases);
     }
 
     const rawSentences = splitSentences(cleanedBody);
+    const totalCount = rawSentences.length;
+    if (totalCount === 0) return "";
+
     const cleanedSentences = [];
 
+    // 2. 문장 정제 및 지시대명사 보정
     rawSentences.forEach((sentence, index) => {
         let text = sentence.trim();
         if (!text) return;
@@ -192,7 +196,6 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         let processedText = text;
         let targetIndex = index;
 
-        // 지시대명사 및 문장 연결 보정 로직
         if (DANGLING_START_REGEX.test(processedText) && index > 0) {
             const prevText = rawSentences[index - 1];
 
@@ -209,28 +212,16 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
             }
 
         } else if (/^(이|그)\s*중\b/.test(processedText)) {
-
             const foundTitle = findPrecedingTitle(rawSentences, index);
-
             if (foundTitle) {
-                processedText = resolveVagueReference(
-                    processedText,
-                    foundTitle
-                );
+                processedText = resolveVagueReference(processedText, foundTitle);
             } else {
                 return;
             }
-
         } else {
-
-            processedText = resolveDemonstrativeReference(
-                processedText,
-                rawSentences,
-                index
-            );
+            processedText = resolveDemonstrativeReference(processedText, rawSentences, index);
         }
 
-        // 지시대명사 치환 후 한번 더 미세 메타 정제 및 길이 검사
         processedText = removeMetaBySearch(processedText);
 
         if (!processedText) return;
@@ -244,8 +235,8 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
     if (cleanedSentences.length === 0) return "";
 
-    // 스코어링 계산
-    const candidates = cleanedSentences.map(({ original, index }) => {
+    // 3. 스코어링 계산
+    const scoredCandidates = cleanedSentences.map(({ original, index }) => {
         let score = 10;
 
         if (NUTRITION_REGEX.test(original)) score += 20;
@@ -271,25 +262,72 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         };
     });
 
-    candidates.sort((a, b) => b.score - a.score);
+    // 4. 구역 분할 (초반/중반/후반)
+    const boundary1 = Math.floor(totalCount / 3);
+    const boundary2 = Math.floor((totalCount * 2) / 3);
 
-    // 중복 제거 및 상위 N개 추출
+    const zones = [
+        { id: 1, candidates: [] },
+        { id: 2, candidates: [] },
+        { id: 3, candidates: [] }
+    ];
+
+    scoredCandidates.forEach(item => {
+        if (item.index < boundary1) {
+            zones[0].candidates.push(item);
+        } else if (item.index < boundary2) {
+            zones[1].candidates.push(item);
+        } else {
+            zones[2].candidates.push(item);
+        }
+    });
+
+    // 5. 가장 중요한 문장이 많이 밀집된 구역 찾기
+    let maxZoneIndex = 0;
+    let maxCandidateCount = -1;
+
+    zones.forEach((zone, idx) => {
+        if (zone.candidates.length > maxCandidateCount) {
+            maxCandidateCount = zone.candidates.length;
+            maxZoneIndex = idx;
+        }
+    });
+
+    const selected = [];
     const seen = new Set();
-    const uniqueCandidates = [];
 
-    for (const item of candidates) {
+    // 1순위: 핵심 문장이 가장 많은 구역(maxZoneIndex)에서 최우선으로 선별
+    // count가 작아도(3~4) 다른 구역 자리를 최소 1개는 남기도록 상한 캡
+    const zoneLimit = count > 1
+        ? Math.min(Math.max(1, Math.ceil(count * 0.7)), count - 1)
+        : count;
+
+    zones[maxZoneIndex].candidates.sort((a, b) => b.score - a.score);
+    for (const item of zones[maxZoneIndex].candidates) {
         if (!seen.has(item.sentence)) {
             seen.add(item.sentence);
-            uniqueCandidates.push(item);
-
-            if (uniqueCandidates.length >= count) break;
+            selected.push(item);
+            if (selected.length >= zoneLimit) break;
         }
     }
 
-    // 원래 문장 순서대로 재정렬
-    uniqueCandidates.sort((a, b) => a.index - b.index);
+    // 2순위: 남은 자리는 전체 구역을 통틀어 점수 높은 순으로 채우기
+    const remainingCandidates = [];
+    zones.forEach(zone => remainingCandidates.push(...zone.candidates));
+    remainingCandidates.sort((a, b) => b.score - a.score);
 
-    return uniqueCandidates
+    for (const item of remainingCandidates) {
+        if (selected.length >= count) break;
+        if (!seen.has(item.sentence)) {
+            seen.add(item.sentence);
+            selected.push(item);
+        }
+    }
+
+    // 6. 원래 문맥 흐름대로 읽히도록 문장 인덱스(index) 순 재정렬
+    selected.sort((a, b) => a.index - b.index);
+
+    return selected
         .map(item => item.sentence)
         .join(" ");
 }
