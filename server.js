@@ -461,7 +461,7 @@ let cleanExtract = extractBody
 // 4. 서론 정제 (한 줄로 다듬기)
 let cleanIntro = exintro.replace(/\s+/g, " ").trim();
 
-// 5. 설명 및 힌트 생성
+// 5. 설명 및 힌트 생성//
 const finalDescription = buildDescription(
     cleanIntro, 
     cleanExtract || "",
