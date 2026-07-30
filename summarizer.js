@@ -33,7 +33,7 @@ c
 function isIncompleteSentence(sentence) {
     if (!sentence) return true;
     const text = sentence.trim();
-    const validEndingRegex = /(다|냐|까|요|죠|자|라|며|음|임|함|됨|성|상|위|중)\.?$/;
+    const validEndingRegex = /(다|냐|까|요|죠|라|며|음|임|함|됨|성|상|위|중)\.?$/;
     return !validEndingRegex.test(text);
 }
 
