@@ -15,11 +15,10 @@
     //"헌신", "보급", "창설", "구제", "지원", "정책", "구호", "봉사", "확산",
   //  "유학", "사상", "성현", "철학", "사상가", "유학자", "성선설", "인", "의", "예", "지", "맹자", "공자", "논어", "대학", "중용", "도덕", "윤리", "경전", "성리학", "실학", "경세", "목민", "실용", "실사구시", "이용후생"
 
-// ==========================================================
-// 1. 전처리 및 괄호/문법 정제 헬퍼
+// // ==========================================================
+// 1. 전처리 및 문장 완결성 정제 헬퍼
 // ==========================================================
 
-// 스택 기반 짝 안 맞는 홑괄호 선별 제거
 function removeUnpairedParentheses(str) {
     if (!str) return "";
     const stack = [];
@@ -52,23 +51,19 @@ function normalizeSpace(text = "") {
         .trim();
 }
 
-// 문장 시작 시 문맥을 깨뜨리는 단독 접속사 제거
 const REGEX_LEADING_CONNECTORS = /^(그러나|하지만|그런데|한편|따라서|게다가|반면|이에|이후|결국|그\s*후|또한|그리고),?\s*/;
 function cleanLeadingConnectors(sentence) {
     if (!sentence) return "";
     return sentence.replace(REGEX_LEADING_CONNECTORS, "").trim();
 }
 
-// 🎯 [수정] 생몰년((년~년), (BC~)) 및 한자 표기는 철저히 보호하고, 잡다한 메타(본관, 자, 호 등)만 정제
 function removeMetaBySearch(text) {
     if (!text) return "";
     let result = text;
 
-    // '호는 ~이다' 서술문 정제
     const hoMetaRegex = /(?<![가-힣])호는\s+[^。.]{1,200}?(?:이다|였다|이었|이며|이고|\.|$)/g;
     result = result.replace(hoMetaRegex, "");
 
-    // 본관, 자, 시호 등 불필요 항목 정제 (생몰년 관련 키워드는 제외)
     const keywords = "시호|본관|자|별호|아호|아명|태명|세례명|일명|당호|법명";
     const keyPattern = `(?<![가-힣])(?:${keywords})(?:은|는|\\([^)]*\\))?`;
     const valToken = `(?:[^\\s,.\\(\\)\\u00B7]+(?:\\([^)]*\\)?)?)`;
@@ -78,15 +73,25 @@ function removeMetaBySearch(text) {
     const metaChainRegex = new RegExp(`(?:,\\s*|\\s+)*(?:${singleMeta}(?:,\\s*|\\s+이며|\\s+이고|\\s+)*)+(?:이다|였다|이었다|이며|이고|이자|으로)?`, "g");
     result = result.replace(metaChainRegex, "");
 
-    // 괄호 내부에서 '본관: 파평;' 같은 불필요 정보만 부분 삭제 (생몰년 날짜 수식어는 유지)
-    result = result
+    return result
         .replace(/\(\s*(?:본관|시호|자|아명|일명)[^;)]*;\s*/g, "(")
         .replace(/\.{2,}/g, ".")
         .replace(/\s+\./g, ".")
         .replace(/\s+/g, " ")
         .trim();
+}
 
-    return result;
+// 🎯 [핵심 강화] 서술어 어미(~다, ~였다 등)가 없는 단순 목록, 날짜, 책제목 단편은 100% 탈락시킴
+function isIncompleteSentence(sentence) {
+    if (!sentence) return true;
+    
+    // 문장 끝의 괄호, 따옴표, 마침표 제거 후 순수 끝 단어 검사
+    const cleanEnd = sentence.replace(/[()"'\s.]+$|》/g, "").trim();
+    
+    // 한국어 서술어 정규 종결어미 검사
+    const validEndingRegex = /(?:다|였다|이었다|하였다|됐다|된다|있다|없다|했다|되었다|남겼다|동조하였다|지지하였다|개진시켰다|역임했다)$/;
+    
+    return !validEndingRegex.test(cleanEnd);
 }
 
 function splitSentences(text) {
@@ -105,7 +110,7 @@ function splitSentences(text) {
 }
 
 // ==========================================================
-// 2. 범용 키워드 분석 & 가중치 엔진 (Domain-Agnostic)
+// 2. 범용 키워드 분석 & 가중치 엔진
 // ==========================================================
 
 function getDocumentKeywords(text, topN = 12) {
@@ -127,7 +132,7 @@ function getDocumentKeywords(text, topN = 12) {
         .slice(0, topN);
 }
 
-const GENERIC_IMPACT_REGEX = /(기여|설립|개발|발견|창시|주도|발표|영향|성공|구축|혁명|수상|창립|저술|총괄|개혁|정립|주창|체계화|확산|보급|창안|집대성|기틀|초석|승리|평정|확장|정벌|복속|의거|투쟁|반응|원리|이론|법칙|발명)/;
+const GENERIC_IMPACT_REGEX = /(기여|설립|개발|발견|창시|주도|발표|영향|성공|구축|혁명|수상|창립|저술|총괄|개혁|정립|주창|체계화|확산|보급|창안|집대성|기틀|초석|승리|평정|확장|정벌|복속|의거|투쟁|반응|원리|이론|법칙|발명|지지|동조|업적|개진)/;
 const GENERIC_NOISE_REGEX = /(의\s*(?:아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|자녀|후손)|결혼하|슬하에|일화|여담|소문|전해진다|체육관|유적|오차가\s*생긴다|차이를\s*보이고|이설이\s*있다)/;
 
 function filterOtherPerson(rawSentences, aliases = []) {
@@ -170,8 +175,9 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         let text = rawSentences[index].trim();
         const len = text.length;
 
+        // 서술어 검증 및 단순 목록/제목 완벽 제거
         if (len < 15 || len > 350) continue;
-        if (/^[《<〈""'`].*[》>〉""'`]$/.test(text)) continue;
+        if (isIncompleteSentence(text)) continue;
 
         let score = 10;
 
@@ -277,7 +283,9 @@ export function buildDescription(introText, bodyText, aliases = [], extraCount =
     const selectedIntroSentences = [];
 
     if (introSentences.length > 0) {
-        selectedIntroSentences.push(introSentences[0]); // 생몰년이 포함된 정의문 첫 문장 기본 유지
+        if (!isIncompleteSentence(introSentences[0])) {
+            selectedIntroSentences.push(introSentences[0]);
+        }
 
         for (let i = 1; i < introSentences.length; i++) {
             const sentence = introSentences[i];
@@ -285,8 +293,7 @@ export function buildDescription(introText, bodyText, aliases = [], extraCount =
 
             if (currentLen >= 220 || selectedIntroSentences.length >= 3) break;
 
-            const isTMI = GENERIC_NOISE_REGEX.test(sentence);
-            if (!isTMI) {
+            if (!isIncompleteSentence(sentence) && !GENERIC_NOISE_REGEX.test(sentence)) {
                 selectedIntroSentences.push(cleanLeadingConnectors(sentence));
             }
         }
@@ -304,3 +311,4 @@ export function buildDescription(introText, bodyText, aliases = [], extraCount =
     const merged = normalizeSpace([introResultText, extra].filter(Boolean).join(" "));
     return cleanSlice(merged);
 }
+            
