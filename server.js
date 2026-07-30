@@ -361,32 +361,45 @@ async function fillCache() {
             targetTitles = shuffle([...vipTitles, ...newTitles]);
 
             if (targetTitles.length > 0) {
-                for (let i = 0; i < targetTitles.length; i += 4) { 
-                    const batch = targetTitles.slice(i, i + 4);
-                    let detailRes;
-//exintro:0 또는 1이 아니라고??
-                    try {
-                        detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
-                            ...WIKI_AXIOS_CONFIG,
-                            params: {
-                                action: "query",
-                                titles: batch.join("|"),
-                                prop: "extracts|pageimages",
-                                exlimit: "max",
-                                explaintext: 1,   
-                                redirects: 1,
-                                pithumbsize: 800,
-                                format: "json",
-                                origin: "*"
-                            }
-                        });
-                    } catch (e) {
-                        if (e.response?.status === 429 || e.code === "ECONNABORTED") {
-                            await new Promise(resolve => setTimeout(resolve, 3000));
-                        }
-                        continue;
-                    }
+    for (let i = 0; i < targetTitles.length; i += 4) { 
+        const batch = targetTitles.slice(i, i + 4);
+        let detailRes;
 
+        try {
+            // 🎯 4개 타이틀을 개별 병렬(Promise.all)로 요청하여 본문 전체 수집
+            const results = await Promise.all(
+                batch.map(async (title) => {
+                    const res = await axios.get("https://ko.wikipedia.org/w/api.php", {
+                        ...WIKI_AXIOS_CONFIG,
+                        params: {
+                            action: "query",
+                            titles: title,
+                            prop: "extracts|pageimages",
+                            explaintext: 1,   // 전체 본문 가져오기
+                            redirects: 1,
+                            pithumbsize: 800,
+                            format: "json",
+                            origin: "*"
+                        }
+                    });
+                    return res.data.query?.pages || {};
+                })
+            );
+
+            // 🎯 가져온 결과를 기존 detailRes 구조로 합쳐서 아래 코드와 완벽 호환되게 만듦
+            detailRes = {
+                data: {
+                    query: {
+                        pages: Object.assign({}, ...results)
+                    }
+                }
+            };
+        } catch (e) {
+            if (e.response?.status === 429 || e.code === "ECONNABORTED") {
+                await new Promise(resolve => setTimeout(resolve, 3000));
+            }
+            continue;
+        }
                     const pages = Object.values(detailRes.data.query?.pages || {});
                     const normalizedPages = pages.filter(p => !p.missing);
 
