@@ -235,8 +235,8 @@ function splitSentences(text) {
     // split 전에 숫자 사이의 점(예: 3.1, 1919.3.1)을 임시 치환하여 쪼개짐 방지
     const protectedText = normalizeSpace(text)
         .replace(/\n+/g, " ")
-        .replace(/(\d+)\s*\.\s*(\d+)/g, "$1__DECIMAL_DOT__$2");
-
+        .replace(/(\d+)\s*\.\s*(\d+)/g, "$1__DECIMAL_DOT__$2")
+        .replace(/(\d+)\s*\.\s*(?=운동|의거|혁명|사태|항쟁|시위|만세)/g, "$1__DECIMAL_DOT__"); // 🟢 [추가]
     return protectedText
         .split(/(?<!\b[a-zA-Z])([.!?。])(?=\s+|$)/)
         .reduce((acc, curr, index, array) => {
