@@ -29,6 +29,19 @@ const NAME_ORIGIN_REGEX = /(호는|호가|호\s*|이름은|이름에서|따왔�
 const possessiveDeathRegex = /((아버지|부친|어머니|모친|아내|부인|남편|아들|딸|형|동생|스승|친구|동료|통역가)의\s*(사망|별세|서거|타계|처형|죽음))/;
 
 // ==========================================================
+//  정규식 파일 상단(Global Scope) 상수화 - V8 엔진 재컴파일 방지 (연산 속도 극대화)
+// ==========================================================
+const REGEX_QUOTE_WRAPPED = /^[《<〈""'`].*[》>〉""'`]$/;
+const REGEX_IN_WHICH = /^(이|그)\s*중\b/;
+
+// 접속어 + 시간 지시어 단일 패스 통합 정규식 (replace 2번 돌리던 걸 1번으로 단축)
+const REGEX_PREFIX_CLEAN = /^(?:첫째|둘째|셋째|넷째|다섯째|마지막으로|우선|먼저|또한|그리고|한편|다음으로|결국|그\s*뒤|그\s*후|그\s*이후|이때|이처럼|이로\s*인해),?\s*/;
+const REGEX_FRAGMENTS = /^(기습공격을|전투에서|이유는|까닭은)/;
+const REGEX_INVENTIONS = /자격루|거중기|측우기|혼천의|앙부일구|거북선|활자|화성/;
+const REGEX_EXTERNAL_SUBJECT = /(?:중국인|일본인|관람객|학자들|후대|외신|사람들)(?:은|는|이|가)/;
+
+
+// ==========================================================
 // 2. 전처리 함수 (호/시호 완벽 제거 + 문장 부호 공백 보정)
 // ==========================================================
 function normalizeSpace(text = "") {
@@ -198,8 +211,9 @@ function extractBookTitles(text) {
     return titles;
 }
 
+
 // ==========================================================
-// 3. 핵심 추출 로직
+// 2. 메인 함수
 // ==========================================================
 export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 3) {
     if (!bodyText || typeof bodyText !== "string") return "";
@@ -214,117 +228,113 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
     if (totalCount === 0) return "";
 
     const bookTitles = extractBookTitles(cleanedBody);
+    const hasBookTitles = bookTitles.length > 0;
     const cleanedSentences = [];
 
-    rawSentences.forEach((sentence, index) => {
-        let text = sentence.trim();
-        if (!text || text.length < 15 || text.length > 400) return;
-        if (isIncompleteSentence(text)) return;
-        if (/^[《<〈""'`].*[》>〉""'`]$/.test(text)) return;
+    // [최적화 1] forEach 대신 빠른 for 문 사용 및 정규식 평가 단축
+    for (let index = 0; index < totalCount; index++) {
+        const text = rawSentences[index].trim();
+        const len = text.length;
+
+        if (len < 15 || len > 400) continue;
+        if (isIncompleteSentence(text)) continue;
+        if (REGEX_QUOTE_WRAPPED.test(text)) continue;
 
         let processedText = text;
-        let targetIndex = index;
 
-        if (/^(이|그)\s*중\b/.test(processedText)) {
+        if (REGEX_IN_WHICH.test(processedText)) {
             const foundTitle = findPrecedingTitle(rawSentences, index);
             if (foundTitle) {
                 processedText = resolveVagueReference(processedText, foundTitle);
             } else {
-                return;
+                continue;
             }
         } else {
             processedText = resolveDemonstrativeReference(processedText, rawSentences, index);
         }
 
-        // 🚨 [기존 접속사 제거 유지]
-        processedText = processedText.replace(/^(첫째|둘째|셋째|넷째|다섯째|마지막으로|우선|먼저|또한|그리고|한편|다음으로|결국),?\s*/g, "");
-        
-        // 🎯 [신규 추가 1] 문맥 없이 혼자 쓰이면 어색한 시간 지시어 정리 ("그 뒤", "이때" 등)
-        // 지시어 복원으로 해결 안 된 문장 맨 앞 "그 뒤,", "이때," 만 깔끔하게 잘라냅니다.
-        processedText = processedText.replace(/^(그\s*뒤|그\s*후|그\s*이후|이때|이처럼|이로\s*인해),?\s*/, "");
-        processedText = processedText.trim();
+        // 접속어 및 시간 지시어 1번의 replace로 통합 제거
+        processedText = processedText.replace(REGEX_PREFIX_CLEAN, "").trim();
 
-        // 🎯 [신규 추가 2] 앞 맥락 없이는 주어가 불분명한 파편 문장 필터링
-        if (/^(기습공격을|전투에서|이유는|까닭은)/.test(processedText)) return;
-
-        if (processedText.length < 15) return;
+        if (REGEX_FRAGMENTS.test(processedText)) continue;
+        if (processedText.length < 15) continue;
 
         cleanedSentences.push({
             original: processedText,
-            index: targetIndex
+            index: index
         });
-    });
+    }
 
     if (cleanedSentences.length === 0) return "";
 
     // ==========================================================
-    // 🎯 [점수 계산 영역] 기존 작성하신 모든 가산점/감점 100% 살림!
+    // 🎯 [점수 계산 영역] (중복 연산 제거 최적화)
     // ==========================================================
     const scoredCandidates = cleanedSentences.map(({ original, index }) => {
         let score = 10;
-        if (NUTRITION_REGEX.test(original)) score += 20;
+
+        // [최적화 2] NUTRITION_REGEX 결과를 변수에 담아 중복 실행(2회->1회) 방지
+        const isNutrition = NUTRITION_REGEX.test(original);
+        if (isNutrition) score += 20;
 
         const keywordMatches = original.match(KEYWORD_REGEX);
         if (keywordMatches) score += keywordMatches.length * 5;
 
         const isNameOrigin = NAME_ORIGIN_REGEX.test(original);
 
-    // 🎯 [수정 2] 호/이름 유래 문장이 "아닐 때만" 책 이름 가산점(+30) 부여!
-    if (bookTitles.some(title => original.includes(title))) {
-        if (!isNameOrigin) score += 30;
-    }
-        if (/자격루|거중기|측우기|혼천의|앙부일구|거북선|활자|화성/.test(original)) score += 25;
+        // [최적화 3] 호/이름 유래 문장이 아니고 책 제목 목록이 실제로 있을 때만 .some() 실행
+        if (!isNameOrigin && hasBookTitles) {
+            if (bookTitles.some(title => original.includes(title))) score += 30;
+        }
 
-        // 🎯 [신규 추가 3] "중국인들은 ~라 묻는다" 같은 외부인 관람평 문장 감점(-40점)
-        // 위인 본인의 행적이 아닌 외부 반응 문장이 점수 1등 먹는 현상을 방지합니다.
-        if (/(중국인|일본인|관람객|학자들|후대|외신|사람들)(?:은|는|이|가)/.test(original)) score -= 40;
-
+        if (REGEX_INVENTIONS.test(original)) score += 25;
+        if (REGEX_EXTERNAL_SUBJECT.test(original)) score -= 40;
         if (isNameOrigin) score -= 60;
-        if (!NUTRITION_REGEX.test(original) && GENEALOGY_REGEX.test(original)) score -= 50;
+
+        if (!isNutrition && GENEALOGY_REGEX.test(original)) score -= 50;
         if (MINOR_TMI_REGEX.test(original)) score -= 30;
         if (STORY_FLUFF_REGEX.test(original)) score -= 20;
-        if (original.length >= 25 && original.length <= 150) score += 5;
+
+        const origLen = original.length;
+        if (origLen >= 25 && origLen <= 150) score += 5;
 
         return { sentence: original, index, score };
     });
 
     // ==========================================================
-    // 🎯 [Zone 구역 분할] 기존 3구역 나눔 100% 유지
+    // 🎯 [Zone 구역 분할 및 최종 선발]
     // ==========================================================
     const boundary1 = Math.floor(totalCount / 3);
     const boundary2 = Math.floor((totalCount * 2) / 3);
     const zones = [{ candidates: [] }, { candidates: [] }, { candidates: [] }];
 
-    scoredCandidates.forEach(item => {
+    for (let i = 0; i < scoredCandidates.length; i++) {
+        const item = scoredCandidates[i];
         if (item.index < boundary1) zones[0].candidates.push(item);
         else if (item.index < boundary2) zones[1].candidates.push(item);
         else zones[2].candidates.push(item);
-    });
+    }
 
-    // ==========================================================
-    // 🎯 [최종 선발 및 정렬] 각 Zone별 최고점 추출
-    // ==========================================================
     const selected = [];
     const seen = new Set();
 
-    // 각 구역(Zone 0, 1, 2)에서 지시어 보정 & 최고점을 받은 문장 1개씩 선발
-    zones.forEach(zone => {
-        zone.candidates.sort((a, b) => b.score - a.score);
-        if (zone.candidates.length > 0) {
-            const topCandidate = zone.candidates[0];
+    // Zone별 최고점 선발
+    for (let z = 0; z < 3; z++) {
+        const candidates = zones[z].candidates;
+        if (candidates.length > 0) {
+            candidates.sort((a, b) => b.score - a.score);
+            const topCandidate = candidates[0];
             seen.add(topCandidate.sentence);
             selected.push(topCandidate);
         }
-    });
+    }
 
-    // 문장이 부족하면 나머지 후보 중 고득점순 보충
+    // 부족한 문장 보충 (배열 복사 없이 바로 전체 후보에서 고득점 탐색)
     if (selected.length < count) {
-        const remaining = [];
-        zones.forEach(zone => remaining.push(...zone.candidates));
-        remaining.sort((a, b) => b.score - a.score);
-
-        for (const item of remaining) {
+        scoredCandidates.sort((a, b) => b.score - a.score);
+        for (let i = 0; i < scoredCandidates.length; i++) {
             if (selected.length >= count) break;
+            const item = scoredCandidates[i];
             if (!seen.has(item.sentence)) {
                 seen.add(item.sentence);
                 selected.push(item);
@@ -332,10 +342,11 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         }
     }
 
-    // 원문 글 순서(index)대로 다시 재정렬하여 반환
+    // 원문 순서(index) 정렬 후 합치기
     selected.sort((a, b) => a.index - b.index);
     return selected.map(item => item.sentence).join(" ");
 }
+
 
 export function buildDescription(introText, bodyText, aliases = [], extraCount = 3, introThreshold = 150, maxLength = 630) { 
     let intro = removeMetaBySearch(cleanWikiText(introText));
