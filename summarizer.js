@@ -164,7 +164,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 if (META_RE.test(processedText)) {
 // 메타 정보만 있는 문장 제거
     if (
-        /^(태명|세례명|일명|아명|본관|자는|호는|당호|시호)/.test(processedText)
+        /^(태명|세례명|일명|아명|본관|자는|호는|당호|아호|시호)/.test(processedText)
         &&
         !/(활동|운동|출생|사망|설립|창립|발표|저서|작품|업적|연구)/.test(processedText)
     ) {
@@ -179,11 +179,11 @@ if (META_RE.test(processedText)) {
     // 문장 중간에 붙은 메타 정보 제거
     processedText = processedText
         .replace(
-            /,\s*(태명|세례명|일명|아명|본관|자는|호는|당호|시호)\s*[^,。.]+/g,
+            /,\s*(태명|세례명|일명|아명|본관|자는|호는|당호|시호|아호)\s*[^,。.]+/g,
             ""
         )
         .replace(
-            /\s+(태명|세례명|일명|아명|본관|자는|호는|당호|시호)\s*[^,。.]+(이며|이고|이다)\.?/g,
+            /\s+(태명|세례명|일명|아명|본관|자는|호는|당호|시호|아호)\s*[^,。.]+(이며|이고|이다)\.?/g,
             ""
         )
         .replace(/,\s*,/g, ",")
