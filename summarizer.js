@@ -134,7 +134,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
         if (!text || isIncompleteSentence(text)) return;
         if (/^[《<〈“"'`].*[》>〉”"'`]$/.test(text)) return;
-        if (text.length < 15 || text.length > 320) return;
+        if (text.length < 15) return;
 
         let processedText = text;
         let targetIndex = index;
@@ -158,7 +158,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
             processedText = resolveDemonstrativeReference(processedText, rawSentences, index);
         }
 
-        if (processedText.length > 300) return;
+        if (processedText.length > 500) return;
 
         if (META_RE.test(processedText)) {
 
