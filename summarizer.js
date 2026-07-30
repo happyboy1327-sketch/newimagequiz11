@@ -162,23 +162,35 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
         // 자·호·아명 정보 제거
 if (META_RE.test(processedText)) {
-    const originalText = processedText;
+// 메타 정보만 있는 문장 제거
+    if (
+        /^(태명|세례명|일명|아명|본관|자는|호는|당호|시호)/.test(processedText)
+        &&
+        !/(활동|운동|출생|사망|설립|창립|발표|저서|작품|업적|연구)/.test(processedText)
+    ) {
+        processedText = processedText
+            .replace(
+                /^(태명|세례명|일명|아명|본관|자는|호는|당호|시호).*$/,
+                ""
+            )
+            .trim();
+    }
 
+    // 문장 중간에 붙은 메타 정보 제거
     processedText = processedText
         .replace(
-            /(?:,?\s*)(본관|아명|태명|세례명|일명|자는|자\(字\)|호는|호\(號\)|당호|시호)\s*[^,。.]+(?=,|이며|이고|이다|$)/g,
+            /,\s*(태명|세례명|일명|아명|본관|자는|호는|당호|시호)\s*[^,。.]+/g,
+            ""
+        )
+        .replace(
+            /\s+(태명|세례명|일명|아명|본관|자는|호는|당호|시호)\s*[^,。.]+(이며|이고|이다)\.?/g,
             ""
         )
         .replace(/,\s*,/g, ",")
-        .replace(/^,\s*/, "")
-        .replace(/,\s*(이다|이며|이고)/, " $1")
         .replace(/\s+/g, " ")
         .trim();
 
-    // 제거 후 문장이 깨지면 원문 유지
-    if (processedText.length < 10) {
-        return;
-    }
+    if (!processedText) return;
 }
         cleanedSentences.push({ original: processedText, index: targetIndex });
     });
