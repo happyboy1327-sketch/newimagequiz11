@@ -37,8 +37,7 @@ function removeMetaBySearch(text, mode = "all") {
     let result = text;
 
     const metaRegex =
-        /(?:,\s*)?(본관|자\(字\)는|호는|호\(號\)|아호는|아명은|아명|태명은|태명|세례명은|일명은|당호|시호)\s*[^,.。]+/g;
-
+/(?:,\s*)?(본관은?|자는?|자\(字\)|호는?|호\(號\)|아호는?|아명은?|태명은?|세례명은?|일명은?|당호는?|시호는?)\s*.*?(?=(?:,\s*(?:본관|자는?|호는?|아명|태명|시호)|이다|였다|이었다|이다\.|$))/g;
     result = result.replace(metaRegex, "");
 
     result = result
