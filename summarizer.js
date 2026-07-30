@@ -109,12 +109,33 @@ function cleanWikiText(text) {
         .trim();
 }
 
-// 🌟 [추가] 족보/호/자/시호 문장을 아예 통째로 지워버리는 청소 함수
-function purgeGenealogySentences(text) {
-    if (!text) return "";
-    return splitSentences(text)
-        .filter(sentence => !STRICT_GENEALOGY_REGEX.test(sentence))
-        .join(" ");
+// 🌟 [핵심] 문장 통째 삭제가 아닌, "자는.. 호는.." 구문만 핀포인트로 오려내는 함수
+function cleanGenealogyClause(sentence) {
+    if (!sentence) return "";
+
+    let cleaned = sentence;
+
+    // 1. 문장 내부/끝에 붙은 자, 호, 본관, 아명, 당호, 시호, 태명, 세례명 구문만 싹 오려냄
+    const genealogyPattern = /,?\s*(?:본관은|아명은|태명은|세례명은|자\(字\)는|자는|호\(號\)는|호는|당호는|시호는|시\(諡\)는|일명은)\s+[^.!?]+(?=[.!?]|$)/g;
+    cleaned = cleaned.replace(genealogyPattern, "");
+
+    // 2. 구문을 오려내면서 문장 끝이 연결어미(~으로, ~이고, ~이며)로 남았으면 서술형(~이다.)으로 자동 마감
+    cleaned = cleaned.replace(/(?:으로|이고|이며|였으며|였고|였으나),\s*$/i, "이다.");
+    cleaned = cleaned.replace(/(?:으로|이고|이며|였으며|였고|였으나)\s*$/i, "이다.");
+
+    // 3. 마침표 및 찌꺼기 공백 정돈
+    cleaned = cleaned.trim();
+    if (cleaned && !/[.!?]$/.test(cleaned)) {
+        cleaned += ".";
+    }
+    cleaned = cleaned.replace(/\s+/g, " ").trim();
+
+    // 4. 오려내고 남은 알맹이가 너무 짧거나(15자 미만) 족보 단어만 있던 개별 문장이면 버림
+    if (cleaned.length < 15 || /^[^가-힣]*[가-힣]{1,5}[.!?]$/.test(cleaned)) {
+        return "";
+    }
+
+    return cleaned;
 }
 
 function isIncompleteSentence(sentence) {
@@ -297,12 +318,16 @@ export function buildDescription(
     introThreshold = 150,
     maxLength = 1100
 ) {
-    let intro = cleanWikiText(introText);
-    let body = cleanWikiText(bodyText);
 
-    // 🌟 [입구 차단] intro와 body에 들어있는 모든 '자는.. 시는.. 호는..' 문장 완벽 삭제
-    intro = purgeGenealogySentences(intro);
-    body = purgeGenealogySentences(body);
+    let intro = splitSentences(cleanWikiText(introText))
+        .map(s => cleanGenealogyClause(s))
+        .filter(Boolean)
+        .join(" ");
+
+    let body = splitSentences(cleanWikiText(bodyText))
+        .map(s => cleanGenealogyClause(s))
+        .filter(Boolean)
+        .join(" ");
 
     if (intro && aliases.length > 0) intro = filterOtherPersonDeath(intro, aliases);
     if (body && aliases.length > 0) body = filterOtherPersonDeath(body, aliases);
