@@ -290,9 +290,6 @@ export function buildDescription(
     let intro = cleanWikiText(introText);
     let body = cleanWikiText(bodyText);
 
-    console.log("BUILD INTRO:", intro);
-    console.log("BUILD BODY:", body);
-
     if (intro && aliases.length > 0) intro = filterOtherPersonDeath(intro, aliases);
     if (body && aliases.length > 0) body = filterOtherPersonDeath(body, aliases);
 
