@@ -254,18 +254,20 @@ function splitSentences(text) {
 export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 2) {
     if (!bodyText || typeof bodyText !== "string") return "";
 
-    const rawSentences = splitSentences(bodyText);
+    // 🔴 [교체] cleanWikiText를 문장 분리(splitSentences)보다 "먼저" 실행하여 주석([1]) 등에 의한 잘림 방지
+    const cleanedFullText = cleanWikiText(bodyText);
+    const rawSentences = splitSentences(cleanedFullText);
     const cleanedSentences = [];
 
     rawSentences.forEach((sentence, index) => {
-        let text = cleanWikiText(sentence);
+        let text = cleanGenealogyClause(sentence);
 
         if (!text || isIncompleteSentence(text)) return;
         if (/^[《<〈“"'`].*[》>〉”"'`]$/.test(text)) return;
         if (text.length < 15 || text.length > 320) return;
 
-        // 🌟 [강력 차단] '자는', '호는', '시는', '본관은' 포함 문장은 후보 등록 자체를 거부!
-        if (STRICT_GENEALOGY_REGEX.test(text)) return;
+        // 🟢 [추가] '1운동', '월 1일'처럼 앞 숫자가 자려 나간 파손 문장 필터링
+        if (/^\d+(운동|월|일|년|회)\b/.test(text) && !/^(19|20)\d\d년/.test(text)) return;
 
         let processedText = text;
         let targetIndex = index;
