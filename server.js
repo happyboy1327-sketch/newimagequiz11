@@ -364,7 +364,7 @@ async function fillCache() {
                 for (let i = 0; i < targetTitles.length; i += 4) { 
                     const batch = targetTitles.slice(i, i + 4);
                     let detailRes;
-
+//exintro:0 또는 1이 아니라고??
                     try {
                         detailRes = await axios.get("https://ko.wikipedia.org/w/api.php", {
                             ...WIKI_AXIOS_CONFIG,
@@ -372,7 +372,6 @@ async function fillCache() {
                                 action: "query",
                                 titles: batch.join("|"),
                                 prop: "extracts|pageimages",
-                                exintro: 0,
                                 exlimit: "max",
                                 explaintext: 1,   
                                 redirects: 1,
