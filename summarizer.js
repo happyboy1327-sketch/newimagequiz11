@@ -20,6 +20,8 @@ const KEYWORD_REGEX = new RegExp(IMPORTANT_KEYWORDS.join('|'), 'g');
 const GENEALOGY_REGEX = /(의\s*(?:아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|차녀|장녀|자녀|후손)(?:이다|이었다|이며|이고|으로서)?|슬하에|결혼하(?:여|였|고)|결혼했(?:다)?)/;
 const NUTRITION_REGEX = /(독립|전투|(?:독립|만세|민주화)?운동(?!\s*장)|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|전승|수상|발표|설립|창립|개발|발명가|순국|고문|정복|멸망|편입|군현제|도량형|만리장성|분서갱유|황제|칭호|제도|토목|능묘|순행|붕어|고안|제작|창제|개량|설계|과학|기술|천문|의학|수학|공학|헌신|보급|창설|주창|구제|지원|관측|발명품|이론|법칙|원리|측우기|혼천의|자격루|유학|철학|성현|사상가|유학자|성선설|경전|성리학|실학|경세|목민|실용|실사구시|이용후생)/;
 const MINOR_TMI_REGEX = /(돌아와서|자제해|마부|수레|점점|은퇴|노년|보냈|생활했|향리|소일|이름을\s*딴|체육관|유적)/;
+// 단순 과정/정치 일화/배경 서사 감점용 정규식
+const STORY_FLUFF_REGEX = /(관직에\s*올라|벼슬에|신임을\s*받아|모함을\s*받아|상소를\s*올려|벼슬을|시절에|계기가\s*되어|도착하여|이르렀다|좌천|파직|소환|참석)/;
 
 const NAME_ORIGIN_REGEX = /(이름은?\s*.*?(?:유래|뜻|불리다|붙이다|개명|바꾸다)|호는?\s*.*?(?:유래|뜻|불리다|칭하다))/;
 const NAME_CHANGE_REGEX = /(이름을\s*(?:바꾸다|개명하다|칭하다)|~에서\s*~로\s*(?:개명|변경))/;
@@ -259,6 +261,7 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         if (NAME_ORIGIN_REGEX.test(original)) score -= 15;
         if (!NUTRITION_REGEX.test(original) && GENEALOGY_REGEX.test(original)) score -= 50;
         if (MINOR_TMI_REGEX.test(original)) score -= 30;
+        if (STORY_FLUFF_REGEX.test(original)) score -= 20;
         if (original.length >= 25 && original.length <= 150) score += 5;
 
         return { sentence: original, index, score };
@@ -274,40 +277,37 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         else zones[2].candidates.push(item);
     });
 
-    let maxZoneIndex = 0;
-    let maxCount = -1;
-    zones.forEach((zone, idx) => {
-        if (zone.candidates.length > maxCount) {
-            maxCount = zone.candidates.length;
-            maxZoneIndex = idx;
+    // ❌ 기존 maxZoneIndex 몰아주기 로직을 지우고 아래 코드로 교체합니다.
+
+    // ✅ 각 Zone(초반/중반/후반)에서 점수가 가장 높은 1위 문장을 균등하게 선발
+    const selected = [];
+    const seen = new Set();
+
+    zones.forEach(zone => {
+        zone.candidates.sort((a, b) => b.score - a.score);
+        if (zone.candidates.length > 0) {
+            const topCandidate = zone.candidates[0];
+            seen.add(topCandidate.sentence);
+            selected.push(topCandidate);
         }
     });
 
-    const selected = [];
-    const seen = new Set();
-    const zoneLimit = count > 1 ? Math.min(Math.max(1, Math.ceil(count * 0.7)), count - 1) : count;
+    // 혹시 문장이 부족해서 count(3개)를 못 채운 경우, 남은 후보 중 전체 점수 높은 순으로 채움
+    if (selected.length < count) {
+        const remaining = [];
+        zones.forEach(zone => remaining.push(...zone.candidates));
+        remaining.sort((a, b) => b.score - a.score);
 
-    zones[maxZoneIndex].candidates.sort((a, b) => b.score - a.score);
-    for (const item of zones[maxZoneIndex].candidates) {
-        if (!seen.has(item.sentence)) {
-            seen.add(item.sentence);
-            selected.push(item);
-            if (selected.length >= zoneLimit) break;
+        for (const item of remaining) {
+            if (selected.length >= count) break;
+            if (!seen.has(item.sentence)) {
+                seen.add(item.sentence);
+                selected.push(item);
+            }
         }
     }
 
-    const remaining = [];
-    zones.forEach(zone => remaining.push(...zone.candidates));
-    remaining.sort((a, b) => b.score - a.score);
-
-    for (const item of remaining) {
-        if (selected.length >= count) break;
-        if (!seen.has(item.sentence)) {
-            seen.add(item.sentence);
-            selected.push(item);
-        }
-    }
-
+    // 최종 출력은 다시 원본 글 흐름(index) 순서대로 정렬
     selected.sort((a, b) => a.index - b.index);
     return selected.map(item => item.sentence).join(" ");
 }
