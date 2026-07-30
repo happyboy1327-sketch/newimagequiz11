@@ -7,6 +7,8 @@ const IMPORTANT_KEYWORDS = [
 ];
 
 const GENEALOGY_REGEX = /(의\s*(?:아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|차녀|장녀|자녀|후손)(?:이다|이었다|이며|이고|으로서)?|슬하에|결혼하(?:여|였|고)|결혼했(?:다)?)/;
+const metaRegex =
+    /(?:,\s*)?(본관(?:은)?|자는|자\(字\)(?:는)?|호는|호\(號\)(?:는)?|아호는|아명(?:은)?|태명(?:은)?|세례명(?:은)?|일명(?:은)?|당호(?:는)?|시호(?:는)?)\s+[^,.。]+(?:\([^)]*\))?/g;
 
 // 🌟 [수정] '운동장' 등 장소 명칭을 제외하도록 룩어헤드(?!\s*장) 적용 및 '순국', '고문' 추가
 const NUTRITION_REGEX = /(독립|전투|(?:독립|만세|민주화)?운동(?!\s*장)|학설|발명|발견|창시|개혁|통일|건국|재위|집권|해방|혁명|사상|학파|저서|대표작|노벨상|원소|정리|공식|전쟁|함락|전승|수상|발표|설립|창립|개발|발명가|순국|고문)/;
@@ -29,33 +31,15 @@ function cleanWikiText(text) {
         .trim();
 }
 
-function removeMetaBySearch(text, mode = "all") {
+function removeMetaBySearch(text) {
     if (!text) return "";
 
-    const original = text;
-
-    let result = text;
-
-    const metaRegex =
-/(?:,\s*)?(본관은?|자는?|자\(字\)|호는?|호\(號\)|아호는?|아명은?|태명은?|세례명은?|일명은?|당호는?|시호는?)\s*.*?(?=(?:,\s*(?:본관|자는?|호는?|아명|태명|시호)|이다|였다|이었다|이다\.|$))/g;
-    result = result.replace(metaRegex, "");
-
-    result = result
-        .replace(/,\s*,/g, ",")
+    return text
+        .replace(metaRegex, "")
         .replace(/\s+/g, " ")
+        .replace(/,\s*,/g, ",")
         .trim();
-
-    // 삭제 후 문장 붕괴 방지
-    if (
-        result.length < original.length * 0.5 ||
-        !/[은는이가].*(이다|였다|한다|했다|하였다)\.?$/.test(result)
-    ) {
-        return original;
-    }
-
-    return result;
 }
-
 function isIncompleteSentence(sentence) {
     if (!sentence) return true;
     const text = sentence.trim();
@@ -352,6 +336,11 @@ let firstSentence = introSentences[0] || "";
     const targetBody = normalizeSpace([remainingIntro, body].filter(Boolean).join(" "));
 
     if (targetBody && targetBody.length > 12) {
+        const bodySentences = splitSentences(targetBody);
+
+if (bodySentences.length > 0) {
+    extra = bodySentences.slice(0, extraCount).join(" ");
+}
         extra = extractImportantSentences(
             targetBody,
             "",
