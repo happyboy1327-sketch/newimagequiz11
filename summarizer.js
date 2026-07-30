@@ -30,34 +30,34 @@ function cleanWikiText(text) {
         .trim();
 }
 
-function removeMetaBySearch(text) {
+function removeMetaBySearch(text, mode = "all") {
     if (!text) return "";
 
     let result = text;
 
-    // 자/호/아호/시호 제거 (앞 쉼표 포함)
-    result = result.replace(
-        /,\s*(자는|자\(字\)|호는|호\(號\)|아호는|시호는)\s*[^.。]+?(?:이다|였다|이었다)\.?/g,
-        ""
-    );
+    const metaPattern = 
+        "(본관은?|아호는?|호는?|자는?|자\\(字\\)는?|시호는?|태명은?|아명은?|세례명은?|일명은?|당호는?)";
 
-    // 제거 후 "으로"로 끝나는 문장 보정
-    result = result.replace(
-        /(정치인|문신|학자|시인|저술가|독립운동가|정치 사상가)으로\s*$/,
-        "$1이다."
-    );
+    if (mode === "all") {
+        // 전체 문자열에서 메타 구간 제거
+        result = result.replace(
+            new RegExp(
+                `,?\\s*${metaPattern}\\s*[^.。]+?(?:이다|였다|이었다)\\.?`,
+                "g"
+            ),
+            ""
+        );
+    }
 
-    // 본관 처리
-    result = result.replace(
-        /본관은\s*[^,.。]+(?:이고|이며|이다)?\s*/g,
-        ""
-    );
-
-    // 태명/세례명/일명/아명 처리
-    result = result.replace(
-        /(태명은|세례명은|일명은|아명은)\s*[^.。]+?(?:이다|였다|이었다)\.?/g,
-        ""
-    );
+    if (mode === "first") {
+        result = result.replace(
+            new RegExp(
+                `${metaPattern}\\s*[^.。]+?(?:이다|였다|이었다)\\.?`,
+                "g"
+            ),
+            ""
+        );
+    }
 
     return result
         .replace(/,\s*,/g, ",")
@@ -298,8 +298,8 @@ export function buildDescription(
     if (intro && aliases.length > 0) intro = filterOtherPersonDeath(intro, aliases);
     if (body && aliases.length > 0) body = filterOtherPersonDeath(body, aliases);
 
-    intro = normalizeSpace(intro || "");
-    body = normalizeSpace(body || "");
+    intro = removeMetaBySearch(intro);
+    body = removeMetaBySearch(body);
 
     const cleanSlice = (text) => {
         if (text.length <= maxLength) return text;
@@ -330,7 +330,7 @@ let firstSentence = removeMetaBySearch(introSentences[0] || "");
     // 🌟 [수정] 한자/생몰년 괄호를 빼고 계산한 '실질 텍스트 길이' 기준 적용
     const realFirstSentenceLength = firstSentence.replace(/\([^)]*\)/g, "").trim().length;
 
-    const secondSentence = introSentences[1] || "";
+    const secondSentence = removeMetaBySearch(introSentences[1] || "");
     const isGenealogyTMI = GENEALOGY_REGEX.test(secondSentence);
 
     if (!isGenealogyTMI && secondSentence) {
@@ -347,9 +347,11 @@ let firstSentence = removeMetaBySearch(introSentences[0] || "");
     }
 
     let extra = "";
-    const remainingIntro = introSentences
-        .slice(usedSecondSentence ? 2 : 1)
-        .join(" ");
+   const remainingIntro = introSentences
+    .slice(usedSecondSentence ? 2 : 1)
+    .map(sentence => removeMetaBySearch(sentence))
+    .filter(Boolean)
+    .join(" ");
     const targetBody = normalizeSpace([remainingIntro, body].filter(Boolean).join(" "));
 
     if (targetBody && targetBody.length > 12) {
@@ -361,6 +363,9 @@ let firstSentence = removeMetaBySearch(introSentences[0] || "");
         );
     }
 
-    const merged = normalizeSpace([firstSentence, extra].filter(Boolean).join(" "));
-    return cleanSlice(merged);
+   const merged = removeMetaBySearch(
+    normalizeSpace([firstSentence, extra].filter(Boolean).join(" "))
+);
+
+return cleanSlice(merged);
 }
