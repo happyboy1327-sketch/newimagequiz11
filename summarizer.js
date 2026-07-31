@@ -85,7 +85,7 @@ const CORE_SIGNIFICANCE_KEYWORDS = [
 ];
 
 const UNIVERSAL_NOISE_KEYWORDS = [
-  "자세한 내용은", "참조하십시오", "출처 필요", "각주", "외부 링크", "참고 문헌",
+  "자세한 내용은", "참조하십시오", "출처 필요", "각주", "외부 링크", "참고 문헌", "경력", 
   "여담", "기타", "대중 문화", "서브컬처", "패러디", "밈", "스포일러", "오류",
   "차이를 보이고", "별명", "소문", "야사", "미디어에서", "여담으로", "설이 있다", "추측"
 ];
@@ -335,6 +335,10 @@ export function buildDescription(
 
     // TMI 노이즈 강력 페널티 (0.05배 -> 사실상 요약문 추출에서 제외)
     if (TMI_NOISE_REGEX.test(sentence)) {
+      score *= 0.05;
+    }
+
+    if (UNIVERSAL_NOISE_REGEX.test(sentence)) {
       score *= 0.05;
     }
 
