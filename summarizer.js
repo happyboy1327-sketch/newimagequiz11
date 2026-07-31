@@ -54,49 +54,51 @@ const HARD_NOISE_REGEX = new RegExp([
 
 
 // 🎯 1. 짝이 안 맞는 ( 또는 ) 기호만 골라내어 완벽 제거하는 스택 함수
-function removeUnpairedParentheses(str) {
-    if (!str) return "";
+// 🎯 O(N) 초고속 짝 없는 괄호 기호 적출 함수
+function removeUnmatchedParentheses(text) {
+    if (!text) return "";
+    const len = text.length;
     const stack = [];
-    const removeIndices = new Set();
+    const unmatchedIndices = new Set();
 
-    for (let i = 0; i < str.length; i++) {
-        if (str[i] === '(') {
+    for (let i = 0; i < len; i++) {
+        if (text[i] === '(') {
             stack.push(i);
-        } else if (str[i] === ')') {
+        } else if (text[i] === ')') {
             if (stack.length > 0) {
-                stack.pop(); // 짝이 맞음
+                stack.pop(); // 정상적으로 짝이 맞음 (내용 전체 보존)
             } else {
-                removeIndices.add(i); // 짝 없는 ')'
+                unmatchedIndices.add(i); // 짝 없는 ')'
             }
         }
     }
 
-    // 닫히지 않고 끝난 짝 없는 '(' 전부 적출
+    // 닫히지 않고 끝난 짝 없는 '(' 제거 대상 등록
     while (stack.length > 0) {
-        removeIndices.add(stack.pop());
+        unmatchedIndices.add(stack.pop());
     }
 
-    return str.split('').filter((_, i) => !removeIndices.has(i)).join('');
+    if (unmatchedIndices.size === 0) return text;
+
+    let result = "";
+    for (let i = 0; i < len; i++) {
+        if (!unmatchedIndices.has(i)) {
+            result += text[i];
+        }
+    }
+    return result;
 }
 
-// 🎯 2. 위키 본문 텍스트 정제 (완전체 괄호 제거 + 짝사랑 괄호 적출)
 export function cleanWikiText(text) {
     if (!text) return "";
 
     let cleaned = text
-        .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1") // [[링크|단어]] -> 단어
+        .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1") // [[링크|표기]] -> 표기
         .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
         .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "");
 
-    // 1단계: 짝이 정상적으로 닫힌 괄호 내용 완전 제거 (재귀적 처리)
-    let prev = "";
-    while (prev !== cleaned) {
-        prev = cleaned;
-        cleaned = cleaned.replace(/\([^()]*\)/g, "");
-    }
-
-    // 2단계: 끝까지 안 닫히고 남은 외기러기 '(' 또는 ')' 적출
-    cleaned = removeUnpairedParentheses(cleaned);
+    // 정상적으로 닫힌 괄호(외국어명, 달력, 생몰년)는 100% 보존하고, 짝 없는 괄호만 제거
+    cleaned = removeUnmatchedParentheses(cleaned);
 
     return cleaned
         .replace(/\s+/g, " ")
