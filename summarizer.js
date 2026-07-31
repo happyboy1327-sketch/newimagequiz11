@@ -41,14 +41,16 @@ export function stripMetainfo(text) {
   if (!text) return "";
   let result = text;
 
-  // 1) 괄호 안 족보 TMI 및 가족사 서술절 도려내기
+  // 1) 괄호 안 족보 TMI 도려내기
   result = result.replace(/\([^)]*(?:부친|모친|조부|증조부|고조부|외가|손자|처남|장인|남씨|윤씨|씨)[^)]*\)/g, "");
   result = result.replace(/(?:부친|모친|조부|증조부|고조부|외조부)\s+[^,.!?\n]+?(?:낳았고|낳았으며|이었고|이었다|이며|거쳤으나|낙향하였고)[,;\s]*/g, "");
   result = result.replace(/(?:첫|둘째|셋째)?\s*부인인?\s+[^,.!?\n]+?(?:사이에|낳았으며|낳았고)[,;\s]*/g, "");
-  result = result.replace(/(?:첫|둘째|셋째|네|다섯|막내)?\s*(?:번째|째)?\s*(?:아들|딸|남|녀|장남|차남|삼남|사남)이?(?:었다|였다|이며|이고|로\s*태어나)?/g, "");
-  result = result.replace(/\d+남\s*\d+녀\s*(?:중\s*)?/g, "");
 
-  // 2) 호/자/본관 메타 라벨 정제 (호세, 자유 등 일반 단어 보호)
+  // [수정!] 출생 순서 구문 엄격 매칭 (단독 '남', '녀' 매칭 완전 차단)
+  const strictBirthOrderRegex = /(?:첫|둘째|셋째|넷째|다섯째|막내)\s*(?:번째|째)?\s*(?:아들|딸|남|녀)(?:이었다|였다|이다|이며|이고|로\s*태어남|로\s*태어나)?|(?:장남|차남|삼남|사남|오남|장녀|차녀|삼녀|사녀|외아들|외딸)(?:이었다|였다|이다|이며|이고)?|(?:\d+|[일이삼사오육칠팔구])남\s*(?:\d+|[일이삼사오육칠팔구])녀\s*(?:중)?/g;
+  result = result.replace(strictBirthOrderRegex, "");
+
+  // 2) 위키 메타 라벨(본관, 호, 자 등) 도려내기
   const metaLabelPattern = "(?:(?:본관|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|호|자|묘)(?:는|은|\\s*[:=]))";
   
   const innerMetaRegex = new RegExp(`${metaLabelPattern}\\s*[^,;)]+(?:\\([^)]*\\))?`, "g");
@@ -75,7 +77,7 @@ export function stripMetainfo(text) {
     .replace(/\s+/g, " ")
     .trim();
 
-  // 4) 알맹이 없는 유령 문장(단어 2개 이하) 소멸 검증
+  // 4) 알맹이 없는 유령 문장 소멸
   const words = result.match(/[가-힣a-zA-Z0-9]{2,}/g) || [];
   if (words.length <= 2 || /^[^는은이가]+[는은이가]\s*\.?$/.test(result)) {
     return "";
@@ -90,7 +92,7 @@ export function stripMetainfo(text) {
 
 const CORE_SIGNIFICANCE_KEYWORDS = [
   "원리", "구조", "기능", "작용", "현상", "이론", "연구", "발견", "규명", "증명", 
-  "분석", "기반", "시스템", "메커니즘", "특징", "성질", "분류", "상태", "상호작용",
+  "분석", "기반", "시스템", "메커니즘", "특징", "성질", "분류", "상태", "상호작용", "개척",
   "제도", "정책", "사회", "경제", "체계", "관계", "변화", "전개", "성장", "효과", 
   "원인", "결과", "분포", "개혁", "조약", "협정", "시장", "구조적", "통일", "통합", "정합", 
   "양식", "사상", "문화", "작품", "기법", "전통", "유형", "형성", "창작", "유산", "완화", 
@@ -107,7 +109,7 @@ const UNIVERSAL_NOISE_KEYWORDS = [
 const CORE_SIGNIFICANCE_REGEX = new RegExp(CORE_SIGNIFICANCE_KEYWORDS.join("|"));
 const UNIVERSAL_NOISE_REGEX = new RegExp(UNIVERSAL_NOISE_KEYWORDS.join("|"));
 // 업적 관련 핵심 어간/동사 패턴 (컴파일 타임 정규식 리터럴)
-const ACHIEVEMENT_VERB_REGEX = /(저술|집필|설계|고안|집대성|제시|편찬|주창|발명|창안|개혁|건축|축조|간행|통찰|창작|창시|정리|도입|확립|반영|기여|주도|설립|격퇴|정벌|연구)/;
+const ACHIEVEMENT_VERB_REGEX = /(토벌|개척|저술|집필|설계|고안|집대성|제시|편찬|주창|발명|창안|개혁|건축|축조|간행|통찰|창작|창시|정리|도입|확립|반영|기여|주도|설립|격퇴|정벌|연구)/;
 
 // 수동적 배경/지형 서술 패턴 (감점 대상)
 const PASSIVE_BG_REGEX = /((?:지점|시대|무렵|해|곳)이다|위치해\s*있다|일이\s*벌어졌다|상황이었다|태어났다)/;
