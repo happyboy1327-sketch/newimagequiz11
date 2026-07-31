@@ -110,6 +110,19 @@ function splitSentences(text) {
         }, []);
 }
 
+export function getWikiConceptTerms(text, topN = 15) {
+    if (!text) return [];
+    const noise = /(\d+(년|월|일|세기)|조선|한국|서울|미국|일본|어머니|아들|딸|씨|황제|선생|대왕|《|『)/;
+    const concept = /(학|론|설|법칙|원리|현상|효과|반응|구조|체계|역학|에너지|성|화|력|주의|제도|혁명|사상|철학|법|이론)$/;
+    const map = new Map();
+    for (const [, term] of text.matchAll(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g)) {
+        const clean = term.trim();
+        if (clean.length >= 2 && clean.length <= 12 && !noise.test(clean)) {
+            map.set(clean, (map.get(clean) || 0) + (concept.test(clean) ? 3 : 1));
+        }
+    }
+    return [...map.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t).slice(0, topN);
+}
 // ==========================================================
 // 2. 키워드 및 타인/TMI 필터링 (주어 생략 보완)
 // ==========================================================
@@ -172,6 +185,9 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
     const totalCount = rawSentences.length;
     if (totalCount === 0) return "";
 
+   const wikiTerms = getWikiConceptTerms(cleanedBody + " " + introText);
+    const WIKI_TERM_REGEX = wikiTerms.length ? new RegExp(wikiTerms.join("|")) : null;
+
     const docKeywords = getDocumentKeywords(cleanedBody + " " + introText, 12);
     const scoredCandidates = [];
 
@@ -186,6 +202,10 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         let score = 10;
 
         // 🎯 [핵심 수정] 하드 필터링 대신 높은 가산점 제공으로 문장 증발 방지
+       if (WIKI_TERM_REGEX && WIKI_TERM_REGEX.test(text)) {
+            score += 50; // 탐침된 위키 개념어가 있으면 +50점
+        }
+
         if (ACHIEVEMENT_REGEX.test(text)) score += 40;
 
         let keywordHits = 0;
