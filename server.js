@@ -370,6 +370,7 @@ async function fillCache() {
                                             action: "query",
                                             titles: title,
                                             prop: "extracts|pageimages",
+                                            exintro: 1,
                                             explaintext: 1,
                                             redirects: 1,
                                             pithumbsize: 800,
