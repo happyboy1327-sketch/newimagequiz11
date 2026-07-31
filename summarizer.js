@@ -338,9 +338,9 @@ export function buildDescription(
       score *= 0.05;
     }
 
-    if (UNIVERSAL_NOISE_KEYWORDS.test(sentence)) {
-      score *= 0.05;
-    }
+    if (UNIVERSAL_NOISE_KEYWORDS.some(keyword => sentence.includes(keyword))) {
+  score *= 0.05;
+}
 
     // 독립 추출 시 부자연스러운 접속사 시작 문장 감점 (0.7배)
     if (/^(?:또한|이후|한편|그뒤|그후|그리고|그러나|하지만)\s*/.test(sentence)) {
