@@ -91,7 +91,7 @@ export function stripMetainfo(text) {
     return "";
   }
 
-  return result;
+  return result
 }
 
 // ==========================================================
