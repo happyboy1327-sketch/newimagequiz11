@@ -64,23 +64,27 @@ function stripMetaInfo(text) {
   if (!text) return "";
   let result = text;
 
-  const unwantedPattern = /^(?:\s*)(?:자는|호는|시호는|본관은|별호는|아호는|아명은|태명은|세례명은|일명은|당호는|법명은|묘호는|자|호|시호|본관|별호|아호|아명|태명|세례명|일명|당호|법명|묘호)(?:\s*[:=]|\s+|$)/;
-
-  result = result.replace(/\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g, (match, inner) => {
-    const parts = inner.split(/[,;]/);
-    const filteredParts = parts.filter((part) => !unwantedPattern.test(part.trim()));
-
-    if (filteredParts.length === 0) return "";
-    return `(${filteredParts.join(", ").trim()})`;
+  // 1) 괄호 안의 메타 정보 정리 (예: (郭再祐, 1552년~1617년, 호는 망우당) -> (郭再祐, 1552년~1617년))
+  result = result.replace(/\(([^)]*)\)/g, (match, inner) => {
+    let cleanedInner = inner.replace(/(?:자는|호는|시호는|본관은|별호는|아호는|아명은|태명은|세례명은|일명은|당호는|법명은|자|호|시호|본관|별호|아호|아명|태명|세례명|일명|당호|법명)\s*[:=]?\s*[^,;)]+/g, "").trim();
+    cleanedInner = cleanedInner.replace(/^[\s,;]+|[\s,;]+$/g, "").replace(/[\s,;]{2,}/g, ", ");
+    return cleanedInner ? `(${cleanedInner})` : "";
   });
 
-  result = result.replace(/\(\s*\)/g, "");
+  // 2) 독립된 메타 문장/절 제거
+  const metaKeywords = "자는|호는|시호는|본관은|별호는|아호는|아명은|태명은|세례명은|일명은|당호는|법명은|자|호|시호|본관|별호|아호|아명|태명|세례명|일명|당호|법명";
+  const metaPattern = new RegExp(
+    `(?:(?<![가-힣])(?:${metaKeywords})(?:는|은)?\\s*[^,\\(\\)\\.\\n]{1,40}?(?:이다|였다|이었다|이며|이고|이자|으로)?(?:,\\s*|\\.\\s*|\\s+|$))`,
+    "g"
+  );
+  result = result.replace(metaPattern, "");
 
-  const standaloneMetaPattern = /(?<![가-힣a-zA-Z0-9])(?:자는|호는|시호는|본관은|별호는|아호는|아명은|태명은|세례명은|일명은|당호는|법명은|묘호는)\s+[^,;.\n)]+(?:이다|였다|이었다|이며|이고|이자|으로)?(?=[,;.\n]|$)/g;
-  result = result.replace(standaloneMetaPattern, "");
-
+  // 3) 잔여 공백 및 특수문자 정리
   return result
-    .replace(/\s+([,.!?])/g, "$1")
+    .replace(/\(\s*(?:본관|시호|아명|일명|자|호)[^;)]*;\s*/g, "(")
+    .replace(/\(\s*\)/g, "")
+    .replace(/\.{2,}/g, ".")
+    .replace(/\s+\./g, ".")
     .replace(/\s+/g, " ")
     .trim();
 }
