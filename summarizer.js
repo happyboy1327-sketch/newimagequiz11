@@ -57,19 +57,30 @@ const HARD_NOISE_REGEX = new RegExp([
 // 🎯 1. 짝이 안 맞는 ( 또는 ) 기호만 골라내어 완벽 제거하는 스택 함수
 // 🎯 O(N) 초고속 짝 없는 괄호 기호 적출 함수
 
+function removeUnpairedParentheses(str) {
+    if (!str) return "";
+    const stack = [];
+    const toRemove = new Set();
+    for (let i = 0; i < str.length; i++) {
+        if (str[i] === '(') stack.push(i);
+        else if (str[i] === ')') stack.length ? stack.pop() : toRemove.add(i);
+    }
+    stack.forEach(i => toRemove.add(i));
+    return str.split('').filter((_, i) => !toRemove.has(i)).join('');
+}
+
 export function cleanWikiText(text) {
     if (!text) return "";
-
-    let cleaned = text
-        .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1")
-        .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
-        .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "");
-
-    return cleaned
-        .replace(/\s+/g, " ")
-        .replace(/\s+\./g, ".")
-        .replace(/\(\s*\)/g, "")
-        .trim();
+    return removeUnpairedParentheses(
+        text
+            .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1") // [[링크|단어]] -> 단어로 변환
+            .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
+            .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "")
+            .replace(/\(\s*\)/g, "")
+    )
+    .replace(/\s+/g, " ")
+    .replace(/\s+\./g, ".")
+    .trim();
 }
 
 function normalizeSpace(text = "") {
