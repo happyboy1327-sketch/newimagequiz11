@@ -443,57 +443,53 @@ async function fillCache() {
                         if (QUIZ_CACHE.some(cached => cached.name === pageData.title)) continue;
 
                         const fullExtract = pageData.extract || "";
-const aliases = pageData.aliases || []; // 👈 aliases 미선언 에러 방지
 
-// 1. 첫 번째 목차(==) 기준으로 서론과 본문 분리
-const firstHeaderIndex = fullExtract.search(/==+/);
+                        // 1. 첫 번째 목차(==) 기준으로 서론과 본문 분리
+                        const firstHeaderIndex = fullExtract.search(/==+/);
 
-let exintro = fullExtract;
-let extractBody = "";
+                        let exintro = fullExtract;
+                        let extractBody = "";
 
-if (firstHeaderIndex !== -1) {
-    exintro = fullExtract.substring(0, firstHeaderIndex).trim();
-    extractBody = fullExtract.substring(firstHeaderIndex).trim();
-} else {
-    // 👈 [수정] 목차가 없는 문서의 경우 전체 텍스트를 본문으로도 활용할 수 있게 처리
-    extractBody = fullExtract;
-}
+                        if (firstHeaderIndex !== -1) {
+                            exintro = fullExtract.substring(0, firstHeaderIndex).trim();
+                            extractBody = fullExtract.substring(firstHeaderIndex).trim();
+                        }
 
-// 2. 불필요한 하단 섹션 제거
-const cutIndex = extractBody.search(/\n==\s*(각주|같이 보기|참고 문헌|외부 링크|주석)\s*==/i);
-if (cutIndex !== -1) {
-    extractBody = extractBody.substring(0, cutIndex);
-}
+                        // 2. 불필요한 하단 섹션 제거
+                        const cutIndex = extractBody.search(/\n==\s*(각주|같이 보기|참고 문헌|외부 링크|주석)\s*==/i);
+                        if (cutIndex !== -1) {
+                            extractBody = extractBody.substring(0, cutIndex);
+                        }
 
-// 3. 본문 정제
-let cleanExtract = extractBody
-    .replace(/^=+.*?=+$/gm, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+                        // 3. 본문 정제
+                        let cleanExtract = extractBody
+                            .replace(/^=+.*?=+$/gm, "")
+                            .replace(/\n{3,}/g, "\n\n")
+                            .trim();
 
-// 4. 서론 정제
-let cleanIntro = exintro.replace(/\s+/g, " ").trim();
+                        // 4. 서론 정제
+                        let cleanIntro = exintro.replace(/\s+/g, " ").trim();
 
-// 5. 설명 및 힌트 생성 (safe 연동)
-const finalDescription = buildDescription(
-    cleanIntro, 
-    cleanExtract || "",
-    aliases, 
-    3,   // extraCount
-    3,   // anchorCount
-    630  // maxLength
-);
+                        // 5. 설명 및 힌트 생성 (수정된 summarizer.js와 안전 연동)
+                        const finalDescription = buildDescription(
+                           cleanIntro, 
+                           cleanExtract || "",
+                           aliases, 
+                           3,   // extraCount (추가 문장 수)
+                           3,   // anchorCount (서문에서 고정할 앵커 문장 수)
+                           630  // maxLength (최대 글자 수)
+                            );
 
-if (finalDescription) {
-    QUIZ_CACHE.push({
-        name: pageData.title,
-        image: imageUrl,
-        hint: createMaskedHint(pageData.title, finalDescription),
-        description: finalDescription 
-    });
-} else {
-    console.log(`탈락: description 생성 실패 (${pageData.title})`);
-}
+                        if (finalDescription) {
+                            QUIZ_CACHE.push({
+                                name: pageData.title,
+                                image: imageUrl,
+                                hint: createMaskedHint(pageData.title, finalDescription),
+                                description: finalDescription 
+                            });
+                        } else {
+                            console.log(`탈락: description 생성 실패 (${pageData.title})`);
+                        }
                     }
                 }
                 console.log("현재 캐시:", QUIZ_CACHE.length);
