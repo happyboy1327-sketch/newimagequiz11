@@ -17,61 +17,9 @@
     
       // ==========================================================
       // ==========================================================
-// 1. 전처리 및 정제 헬퍼
-// ==========================================================
 
-function removeUnpairedParentheses(str) {
-    if (!str) return "";
-    const stack = [];
-    const toRemove = new Set();
-    for (let i = 0; i < str.length; i++) {
-        if (str[i] === '(') stack.push(i);
-        else if (str[i] === ')') stack.length ? stack.pop() : toRemove.add(i);
-    }
-    stack.forEach(i => toRemove.add(i));
-    return str.split('').filter((_, i) => !toRemove.has(i)).join('');
-}
 
-export function cleanWikiText(text) {
-    if (!text) return "";
-    return removeUnpairedParentheses(
-        text
-            .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
-            .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "")
-            .replace(/\(\s*\)/g, "")
-    )
-    .replace(/\s+/g, " ")
-    .replace(/\s+\./g, ".")
-    .trim();
-}
 
-function normalizeSpace(text = "") {
-    return String(text)
-        .replace(/([.!?。])([가-힣a-zA-Z])/g, "$1 $2")
-        .replace(/\s+/g, " ")
-        .trim();
-}
-
-const REGEX_LEADING_CONNECTORS = /^(그러나|하지만|그런데|한편|따라서|게다가|반면|이에|이후|결국|그\s*후|또한|그리고),?\s*/;
-function cleanLeadingConnectors(sentence) {
-    if (!sentence) return "";
-    return sentence.replace(REGEX_LEADING_CONNECTORS, "").trim();
-}
-
-function removeMetaBySearch(text) {
-    if (!text) return "";
-    let result = text;
-
-    const hoMetaRegex = /(?<![가-힣])호는\s+[^。.]{1,200}?(?:이다|였다|이었|이며|이고|\.|$)/g;
-    result = result.replace(hoMetaRegex, "");
-
-    const keywords = "시호|본관|자|별호|아호|아명|태명|세례명|일명|당호|법명";
-    const keyPattern = `(?<![가-힣])(?:${keywords})(?:은|는|\\([^)]*\\))?`;
-    const valToken = `(?:[^\\s,.\\(\\)\\u00B7]+(?:\\([^)]*\\)?)?)`;
-    const valPattern = `${valToken}(?:\\s*[·ㆍ]\\s*${valToken})*`;
-    const singleMeta = `${keyPattern}\\s*${valPattern}`;
-
-    const metaChainRegex = new RegExp(`(?:,\\s*|\\s+)*(?:${singleMeta}(?:,\\s*|\\s+이며|\\s+이고|\\s+)*)+(?:이다|였다|이었다|이며|이고|이자|으로)?`, "g");
 // ==========================================================
 // 1. �꾩쿂由� 諛� �뺤젣 �ы띁
 // ==========================================================
