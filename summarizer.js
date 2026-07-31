@@ -16,6 +16,7 @@
   //  "유학", "사상", "성현", "철학", "사상가", "유학자", "성선설", "인", "의", "예", "지", "맹자", "공자", "논어", "대학", "중용", "도덕", "윤리", "경전", "성리학", "실학", "경세", "목민", "실용", "실사구시", "이용후생"
     
       // ==========================================================
+      // ==========================================================
 // 1. 전처리 및 정제 헬퍼
 // ==========================================================
 
@@ -104,13 +105,13 @@ function splitSentences(text) {
 }
 
 // ==========================================================
-// 2. [완전 개편] 업적 전용 정규식 & TMI 강제 탈락 로직
+// 2. 업적/직업 및 활동 관련 정규식 확장
 // ==========================================================
 
-// 🎯 업적/연구/사회적 영향력/저작 키워드 (최우선 반영)
-const ACHIEVEMENT_REGEX = /(3.1운동|3.1 운동|중시|집필|통일|멸망|도입|기여|설립|개발|발견|창시|주도|발표|영향|성공|구축|사상|주장|혁명|수상|창립|저술|총괄|개혁|정립|주창|체계화|확산|보급|창안|집대성|기틀|초석|승리|평정|확장|창시자|개척자|아버지|대표|중요한|업적|연구|논문|작품|창작|발명|창안|개진|동조|지지|해석|반대|논쟁|부활|수로도|관측|역임|(?!(?:여론|결론|방법론))(?:[가-힣]+론)|(?:[가-힣]+주의))/;
+// 🎯 업적, 직업, 창작, 활동, 수상 관련 키워드 대폭 확장
+const ACHIEVEMENT_REGEX = /(기여|설립|개발|발견|창시|주도|발표|영향|성공|구축|혁명|수상|창립|저술|총괄|개혁|정립|주창|체계화|확산|보급|창안|집대성|기틀|초석|승리|평정|확장|창시자|개척자|아버지|대표|중요한|업적|연구|논문|작품|창작|발명|개진|동조|지지|해석|반대|논쟁|부활|수로도|관측|역임|소설가|작가|문학|소설|시인|화가|음악가|철학자|사상가|정치가|과학자|물리학자|수학자|교수|활동|집필|출판|발간|언론인|기자|활동을|작업|완성|(?!(?:여론|결론|방법론))(?:[가-힣]+론)|(?:[가-힣]+주의))/;
 
-// 🎯 노이즈/TMI 키워드 (감점이 아닌 '즉시 탈락' 처리)
+// 🎯 노이즈/TMI 키워드 (즉시 탈락)
 const HARD_NOISE_REGEX = /(의\s*(?:아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|자녀|후손|부모)|결혼하|슬하에|일화|여담|소문|전해진다|체육관|유적|오차가\s*생긴다|차이를\s*보이고|이설이\s*있다|태어나|유학을|출생하였다|여행을|구글|두들|기념하여|제작되었다|생일을)/;
 
 function filterOtherPerson(rawSentences, aliases = []) {
@@ -165,7 +166,7 @@ function getDocumentKeywords(text, topN = 12) {
 }
 
 // ==========================================================
-// 3. [개편] 업적 중심 뒷문장 선별 로직
+// 3. 메인 요약 생성 로직
 // ==========================================================
 
 export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 3) {
@@ -188,17 +189,12 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         let text = rawSentences[index].trim();
         const len = text.length;
 
-        // 기본 길이 및 완결성 검사
         if (len < 15 || len > 350) continue;
         if (isIncompleteSentence(text)) continue;
-
-        // 🚨 TMI 문장은 필터에서 즉시 탈락
         if (HARD_NOISE_REGEX.test(text)) continue;
-
-        // 🚨 [핵심] 업적 관련 키워드가 전혀 포함되지 않은 잡다한 문장은 무조건 탈락!
         if (!ACHIEVEMENT_REGEX.test(text)) continue;
 
-        let score = 50; // 업적 문장 기본 점수 대폭 증대
+        let score = 50;
 
         let keywordHits = 0;
         docKeywords.forEach(kw => {
@@ -217,11 +213,8 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 
     if (scoredCandidates.length === 0) return "";
 
-    // 점수가 높은 '업적 문장' 위주로 상위 count개 선별
     scoredCandidates.sort((a, b) => b.score - a.score);
     const selected = scoredCandidates.slice(0, count);
-    
-    // 원본 문맥 순서대로 재정렬
     selected.sort((a, b) => a.index - b.index);
 
     return selected
@@ -292,4 +285,4 @@ export function buildDescription(introText, bodyText, aliases = [], extraCount =
 
     const merged = normalizeSpace([introResultText, extra].filter(Boolean).join(" "));
     return cleanSlice(merged);
-}  
+}      
