@@ -1,14 +1,10 @@
 // summarizer.js
-// 위키 원문 정제(cleanWikiText) + 범용 요약(TextRank + 주제어 감지) 모듈
+// 위키 원문 정제(cleanWikiText) + 호/자 정제(stripMetainfo) + 서문 앵커(Anchor) 고정 요약 모듈
 
 // ==========================================================
 // 1. 위키 텍스트 전처리 정제 함수 (cleanWikiText)
 // ==========================================================
 
-/**
- * 위키 원문의 각주, HTML 태그, 링크 마크업, 재위 기간, 항목 번호 등을 정제
- * (단, 한자/외국어명 및 생몰년은 보존)
- */
 export function cleanWikiText(text) {
   if (!text) return "";
   let cleaned = text;
@@ -34,37 +30,14 @@ export function cleanWikiText(text) {
 }
 
 // ==========================================================
-// 2. 범용 핵심어 & 노이즈 사전
+// 2. 호/자/본관 메타 제거 함수 (stripMetainfo)
 // ==========================================================
 
-const CORE_SIGNIFICANCE_KEYWORDS = [
-  "원리", "구조", "기능", "작용", "현상", "이론", "연구", "발견", "규명", "증명", 
-  "분석", "기반", "시스템", "메커니즘", "특징", "성질", "분류", "상태", "상호작용",
-  "제도", "정책", "사회", "경제", "체계", "관계", "변화", "전개", "성장", "효과", 
-  "원인", "결과", "분포", "개혁", "조약", "협정", "시장", "구조적",
-  "양식", "사상", "문화", "작품", "기법", "전통", "유형", "형성", "창작", "유산",
-  "대표", "영향", "의의", "기여", "발전", "역사", "중심", "주요", "핵심", "주요한",
-  "지정", "설립", "주도", "구성", "기록", "도입", "확립", "공격", "격퇴", "정벌", "함락"
-];
-
-const UNIVERSAL_NOISE_KEYWORDS = [
-  "자세한 내용은", "참조하십시오", "출처 필요", "각주", "외부 링크", "참고 문헌",
-  "여담", "기타", "대중 문화", "서브컬처", "패러디", "밈", "스포일러", "오류",
-  "차이를 보이고", "별명", "소문", "야사", "미디어에서", "여담으로", "설이 있다"
-];
-
-const CORE_SIGNIFICANCE_REGEX = new RegExp(CORE_SIGNIFICANCE_KEYWORDS.join("|"));
-const UNIVERSAL_NOISE_REGEX = new RegExp(UNIVERSAL_NOISE_KEYWORDS.join("|"));
-
-// ==========================================================
-// 3. 메타 정보 정제 (자/호/본관 등 제거, 생몰년/외국어명 유지)
-// ==========================================================
-
-function stripMetaInfo(text) {
+export function stripMetainfo(text) {
   if (!text) return "";
   let result = text;
 
-  // 1) 괄호 안의 메타 정보 정리 (예: (郭再祐, 1552년~1617년, 호는 망우당) -> (郭再祐, 1552년~1617년))
+  // 1) 괄호 안 메타 정제 (한자/생몰년 유지, 호/자/본관 등만 선별 제거)
   result = result.replace(/\(([^)]*)\)/g, (match, inner) => {
     let cleanedInner = inner.replace(/(?:자는|호는|시호는|본관은|별호는|아호는|아명은|태명은|세례명은|일명은|당호는|법명은|자|호|시호|본관|별호|아호|아명|태명|세례명|일명|당호|법명)\s*[:=]?\s*[^,;)]+/g, "").trim();
     cleanedInner = cleanedInner.replace(/^[\s,;]+|[\s,;]+$/g, "").replace(/[\s,;]{2,}/g, ", ");
@@ -89,13 +62,38 @@ function stripMetaInfo(text) {
     .trim();
 }
 
-/** 접속어 정제 */
+// ==========================================================
+// 3. 범용 핵심어 & 노이즈 사전
+// ==========================================================
+
+const CORE_SIGNIFICANCE_KEYWORDS = [
+  "원리", "구조", "기능", "작용", "현상", "이론", "연구", "발견", "규명", "증명", 
+  "분석", "기반", "시스템", "메커니즘", "특징", "성질", "분류", "상태", "상호작용",
+  "제도", "정책", "사회", "경제", "체계", "관계", "변화", "전개", "성장", "효과", 
+  "원인", "결과", "분포", "개혁", "조약", "협정", "시장", "구조적",
+  "양식", "사상", "문화", "작품", "기법", "전통", "유형", "형성", "창작", "유산",
+  "대표", "영향", "의의", "기여", "발전", "역사", "중심", "주요", "핵심", "주요한",
+  "지정", "설립", "주도", "구성", "기록", "도입", "확립", "공격", "격퇴", "정벌", "함락"
+];
+
+const UNIVERSAL_NOISE_KEYWORDS = [
+  "자세한 내용은", "참조하십시오", "출처 필요", "각주", "외부 링크", "참고 문헌",
+  "여담", "기타", "대중 문화", "서브컬처", "패러디", "밈", "스포일러", "오류",
+  "차이를 보이고", "별명", "소문", "야사", "미디어에서", "여담으로", "설이 있다"
+];
+
+const CORE_SIGNIFICANCE_REGEX = new RegExp(CORE_SIGNIFICANCE_KEYWORDS.join("|"));
+const UNIVERSAL_NOISE_REGEX = new RegExp(UNIVERSAL_NOISE_KEYWORDS.join("|"));
+
+// ==========================================================
+// 4. 헬퍼 함수
+// ==========================================================
+
 const REGEX_LEADING_CONNECTORS = /^(그러나|하지만|그런데|한편|따라서|게다가|반면|이에|이후|결국|그\s*후|또한|그리고),?\s*/;
 function cleanLeadingConnectors(sentence) {
   return sentence ? sentence.replace(REGEX_LEADING_CONNECTORS, "").trim() : "";
 }
 
-/** 문장 분리 */
 function splitSentences(text) {
   if (!text) return [];
   const cleaned = text.replace(/\s+/g, " ").trim();
@@ -105,7 +103,6 @@ function splitSentences(text) {
     .filter((s) => s.length > 8);
 }
 
-/** 토큰화 */
 function tokenize(sentence) {
   return sentence
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
@@ -115,7 +112,7 @@ function tokenize(sentence) {
 }
 
 // ==========================================================
-// 4. 주제어 분석 및 TextRank 알고리즘
+// 5. 주제어 분석 및 TextRank 알고리즘
 // ==========================================================
 
 function getTopDocumentKeywords(sentences, topK = 10) {
@@ -191,20 +188,27 @@ function pageRank(matrix, damping = 0.85, iterations = 40, tolerance = 1e-5) {
 }
 
 // ==========================================================
-// 5. 완벽 문장 조립 (문장 잘림 방지)
+// 6. 완벽 문장 조립 (서문 앵커 우선 배치 + TextRank 보완)
 // ==========================================================
 
-function assembleCompleteSentences(firstSentence, rankedCandidates, maxLength = 630) {
+function assembleCompleteSentences(anchorSentences, rankedCandidates, maxLength = 630) {
   let summaryParts = [];
   let currentLength = 0;
 
-  if (firstSentence) {
-    let cleanFirst = firstSentence.trim();
-    if (!/[.!?]$/.test(cleanFirst)) cleanFirst += ".";
-    summaryParts.push(cleanFirst);
-    currentLength += cleanFirst.length;
+  // 1) 서문 앵커 문장 우선 배치 (글자 수 한도 내)
+  for (const anchor of anchorSentences) {
+    let cleanAnchor = anchor.trim();
+    if (!cleanAnchor) continue;
+    if (!/[.!?]$/.test(cleanAnchor)) cleanAnchor += ".";
+
+    const expectedLength = currentLength + (summaryParts.length > 0 ? 1 : 0) + cleanAnchor.length;
+    if (expectedLength <= maxLength) {
+      summaryParts.push(cleanAnchor);
+      currentLength = expectedLength;
+    }
   }
 
+  // 2) 남은 후보 문장들 추가 (TextRank 점수순)
   for (const item of rankedCandidates) {
     let candidate = cleanLeadingConnectors(item.sentence).trim();
     if (!candidate) continue;
@@ -224,7 +228,7 @@ function assembleCompleteSentences(firstSentence, rankedCandidates, maxLength = 
 }
 
 // ==========================================================
-// 6. 메인 요약 함수: buildDescription
+// 7. 메인 요약 함수: buildDescription
 // ==========================================================
 
 export function buildDescription(
@@ -232,45 +236,43 @@ export function buildDescription(
   bodyText = "",
   aliases = [],
   extraCount = 3,
-  introThreshold = 150,
+  anchorCount = 2, // 서문 앵커 고정 문장 개수 (기본 2개, 2~3개 자유 설정 가능)
   maxLength = 630
 ) {
-  // 1. 위키 텍스트 노이즈 정제 (cleanWikiText) -> 메타 정제 (stripMetaInfo)
+  // 1) cleanWikiText -> stripMetainfo 파이프라인
   const rawCleanIntro = cleanWikiText(introText);
   const rawCleanBody = cleanWikiText(bodyText);
 
-  const cleanIntro = stripMetaInfo(rawCleanIntro);
-  const cleanBody = stripMetaInfo(rawCleanBody);
+  const cleanIntro = stripMetainfo(rawCleanIntro);
+  const cleanBody = stripMetainfo(rawCleanBody);
 
   const introSentences = splitSentences(cleanIntro);
   const bodySentences = splitSentences(cleanBody);
 
   if (introSentences.length === 0 && bodySentences.length === 0) return "";
 
-  // 2. 정의문(첫 문장) 추출
-  let firstSentence = "";
+  // 2) 앵커 문장(서문 첫 2~3문장) 및 후보 분석 문장 분리
+  let anchorSentences = [];
   let candidateSentences = [];
 
   if (introSentences.length > 0) {
-    firstSentence = introSentences[0];
-    candidateSentences = [...introSentences.slice(1), ...bodySentences];
+    anchorSentences = introSentences.slice(0, anchorCount);
+    candidateSentences = [...introSentences.slice(anchorCount), ...bodySentences];
   } else {
-    firstSentence = bodySentences[0];
-    candidateSentences = bodySentences.slice(1);
+    anchorSentences = bodySentences.slice(0, anchorCount);
+    candidateSentences = bodySentences.slice(anchorCount);
   }
 
   if (candidateSentences.length === 0) {
-    return firstSentence.length <= maxLength 
-      ? (firstSentence.endsWith(".") ? firstSentence : firstSentence + ".")
-      : firstSentence.slice(0, maxLength);
+    return assembleCompleteSentences(anchorSentences, [], maxLength);
   }
 
-  // 3. 주제어 추출 및 TextRank 계산
-  const topKeywords = getTopDocumentKeywords([firstSentence, ...candidateSentences], 10);
+  // 3) 주제어 추출 및 TextRank 계산 (앵커 + 후보 전체 문맥 반영)
+  const topKeywords = getTopDocumentKeywords([...anchorSentences, ...candidateSentences], 10);
   const matrix = buildSimilarityMatrix(candidateSentences);
   const baseScores = pageRank(matrix);
 
-  // 4. 가중치 적용
+  // 4) 가중치 계산
   const finalCandidates = candidateSentences.map((sentence, index) => {
     let score = baseScores[index] || 0.1;
 
@@ -295,21 +297,20 @@ export function buildDescription(
     return { sentence, score, index };
   });
 
-  // 5. 상위 문장 추출 및 원문 순 정렬
+  // 5) 상위 후보 문장 추출 및 원문 순 정렬
   const ranked = finalCandidates
     .sort((a, b) => b.score - a.score)
     .slice(0, extraCount + 2)
     .sort((a, b) => a.index - b.index);
 
-  // 6. 완벽한 문장 단위 조립
-  return assembleCompleteSentences(firstSentence, ranked, maxLength);
+  // 6) 완벽한 문장 조립 (앵커 고정 + TextRank 보완)
+  return assembleCompleteSentences(anchorSentences, ranked, maxLength);
 }
 
 export function summarizeText(text, topN = 3) {
   return {
-    summary: buildDescription(text, "", [], topN - 1),
+    summary: buildDescription(text, "", [], topN - 1, 2),
     sentenceCount: splitSentences(text).length,
     usedSentences: topN,
   };
 }
-
