@@ -31,80 +31,47 @@ export function cleanWikiText(text) {
 
 
 // ==========================================================
-// 2. 메타 정보, 족보 TMI, 잡다한 서술절 통합 정제 함수 (위치 2)
-// ==========================================================
-
-// ==========================================================
-// 2. 메타 정보, 족보 TMI, 잡다한 서술절 통합 정제 함수
+// 2. 메타 정보 및 메타 라벨 안전 정제 함수 (stripMetainfo)
 // ==========================================================
 
 export function stripMetainfo(text) {
   if (!text) return "";
   let result = text;
 
-  // 1) 괄호 안 족보 TMI 도려내기
-  result = result.replace(/\([^)]*(?:부친|모친|조부|증조부|고조부|외가|손자|처남|장인|남씨|윤씨|씨)[^)]*\)/g, "");
-
-  // 2) 출생절 및 파손 조각 완전 제거
-  result = result.replace(
-    /(?:(?:의\s*)?(?:첫|둘째|셋째|넷째|다섯째|막내)?\s*(?:번째|째)?\s*(?:아들|딸|남|녀|장남|차남|삼남|사남|오남|장녀|차녀|삼녀|사녀|외아들|외딸)?(?:로|으로)?\s*태어났(?:다|으며|고)|(?:의\s*로\s*태어났(?:다|으며|고)))/g,
-    ""
-  );
-
-  // 3) 족보/보계/시조/세손/후손 문장절 도려내기
-  result = result.replace(/[^,.!?\n]{1,50}?(?:\d+세손|\d+대손|시조|후손)(?:이다|이며|이고|이었다|였다)[,;\s]*/g, "");
-
-  // 4) 혼인/처가/시댁 거주 관련 절 도려내기
-  result = result.replace(
-    /(?:(?:[가-힣]+(?:와|과)\s*)?(?:결혼|혼인|성혼|재혼|이혼|파혼)(?:했|하였|되었|됐|하|하고|이후|이후엔)?(?:다|으며|고|자|음|나|엔)?[,;\s]*)/g,
-    ""
-  );
-  result = result.replace(/(?:(?:처가|시댁)(?:인|에서|의)?\s*[^,.!?\n]{1,30}?(?:지냈다|살았다|거주했다)[,;\s]*)/g, "");
-
-  // 5) 자녀 명명/형제 이름 나열 절 도려내기
-  result = result.replace(/[^,.!?\n]{1,50}?(?:아들|딸|자녀)(?:에게|들의|의)\s*[^,.!?\n]{1,50}?(?:이름|이름자)[^,.!?\n]{1,30}?(?:지었다|붙였다)[,;\s]*/g, "");
-
-  // 6) 메타 라벨(본관, 호, 자 등) 도려내기 (생몰년 날짜 괄호 보호)
-  const metaLabelPattern = "(?:(?:본관|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|호|자|묘)(?:는|은|\\s*[:=]))";
-
-  const innerMetaRegex = new RegExp(`${metaLabelPattern}\\s*[^,;)]+(?:\\([^)]*\\))?`, "g");
-  result = result.replace(/\(([^()]+(?:\([^()]*\)[^()]*)*)\)/g, (match, inner) => {
-    if (/(?:\d{3,4}년|~)/.test(inner)) return match;
-    let cleanedInner = inner.replace(innerMetaRegex, "").trim();
-    cleanedInner = cleanedInner.replace(/^[\s,;]+|[\s,;]+$/g, "").replace(/[\s,;]{2,}/g, ", ");
-    return cleanedInner ? `(${cleanedInner})` : "";
+  // 1) 괄호 안 메타 정보 정제 (생몰년/연도는 보존)
+  result = result.replace(/\(([^()]+)\)/g, (match, inner) => {
+    if (/(?:\d{3,4}년|~)/.test(inner)) return match; // 생몰년 보존
+    if (/(?:본관|시호|아호|별호|아명|법명|묘호|호|자|부친|모친|조부|문화어|폴란드어|프랑스어|기타|출처)/.test(inner)) return "";
+    return match;
   });
 
-  const standaloneMetaRegex = new RegExp(
-    `(?:(?<=[,.\\s]|^))${metaLabelPattern}\\s*[^,;.\\n()]*\\s*(?:\\([^()]*\\)[^,;.\\n()]*)*\\s*(?:이다|였다|이었다|이며|이고|이자|으로|임)?(?:,\\s*|\\.\\s*|\\s+|$)`,
-    "g"
-  );
-  result = result.replace(standaloneMetaRegex, "");
+  // 2) 위키 메타 라벨 단독 문구 제거 (예: "본관은 덕수이다.")
+  result = result.replace(/(?:본관|시호|아호|별호|아명|법명|묘호)\s*[:=는은]\s*[^,;.\n]+/g, "");
 
-  // 7) 구두점 및 다중 공백 정리 (체이닝 중간 세미콜론 주의)
+  // 3) 문두 인용/출처 수식절 정제 (예: "~전기에 따르면,", "~에 의하면,")
+  result = result.replace(/^(?:[^,.!?\n]+?(?:에\s*따르면|에\s*의하면|전기에\s*따르면)[,;\s]*)/gm, "");
+
+  // 4) 다중 공백 및 잔여 구두점 정리
   result = result
+    .replace(/\(\s*\)/g, "")
     .replace(/,\s*,/g, ",")
     .replace(/^\s*,\s*/, "")
-    .replace(/\s*,\s*$/, "")
-    .replace(/\(\s*\)/g, "")
-    .replace(/\.{2,}/g, ".")
-    .replace(/\s+\./g, ".")
     .replace(/\s+/g, " ")
     .trim();
 
-  // 8) 서술어가 잘린 불완전한 문장(유령 문장) 폐기
+  // 5) 서술어 잘림 및 불완전 문장 1차 검증
   const words = result.match(/[가-힣a-zA-Z0-9]{2,}/g) || [];
   if (words.length <= 2) return "";
-
-  if (/(?:[인과의는은를을에서로으로임함]\s*\.?$|[A-Z]\.\s*$)/i.test(result)) {
+  if (/(?:[인과의는은를을에서로으로임함중]\s*\.?$|[A-Z]\.\s*$)/i.test(result)) {
     return "";
   }
 
   return result;
 }
 
+
 // ==========================================================
-// 3. 범용 핵심어 & 노이즈 사전
+// 3. 범용 핵심어 & 노이즈 사전 (단어 기반 관리)
 // ==========================================================
 
 const CORE_SIGNIFICANCE_KEYWORDS = [
@@ -120,23 +87,26 @@ const CORE_SIGNIFICANCE_KEYWORDS = [
 const UNIVERSAL_NOISE_KEYWORDS = [
   "자세한 내용은", "참조하십시오", "출처 필요", "각주", "외부 링크", "참고 문헌",
   "여담", "기타", "대중 문화", "서브컬처", "패러디", "밈", "스포일러", "오류",
-  "차이를 보이고", "별명", "소문", "야사", "미디어에서", "여담으로", "설이 있다"
+  "차이를 보이고", "별명", "소문", "야사", "미디어에서", "여담으로", "설이 있다", "추측"
 ];
 
-const CORE_SIGNIFICANCE_REGEX = new RegExp(CORE_SIGNIFICANCE_KEYWORDS.join("|"));
-const UNIVERSAL_NOISE_REGEX = new RegExp(UNIVERSAL_NOISE_KEYWORDS.join("|"));
-// 업적 관련 핵심 어간/동사 패턴 (컴파일 타임 정규식 리터럴)
-const ACHIEVEMENT_VERB_REGEX = /(저술|집필|설계|고안|집대성|제시|편찬|주창|발명|창안|개혁|건축|축조|간행|통찰|창작|창시|정리|도입|확립|반영|기여|주도|설립|격퇴|정벌|연구|지휘|승리|격파|격침|건조|수호|통제|구원|평정|혁신|창설)/;
+const ACADEMIC_CONCEPT_REGEX = /[가-힣]{2,}(?:설|론|주의)\b/;
+
+// 분야별 업적 동사 가산 정규식
+const ACHIEVEMENT_VERB_REGEX = /(?:저술|집필|설계|고안|집대성|제시|편찬|주창|발명|창안|개혁|건축|축조|간행|통찰|창작|창시|정리|도입|확립|반영|기여|주도|설립|격퇴|정벌|연구|지휘|승리|격파|격침|건조|수호|통제|구원|평정|혁신|창설|발견|노벨상)/;
 
 // 수동적 배경/지형 서술 패턴 (감점 대상)
-const PASSIVE_BG_REGEX = /((?:지점|시대|무렵|해|곳)이다|위치해\s*있다|일이\s*벌어졌다|상황이었다|태어났다)/;
-// 요약문 추출 시 감점 판단용 (결혼, 이혼, 배우자 추가)
-const FAMILY_NOISE_REGEX = /(부친|모친|조부|증조부|고조부|외가|오대손녀|첫\s*부인|둘째\s*부인|가계도|손자|처남|장인|결혼|이혼|혼인|재혼|파혼|배우자|남편|아내|며느리|사위)/;
+const PASSIVE_BG_REGEX = /(?:(?:지점|시대|무렵|해|곳)이다|위치해\s*있다|일이\s*벌어졌다|상황이었다|태어났다)/;
+
+// TMI 노이즈 패턴 (가족, 출생 순서, 혼인, 위인전 일화 소스 통합 감점)
+const TMI_NOISE_REGEX = /(?:부친|모친|조부|증조부|고조부|외가|오대손녀|첫\s*부인|둘째\s*부인|가계도|손자|처남|장인|결혼|이혼|혼인|재혼|파혼|배우자|남편|아내|며느리|사위|처가|시댁|장남|차남|장녀|차녀|외아들|외딸|\d남|\d녀|가정교사|야학|위인전|그림위인전기|계몽사|출판사|소설가|에\s*따르면|에\s*의하면)/;
+
+
 // ==========================================================
 // 4. 헬퍼 함수
 // ==========================================================
 
-const REGEX_LEADING_CONNECTORS = /^(그러나|하지만|그런데|한편|따라서|게다가|반면|이에|이후|결국|그\s*후|또한|그리고),?\s*/;
+const REGEX_LEADING_CONNECTORS = /^(?:그러나|하지만|그런데|한편|따라서|게다가|반면|이에|이후|결국|그\s*후|또한|그리고),?\s*/;
 function cleanLeadingConnectors(sentence) {
   return sentence ? sentence.replace(REGEX_LEADING_CONNECTORS, "").trim() : "";
 }
@@ -157,6 +127,7 @@ function tokenize(sentence) {
     .split(/\s+/)
     .filter((w) => w.length > 1);
 }
+
 
 // ==========================================================
 // 5. 주제어 분석 및 TextRank 알고리즘
@@ -234,6 +205,7 @@ function pageRank(matrix, damping = 0.85, iterations = 40, tolerance = 1e-5) {
   return scores;
 }
 
+
 // ==========================================================
 // 6. 완벽 문장 조립 (서문 앵커 우선 배치 + TextRank 보완)
 // ==========================================================
@@ -274,6 +246,7 @@ function assembleCompleteSentences(anchorSentences, rankedCandidates, maxLength 
   return summaryParts.join(" ");
 }
 
+
 // ==========================================================
 // 7. 메인 요약 함수: buildDescription
 // ==========================================================
@@ -283,7 +256,7 @@ export function buildDescription(
   bodyText = "",
   aliases = [],
   extraCount = 3,
-  anchorCount = 3, // 서문 앵커 고정 문장 개수 (기본 2개, 2~3개 자유 설정 가능)
+  anchorCount = 3, // 서문 앵커 고정 문장 개수 (기본 2개)
   maxLength = 630
 ) {
   // 1) cleanWikiText -> stripMetainfo 파이프라인
@@ -298,7 +271,7 @@ export function buildDescription(
 
   if (introSentences.length === 0 && bodySentences.length === 0) return "";
 
-  // 2) 앵커 문장(서문 첫 2~3문장) 및 후보 분석 문장 분리
+  // 2) 앵커 문장(서문 첫 2문장) 및 후보 분석 문장 분리
   let anchorSentences = [];
   let candidateSentences = [];
 
@@ -314,23 +287,28 @@ export function buildDescription(
     return assembleCompleteSentences(anchorSentences, [], maxLength);
   }
 
-  // 3) 주제어 추출 및 TextRank 계산 (점수 정규화 추가)
+  // 3) 주제어 추출 및 TextRank 계산
   const topKeywords = getTopDocumentKeywords([...anchorSentences, ...candidateSentences], 10);
   const matrix = buildSimilarityMatrix(candidateSentences);
   const baseScores = pageRank(matrix);
 
-  // [개선] TextRank 점수 정규화 (0.0 ~ 1.0 스케일 맞춤)
+  // TextRank 점수 정규화 (0.0 ~ 1.0 스케일)
   const maxBaseScore = Math.max(...baseScores, 0.001);
 
-  // 4) 가중치 계산 (극단적 배수 완화 + 소프트 스케일링)
+  // 4) 가중치 계산 (절충형 감점 및 완결성 검증)
   const finalCandidates = candidateSentences.map((sentence, index) => {
-    let score = baseScores[index] / maxBaseScore; // 정규화된 기본 점수
+    let score = baseScores[index] / maxBaseScore;
 
-    // 위치 가중치: 상단 문장 완만하게 우대
+    // 문장 완결성 검사: 조사나 수식어로 불완전하게 끝난 문장은 즉시 버림
+    if (/(?:[인과의는은를을에서로으로임함중]\s*\.?$|[A-Z]\.\s*$)/i.test(sentence.trim())) {
+      return { sentence, score: 0, index };
+    }
+
+    // 위치 가중치 (상단 문장 완만하게 우대)
     const positionFactor = 1.0 / (1 + index * 0.06);
     score *= positionFactor;
 
-    // 키워드 매칭 (최대 +45% 상한선 설정으로 점수 튀기 방지)
+    // 키워드 매칭 (+15% ~ +45%)
     const tokens = tokenize(sentence);
     let matchCount = 0;
     for (const token of tokens) {
@@ -338,21 +316,35 @@ export function buildDescription(
     }
     score *= (1 + Math.min(matchCount, 3) * 0.15);
 
-    // [개선] 업적 동사 우대 (2.5배 -> 1.5배로 완화하여 문맥 파괴 방지)
+    // 업적 동사 우대 (1.8배)
     if (ACHIEVEMENT_VERB_REGEX.test(sentence)) {
-      score *= 1.5;
+      score *= 1.8;
     }
 
-    // [개선] 수동적 배경 및 노이즈 감점 (완화된 페널티)
+    const keywordCount = CORE_SIGNIFICANCE_KEYWORDS.filter(word => sentence.includes(word)).length;
+    score += keywordCount * 0.2;
+
+    if (ACADEMIC_CONCEPT_REGEX.test(sentence)) {
+  score += 0.3;
+    }
+
+    // 수동적 배경 서술 감점 (0.4배)
     if (PASSIVE_BG_REGEX.test(sentence)) {
       score *= 0.4;
     }
-    if (FAMILY_NOISE_REGEX.test(sentence)) {
-      score *= 0.1;
+
+    // TMI 노이즈 강력 페널티 (0.05배 -> 사실상 요약문 추출에서 제외)
+    if (TMI_NOISE_REGEX.test(sentence)) {
+      score *= 0.05;
     }
 
-    // [개선] 문맥 단절 유발 접속사 시작 문장 페널티 ("또한", "이후", "한편" 등 독립 추출 시 부자연스러움 방지)
+    // 독립 추출 시 부자연스러운 접속사 시작 문장 감점 (0.7배)
     if (/^(?:또한|이후|한편|그뒤|그후|그리고|그러나|하지만)\s*/.test(sentence)) {
+      score *= 0.7;
+    }
+
+    // 너무 길거나(130자 이상) 너무 짧으면(15자 미만) 가독성을 위해 소폭 감점 (0.7배)
+    if (sentence.length > 130 || sentence.length < 15) {
       score *= 0.7;
     }
 
@@ -361,11 +353,12 @@ export function buildDescription(
 
   // 5) 상위 후보 추출 및 문맥 정렬
   const ranked = finalCandidates
+    .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, extraCount)
     .sort((a, b) => a.index - b.index);
 
-  // 6) 완벽한 문장 조립 (앵커 고정 + TextRank 보완)
+  // 6) 완벽한 문장 조립
   return assembleCompleteSentences(anchorSentences, ranked, maxLength);
 }
 
