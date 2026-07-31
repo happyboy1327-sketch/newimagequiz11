@@ -96,7 +96,7 @@ export function cleanWikiText(text) {
     }
 
     // 2단계: 끝까지 안 닫히고 남은 외기러기 '(' 또는 ')' 적출
-    cleaned = removeUnmatchedParentheses(cleaned);
+    cleaned = removeUnpairedParentheses(cleaned);
 
     return cleaned
         .replace(/\s+/g, " ")
