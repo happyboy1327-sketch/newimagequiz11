@@ -40,6 +40,7 @@ export function cleanWikiText(text) {
     if (!text) return "";
     return removeUnpairedParentheses(
         text
+            .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1")
             .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
             .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "")
             .replace(/\(\s*\)/g, "")
@@ -113,7 +114,7 @@ function splitSentences(text) {
 export function getWikiConceptTerms(text, topN = 15) {
     if (!text) return [];
     const noise = /(\d+(년|월|일|세기)|조선|한국|서울|미국|일본|어머니|아들|딸|씨|황제|선생|대왕|《|『)/;
-    const concept = /(학|론|설|법칙|원리|현상|효과|반응|구조|체계|역학|에너지|성|화|력|주의|제도|혁명|사상|철학|법|이론)$/;
+    const concept = /(학|론|설|법칙|원리|현상|효과|반응|구조|체계|역학|에너지|성|화|력|주의|제도|혁명|사상|철학|법|이론|방사선|광선|자외선|적외선|능|소|체|도|률|량|계|점|원|물|상|형)$/;
     const map = new Map();
     for (const [, term] of text.matchAll(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g)) {
         const clean = term.trim();
@@ -235,6 +236,8 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
 }
 
 export function buildDescription(introText, bodyText, aliases = [], extraCount = 2, introThreshold = 150, maxLength = 630) { 
+   const wikiTerms = getWikiConceptTerms(cleanedBody + " " + introText);
+    const WIKI_TERM_REGEX = wikiTerms.length ? new RegExp(wikiTerms.join("|")) : null;
     let introClean = removeMetaBySearch(cleanWikiText(introText));
     let bodyClean = removeMetaBySearch(cleanWikiText(bodyText));
 
@@ -292,7 +295,7 @@ export function buildDescription(introText, bodyText, aliases = [], extraCount =
 
     let extra = "";
     if (targetBody && targetBody.length > 10) {
-        extra = extractImportantSentences(targetBody, introResultText, aliases, extraCount);
+        extra = extractImportantSentences(targetBody, introResultText, WIKI_TERM_REGEX, aliases, extraCount);
     }
 
     const merged = normalizeSpace([introResultText, extra].filter(Boolean).join(" "));
