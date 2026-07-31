@@ -101,6 +101,34 @@ const PASSIVE_BG_REGEX = /(?:(?:지점|시대|무렵|해|곳)이다|위치해\s*
 // TMI 노이즈 패턴 (가족, 출생 순서, 혼인, 위인전 일화 소스 통합 감점)
 const TMI_NOISE_REGEX = /(?:부친|모친|조부|증조부|고조부|외가|오대손녀|첫\s*부인|둘째\s*부인|가계도|손자|처남|장인|결혼|이혼|혼인|재혼|파혼|배우자|남편|아내|며느리|사위|처가|시댁|장남|차남|장녀|차녀|외아들|외딸|\d남|\d녀|가정교사|야학|위인전|그림위인전기|계몽사|출판사|소설가|에\s*따르면|에\s*의하면)/;
 
+// ==========================================================
+// Cultural Heritage Context Patch
+// ==========================================================
+
+// 문화재/지정 관련 문장 정규식
+const HERITAGE_DESIGNATION_REGEX = /(?:보물|국보|사적|천연기념물|유형문화재|책|저서|작품)\s*(?:제?\d+호)?(?:로|에)\s*(?:지정|등록)/;
+
+/**
+ * 문장에 명확한 주어가 빠져있는지 확인 (단락/소제목 보완 필요 여부)
+ */
+function isSubjectMissing(sentence) {
+  // 문장 시작부에 명사+조사(이/가/은/는) 형태의 주어가 존재하는지 검사
+  const hasSubjectPattern = /^[가-힣A-Za-z0-9\s]{1,15}(?:은|는|이|가)\b/;
+  return !hasSubjectPattern.test(sentence.trim());
+}
+
+/**
+ * 요약문 추출 후 주어가 빠진 문화재 문장에 소제목/맥락 주어를 보강해주는 함수
+ */
+export function restoreMissingSubject(sentence, currentSectionTitle = "") {
+  if (HERITAGE_DESIGNATION_REGEX.test(sentence) && isSubjectMissing(sentence)) {
+    // 소제목(예: "앙부일구")이 존재하는 경우 문두에 맥락 주어 추가
+    if (currentSectionTitle && currentSectionTitle !== "개요" && currentSectionTitle !== "역사") {
+      return `${currentSectionTitle}는 ${sentence}`;
+    }
+  }
+  return sentence;
+}
 
 // ==========================================================
 // 4. 헬퍼 함수
@@ -340,6 +368,20 @@ export function buildDescription(
 
     if (UNIVERSAL_NOISE_KEYWORDS.some(keyword => sentence.includes(keyword))) {
   score *= 0.05;
+}
+
+
+if (HERITAGE_DESIGNATION_REGEX.test(sentence)) {
+  const hasLocalSubject = /^[가-힣A-Za-z0-9\s]{1,15}(?:은|는|이|가)\b/.test(sentence);
+  
+  // 문장 자체에 주어가 없더라도 소제목 맥락(sectionTitle)이 있으면 감점하지 않음
+  if (!hasLocalSubject && !sectionTitle) {
+    // 소제목 정보조차 아예 없는 완전한 불명 문장일 때만 소폭 감점
+    score *= 0.6; 
+  } else {
+    // 소제목 맥락이 있거나 주어가 명시된 경우 정상/우대 점수 부여
+    score *= 1.2; 
+  }
 }
 
     // 독립 추출 시 부자연스러운 접속사 시작 문장 감점 (0.7배)
