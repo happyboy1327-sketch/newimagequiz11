@@ -292,8 +292,6 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ex
 
     if (rawTotal.length < 80) return "";
 
-    const substantiveText = cleanWikiText(rawTotal).replace(/(태어났다|사망하였다|출생|사망)/g, "").trim();
-    if (substantiveText.length < 30) return "";
     
     // 🎯 1. 특수문자가 포함되어도 안 죽도록 이스케이프 적용
     const wikiTerms = getWikiConceptTerms((introText || "") + " " + (bodyText || ""));
