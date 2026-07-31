@@ -236,7 +236,7 @@ export function buildDescription(
   bodyText = "",
   aliases = [],
   extraCount = 3,
-  anchorCount = 2, // 서문 앵커 고정 문장 개수 (기본 2개, 2~3개 자유 설정 가능)
+  anchorCount = 3, // 서문 앵커 고정 문장 개수 (기본 2개, 2~3개 자유 설정 가능)
   maxLength = 630
 ) {
   // 1) cleanWikiText -> stripMetainfo 파이프라인
