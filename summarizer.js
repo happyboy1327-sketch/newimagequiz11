@@ -302,49 +302,55 @@ export function buildDescription(
     return assembleCompleteSentences(anchorSentences, [], maxLength);
   }
 
-  // 3) 주제어 추출 및 TextRank 계산 (앵커 + 후보 전체 문맥 반영)
+  // 3) 주제어 추출 및 TextRank 계산 (점수 정규화 추가)
   const topKeywords = getTopDocumentKeywords([...anchorSentences, ...candidateSentences], 10);
   const matrix = buildSimilarityMatrix(candidateSentences);
   const baseScores = pageRank(matrix);
 
-  // 4) 가중치 계산
-  const finalCandidates = candidateSentences.map((sentence, index) => {
-    let score = baseScores[index] || 0.1;
+  // [개선] TextRank 점수 정규화 (0.0 ~ 1.0 스케일 맞춤)
+  const maxBaseScore = Math.max(...baseScores, 0.001);
 
-    // 위치 가중치
-    const positionFactor = 1.0 / (1 + index * 0.05);
+  // 4) 가중치 계산 (극단적 배수 완화 + 소프트 스케일링)
+  const finalCandidates = candidateSentences.map((sentence, index) => {
+    let score = baseScores[index] / maxBaseScore; // 정규화된 기본 점수
+
+    // 위치 가중치: 상단 문장 완만하게 우대
+    const positionFactor = 1.0 / (1 + index * 0.06);
     score *= positionFactor;
 
-    // 키워드 매칭
+    // 키워드 매칭 (최대 +45% 상한선 설정으로 점수 튀기 방지)
     const tokens = tokenize(sentence);
     let matchCount = 0;
     for (const token of tokens) {
       if (topKeywords.includes(token)) matchCount++;
     }
-    score *= (1 + matchCount * 0.2);
+    score *= (1 + Math.min(matchCount, 3) * 0.15);
 
-    // [수정] 업적 동사 보유 문장 강력 가중치 부여 (2.5배)
+    // [개선] 업적 동사 우대 (2.5배 -> 1.5배로 완화하여 문맥 파괴 방지)
     if (ACHIEVEMENT_VERB_REGEX.test(sentence)) {
-      score *= 2.5;
+      score *= 1.5;
     }
 
-    // [수정] 수동적 배경 서술어 감점 (0.3배)
+    // [개선] 수동적 배경 및 노이즈 감점 (완화된 페널티)
     if (PASSIVE_BG_REGEX.test(sentence)) {
-      score *= 0.3;
+      score *= 0.4;
     }
-
-    // [수정] 가족사 TMI 감점 (0.1배)
     if (FAMILY_NOISE_REGEX.test(sentence)) {
       score *= 0.1;
+    }
+
+    // [개선] 문맥 단절 유발 접속사 시작 문장 페널티 ("또한", "이후", "한편" 등 독립 추출 시 부자연스러움 방지)
+    if (/^(?:또한|이후|한편|그뒤|그후|그리고|그러나|하지만)\s*/.test(sentence)) {
+      score *= 0.7;
     }
 
     return { sentence, score, index };
   });
 
-  // 5) 상위 후보 문장 추출 및 원문 순 정렬
+  // 5) 상위 후보 추출 및 문맥 정렬
   const ranked = finalCandidates
     .sort((a, b) => b.score - a.score)
-    .slice(0, extraCount + 2)
+    .slice(0, extraCount)
     .sort((a, b) => a.index - b.index);
 
   // 6) 완벽한 문장 조립 (앵커 고정 + TextRank 보완)
