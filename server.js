@@ -493,7 +493,7 @@ async function fillCache() {
                     }
                 }
                 console.log("현재 캐시:", QUIZ_CACHE.length);
-                await new Promise(resolve => setTimeout(resolve, 780));
+                await new Promise(resolve => setTimeout(resolve, 660));
             }
         } catch (e) {
             if (e.response?.status === 429) {
