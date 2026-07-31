@@ -51,30 +51,58 @@ const HARD_NOISE_REGEX = new RegExp([
 // ==========================================================
 // 3. 헬퍼 함수
 // ==========================================================
+
+
+// 🎯 1. 짝이 안 맞는 ( 또는 ) 기호만 골라내어 완벽 제거하는 스택 함수
 function removeUnpairedParentheses(str) {
     if (!str) return "";
     const stack = [];
-    const toRemove = new Set();
+    const removeIndices = new Set();
+
     for (let i = 0; i < str.length; i++) {
-        if (str[i] === '(') stack.push(i);
-        else if (str[i] === ')') stack.length ? stack.pop() : toRemove.add(i);
+        if (str[i] === '(') {
+            stack.push(i);
+        } else if (str[i] === ')') {
+            if (stack.length > 0) {
+                stack.pop(); // 짝이 맞음
+            } else {
+                removeIndices.add(i); // 짝 없는 ')'
+            }
+        }
     }
-    stack.forEach(i => toRemove.add(i));
-    return str.split('').filter((_, i) => !toRemove.has(i)).join('');
+
+    // 닫히지 않고 끝난 짝 없는 '(' 전부 적출
+    while (stack.length > 0) {
+        removeIndices.add(stack.pop());
+    }
+
+    return str.split('').filter((_, i) => !removeIndices.has(i)).join('');
 }
 
+// 🎯 2. 위키 본문 텍스트 정제 (완전체 괄호 제거 + 짝사랑 괄호 적출)
 export function cleanWikiText(text) {
     if (!text) return "";
-    return removeUnpairedParentheses(
-        text
-            .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1") // [[링크|단어]] -> 단어로 변환
-            .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
-            .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "")
-            .replace(/\(\s*\)/g, "")
-    )
-    .replace(/\s+/g, " ")
-    .replace(/\s+\./g, ".")
-    .trim();
+
+    let cleaned = text
+        .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1") // [[링크|단어]] -> 단어
+        .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
+        .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "");
+
+    // 1단계: 짝이 정상적으로 닫힌 괄호 내용 완전 제거 (재귀적 처리)
+    let prev = "";
+    while (prev !== cleaned) {
+        prev = cleaned;
+        cleaned = cleaned.replace(/\([^()]*\)/g, "");
+    }
+
+    // 2단계: 끝까지 안 닫히고 남은 외기러기 '(' 또는 ')' 적출
+    cleaned = removeUnmatchedParentheses(cleaned);
+
+    return cleaned
+        .replace(/\s+/g, " ")
+        .replace(/\s+\./g, ".")
+        .replace(/\(\s*\)/g, "")
+        .trim();
 }
 
 function normalizeSpace(text = "") {
