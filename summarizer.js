@@ -123,7 +123,7 @@ function removeMetaBySearch(text) {
     const hoMetaRegex = /(?<![가-힣])호는\s+[^。.]{1,200}?(?:이다|였다|이었|이며|이고|\.|$)/g;
     result = result.replace(hoMetaRegex, "");
 
-    const keywords = "시호|본관|자|별호|아호|아명|태명|세례명|일명|당호|법명";
+    const keywords = "시호|본관|별호|아호|아명|태명|세례명|일명|당호|법명";
     const singleMeta = `(?:${keywords})(?:은|는|\\([^)]*\\))?\\s*[^,\\(\\)\\.]+(?:\\([^)]*\\))?`;
     
     // 안전한 선형 정규식으로 수정 (무한 멈춤 방지)
@@ -131,7 +131,7 @@ function removeMetaBySearch(text) {
     result = result.replace(metaChainRegex, "");
 
     return result
-        .replace(/\(\s*(?:본관|시호|자|아명|일명)[^;)]*;\s*/g, "(")
+        .replace(/\(\s*(?:본관|시호|아명|일명)[^;)]*;\s*/g, "(")
         .replace(/\.{2,}/g, ".")
         .replace(/\s+\./g, ".")
         .replace(/\s+/g, " ")
