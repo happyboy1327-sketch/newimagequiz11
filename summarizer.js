@@ -1,374 +1,210 @@
-// ==========================================================
-// 1. 위키 링크 개념어 초경량 탐침기
-// ==========================================================
-export function getWikiConceptTerms(rawText, topN = 15) {
-    if (!rawText || typeof rawText !== "string") return [];
-    const noise = /(\d+(년|월|일|세기)|조선|한국|서울|미국|일본|어머니|아들|딸|씨|황제|선생|대왕|《|『|경부선|호남선|노선|동선|어선)/;
-    const concept = /(학|론|설|법칙|원리|현상|효과|반응|구조|체계|역학|에너지|성|화|력|주의|제도|혁명|사상|철학|법|이론|방사선|광선|자외선|적외선|능|소|체|도|률|량|계|점|원|물|상|형)$/;
-    const map = new Map();
-    for (const [, term] of rawText.matchAll(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g)) {
-        const clean = term.trim();
-        if (clean.length >= 2 && clean.length <= 12 && !noise.test(clean)) {
-            map.set(clean, (map.get(clean) || 0) + (concept.test(clean) ? 3 : 1));
-        }
-    }
-    return [...map.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t).slice(0, topN);
+// TextRank 알고리즘 + 위키 메타 정제(생몰년/외국어명 보존) + 정의문 최우선 보존 융합 모듈
+
+/**
+ * 1. 괄호 메타정보 정제 (생몰년, 외국어/한자 표기는 '유지'하고 호/자/본관 등만 제거)
+ * 예: "곽재우(郭再祐, 1552년~1617년, 자는 계묵, 호는 망우당)"
+ *     -> "곽재우(郭再祐, 1552년~1617년)"
+ */
+function stripMetaInfo(text) {
+  if (!text) return "";
+  let result = text;
+
+  // 불필요한 메타 키워드 패턴 (자, 호, 본관, 시호, 아명 등)
+  const unwantedPattern = /^(?:\s*)(?:자는|호는|시호는|본관은|별호는|아호는|아명은|태명은|세례명은|일명은|당호는|법명은|묘호는|자|호|시호|본관|별호|아호|아명|태명|세례명|일명|당호|법명|묘호)(?:\s*[:=]|\s+|$)/;
+
+  // 괄호 내부 항목별(쉼표 기준) 검사 후 호/자/본관 항목만 필터링
+  result = result.replace(/\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g, (match, inner) => {
+    const parts = inner.split(/[,;]/);
+    const filteredParts = parts.filter((part) => !unwantedPattern.test(part.trim()));
+
+    if (filteredParts.length === 0) return "";
+    return `(${filteredParts.join(", ").trim()})`;
+  });
+
+  // 빈 괄호 () 정리
+  result = result.replace(/\(\s*\)/g, "");
+
+  // 괄호 외부의 독립 메타 문장 정제 ("자는 계묵, 호는 망우당이다." 등)
+  const standaloneMetaPattern = /(?<![가-힣a-zA-Z0-9])(?:자는|호는|시호는|본관은|별호는|아호는|아명은|태명은|세례명은|일명은|당호는|법명은|묘호는)\s+[^,;.\n)]+(?:이다|였다|이었다|이며|이고|이자|으로)?(?=[,;.\n]|$)/g;
+  result = result.replace(standaloneMetaPattern, "");
+
+  return result
+    .replace(/\s+([,.!?])/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-// ==========================================================
-// 2. 키워드 사전 및 필터
-// ==========================================================
-const RAW_KEYWORDS = [
-    "태어났다", "출생", "사망", "활동", "독점", "정벌", "발표", "창시", "발명",
-    "발견", "폐지", "수상", "노벨", "대표", "저서", "저자", "작품", "전쟁", "독립", "혁명",
-    "연구", "증명", "설립", "창립", "개발", "제작", "기록", "영향", "업적", "졸업", "도입", "주장",
-    "임명", "취임", "부정", "일기", "수용소", "유대인", "수필", "순국", "이토", "히로부미",
-    "옥사", "고문", "투옥", "역임", "주석", "의병", "교육", "망명", "피살", "저항", "만세",
-    "저술", "집대성", "창안", "고안", "편찬", "집필", "창제", "축조", "개혁", "기여",
-    "주도", "총괄", "선출", "달성", "남겼", "남기", "평가받", "일컬어", "불린", "이끌",
-    "가담", "초석", "기틀", "개선", "전개", "주창", "체계화", "정립", "기여하", "성공", "임시정부",
-    "조직", "통일", "멸망", "함락", "정복", "편입", "군현제", "도량형", "만리장성", "분서갱유",
-    "황제", "칭호", "제도", "토목", "능묘", "순행", "개량", "설계", "과학", "기술",
-    "천문", "의학", "수학", "공학", "관측", "발명품", "이론", "법칙", "원리", "측우기",
-    "혼천의", "자격루", "헌신", "보급", "창설", "구제", "지원", "정책", "구호", "봉사",
-    "확산", "유학", "사상", "성현", "철학", "사상가", "유학자", "성선설", "인", "의",
-    "예", "지", "맹자", "공자", "논어", "대학", "중용", "도덕", "윤리", "경전",
-    "성리학", "실학", "경세", "목민", "실용", "실사구시", "이용후생"
-];
-
-const IMPORTANT_KEYWORDS = Array.from(new Set(RAW_KEYWORDS)).sort((a, b) => b.length - a.length);
-const KEYWORD_REGEX = new RegExp(
-    IMPORTANT_KEYWORDS.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")
-);
-const HARD_NOISE_REGEX = new RegExp([
-    "(?:의\\s*(?:아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|자녀|후손|부모|친척|사위|숙부|고모))", 
-    "결혼하", "이혼하", "슬하에", "일화", "여담", "소문", "전해진다", "야사", "전설", "민담", 
-    "체육관", "유적", "오차가\\s*생긴다", "차이를\\s*보이고", "이설이\\s*있다", "추정된다", 
-    "구글", "두들", "기념하여", "생일을", "동상", "도로명", "지하철역", 
-    "저널", "성명", "지적했", "논란", "시민단체", "기자회견", "평하였다", "현모양처", 
-    "시대착오", "망신", "언론", "기사", "인터뷰", "전제한\\s*뒤", "거세다", "반발", "캠페인"
-].join("|"));
-
-function escapeRegExp(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/**
+ * 독립된 순수 메타 문장 여부 검사
+ */
+function isPureMetaSentence(sentence) {
+  if (!sentence) return false;
+  const clean = sentence.trim();
+  return /^(?:자|호|시호|본관|아명|법명)는\s+/.test(clean) ||
+         /^(?:자는|호는|시호는|본관은)\s+[^.]+?(?:이다|였다|이었다)\.?$/.test(clean);
 }
 
-// ==========================================================
-// 3. 헬퍼 함수
-// ==========================================================
-
-function removeUnpairedParentheses(str) {
-    if (!str) return "";
-    const stack = [];
-    const remove = new Set();
-
-    for (let i = 0; i < str.length; i++) {
-        if (str[i] === "(") {
-            stack.push(i);
-        } else if (str[i] === ")") {
-            if (stack.length) {
-                stack.pop();
-            } else {
-                remove.add(i);
-            }
-        }
-    }
-
-    for (const i of stack) {
-        remove.add(i);
-    }
-
-    let result = "";
-    for (let i = 0; i < str.length; i++) {
-        if (!remove.has(i)) result += str[i];
-    }
-    return result;
-}
-
-export function cleanWikiText(text) {
-    if (!text) return "";
-
-    let result = text
-        .replace(/\[\[(?:[^|\]]+\|)?([^\]|]+)\]\]/g, "$1")
-        .replace(/\[(?:\d+|출처\s*필요|각주)\]/g, "")
-        .replace(/\(\s*\)/g, "")
-        .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "");
-
-    result = removeUnpairedParentheses(result);
-
-    return result
-        .replace(/\s+/g, " ")
-        .replace(/\s+\./g, ".")
-        .trim();
-}
-
-function normalizeSpace(text = "") {
-    return String(text)
-        .replace(/([.!?。])([가-힣a-zA-Z])/g, "$1 $2")
-        .replace(/\s+/g, " ")
-        .trim();
-}
-
+/** 접속어 정제 */
 const REGEX_LEADING_CONNECTORS = /^(그러나|하지만|그런데|한편|따라서|게다가|반면|이에|이후|결국|그\s*후|또한|그리고),?\s*/;
 function cleanLeadingConnectors(sentence) {
-    if (!sentence) return "";
-    return sentence.replace(REGEX_LEADING_CONNECTORS, "").trim();
+  return sentence ? sentence.replace(REGEX_LEADING_CONNECTORS, "").trim() : "";
 }
 
-function removeMetaBySearch(text) {
-    if (!text) return "";
-    let result = text;
-
-    // 1) 괄호 안의 메타 정보 정리 (예: (郭再祐, 1552년~1617년, 호는 망우당) -> (郭再祐, 1552년~1617년))
-    result = result.replace(/\(([^)]*)\)/g, (match, inner) => {
-        let cleanedInner = inner.replace(/(?:자는|호는|시호는|본관은|별호는|아호는|아명은|태명은|세례명은|일명은|당호는|법명은|자|호|시호|본관|별호|아호|아명|태명|세례명|일명|당호|법명)\s*[:=]?\s*[^,;)]+/g, "").trim();
-        cleanedInner = cleanedInner.replace(/^[\s,;]+|[\s,;]+$/g, "").replace(/[\s,;]{2,}/g, ", ");
-        return cleanedInner ? `(${cleanedInner})` : "";
-    });
-
-    // 2) 독립된 메타 문장/절 제거 (괄호나 마침표, 줄바꿈을 넘어서 문장을 삼키지 않도록 [^,\(\)\.\n]{1,40} 으로 범위 제한)
-    const metaKeywords = "자는|호는|시호는|본관은|별호는|아호는|아명은|태명은|세례명은|일명은|당호는|법명은|자|호|시호|본관|별호|아호|아명|태명|세례명|일명|당호|법명";
-    const metaPattern = new RegExp(
-        `(?:(?<![가-힣])(?:${metaKeywords})(?:는|은)?\\s*[^,\\(\\)\\.\\n]{1,40}?(?:이다|였다|이었다|이며|이고|이자|으로)?(?:,\\s*|\\.\\s*|\\s+|$))`,
-        "g"
-    );
-    result = result.replace(metaPattern, "");
-
-    // 3) 잔여 공백 및 특수문자 정리
-    return result
-        .replace(/\(\s*(?:본관|시호|아명|일명|자|호)[^;)]*;\s*/g, "(")
-        .replace(/\(\s*\)/g, "")
-        .replace(/\.{2,}/g, ".")
-        .replace(/\s+\./g, ".")
-        .replace(/\s+/g, " ")
-        .trim();
+/** 공백 및 글자 수 자르기 헬퍼 */
+function cleanSlice(text, maxLength = 630) {
+  if (!text || text.length <= maxLength) return text;
+  const sliced = text.slice(0, maxLength);
+  const lastPeriod = sliced.lastIndexOf(".");
+  if (lastPeriod > maxLength * 0.5) {
+    return sliced.slice(0, lastPeriod + 1).trim();
+  }
+  return sliced;
 }
 
-function isIncompleteOrOpinionSentence(sentence) {
-    if (!sentence) return true;
-    const cleanEnd = sentence.replace(/[()"'\s.]+$|》/g, "").trim();
-
-    if (/(?:밝혔다|주장했다|전했다|지적했다|비판했다|평가했다)$/.test(cleanEnd)) {
-        return true;
-    }
-
-    const validEndingRegex = /(?:다|였다|이었다|하였다|됐다|된다|있다|없다|했다|되었다|남겼다|불린다)$/;
-    return !validEndingRegex.test(cleanEnd);
-}
-
+/** 문장 분리 */
 function splitSentences(text) {
-    if (!text || typeof text !== "string") return [];
-    const normalized = normalizeSpace(text).replace(/\n+/g, " ");
-    return normalized
-        .split(/(?<!\b[a-zA-Z]|\d)([.!?。])(?=\s+|$)/)
-        .reduce((acc, curr, index, array) => {
-            if (index % 2 === 0) {
-                const punctuation = array[index + 1] || "";
-                const sentence = (curr + punctuation).trim();
-                if (sentence) acc.push(sentence);
-            }
-            return acc;
-        }, []);
+  if (!text) return [];
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  return cleaned
+    .split(/(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 8);
 }
 
-function filterOtherPerson(rawSentences, aliases = []) {
-    if (!Array.isArray(rawSentences) || rawSentences.length === 0) return [];
-
-    return rawSentences.filter((sentence, index) => {
-        const text = sentence.trim();
-        if (!text) return false;
-        if (index === 0) return true;
-
-        if (HARD_NOISE_REGEX.test(text)) return false;
-        return true;
-    });
+/** 토큰화 */
+function tokenize(sentence) {
+  return sentence
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length > 0);
 }
 
-function isTooSimilar(sentence, existingSentences) {
-    const getWords = str => new Set(str.match(/[가-힣a-zA-Z0-9]{2,}/g) || []);
-    const wordsA = getWords(sentence);
-    if (wordsA.size === 0) return false;
+/** 문장 간 Jaccard 유사도 */
+function sentenceSimilarity(tokensA, tokensB) {
+  const setA = new Set(tokensA);
+  const setB = new Set(tokensB);
+  if (setA.size === 0 || setB.size === 0) return 0;
 
-    for (const existing of existingSentences) {
-        const wordsB = getWords(existing);
-        let intersection = 0;
-        wordsA.forEach(w => { if (wordsB.has(w)) intersection++; });
-        
-        const overlapRatio = intersection / Math.min(wordsA.size, wordsB.size);
-        if (overlapRatio > 0.5) return true;
+  let common = 0;
+  for (const w of setA) if (setB.has(w)) common += 1;
+  if (common === 0) return 0;
+
+  const norm = Math.log(setA.size + 1) + Math.log(setB.size + 1);
+  return norm === 0 ? 0 : common / norm;
+}
+
+/** 유사도 행렬 생성 */
+function buildSimilarityMatrix(sentences) {
+  const tokenized = sentences.map(tokenize);
+  const n = sentences.length;
+  const matrix = Array.from({ length: n }, () => new Array(n).fill(0));
+
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const sim = sentenceSimilarity(tokenized[i], tokenized[j]);
+      matrix[i][j] = sim;
+      matrix[j][i] = sim;
     }
-    return false;
+  }
+  return matrix;
 }
 
-function getDocumentKeywords(text, topN = 12) {
-    if (!text) return [];
-    const words = text.match(/[가-힣a-zA-Z0-9]{2,}/g) || [];
-    const stopWords = new Set([
-        "대한", "경우", "관한", "통해", "위해", "따라", "또한", "그리고", "하지만", "이후", 
-        "당시", "것이다", "속해", "의해", "있다", "없다", "되어", "하여", "있는", "하는",
-        "사람", "하나", "가지", "자신의", "위해", "때문", "관련", "기록", "기록되어", "차이를"
-    ]);
-    const freqMap = {};
-    for (const w of words) {
-        if (!stopWords.has(w)) {
-            freqMap[w] = (freqMap[w] || 0) + 1;
+/** PageRank 계산 */
+function pageRank(matrix, damping = 0.85, iterations = 40, tolerance = 1e-5) {
+  const n = matrix.length;
+  if (n === 0) return [];
+
+  let scores = new Array(n).fill(1 / n);
+  const rowSums = matrix.map((row) => row.reduce((a, b) => a + b, 0));
+
+  for (let iter = 0; iter < iterations; iter++) {
+    const newScores = new Array(n).fill((1 - damping) / n);
+    let diff = 0;
+
+    for (let i = 0; i < n; i++) {
+      let incoming = 0;
+      for (let j = 0; j < n; j++) {
+        if (j !== i && matrix[j][i] > 0 && rowSums[j] > 0) {
+          incoming += (matrix[j][i] / rowSums[j]) * scores[j];
         }
+      }
+      newScores[i] += damping * incoming;
+      diff += Math.abs(newScores[i] - scores[i]);
     }
-    return Object.keys(freqMap)
-        .sort((a, b) => freqMap[b] - freqMap[a])
-        .slice(0, topN);
+
+    scores = newScores;
+    if (diff < tolerance) break;
+  }
+
+  return scores;
 }
 
 // ==========================================================
-// 4. 핵심 추출 및 요약 생성 로직
+// 기존 API 호환 메인 함수: buildDescription
 // ==========================================================
+export function buildDescription(
+  introText = "",
+  bodyText = "",
+  aliases = [],
+  extraCount = 3,
+  introThreshold = 150,
+  maxLength = 630
+) {
+  // 1. 원문 정제 (한자명/생몰년 보존 및 잡다한 메타정보 제거)
+  const cleanIntro = stripMetaInfo(introText);
+  const cleanBody = stripMetaInfo(bodyText);
 
-export function extractImportantSentences(bodyText, introText = "", wikiTermRegex = null, aliases = [], count = 3) {
-    if (!bodyText || typeof bodyText !== "string") return "";
+  const introSentences = splitSentences(cleanIntro);
+  const bodySentences = splitSentences(cleanBody);
 
-    const cleanedBody = removeMetaBySearch(cleanWikiText(bodyText));
-    let rawSentences = splitSentences(cleanedBody);
+  if (introSentences.length === 0 && bodySentences.length === 0) return "";
 
-    if (Array.isArray(aliases) && aliases.length > 0) {
-        rawSentences = filterOtherPerson(rawSentences, aliases);
-    }
+  // 2. 첫 문장(인물/개념 정의문) 강제 보존
+  let firstSentence = "";
+  let candidateSentences = [];
 
-    const totalCount = rawSentences.length;
-    if (totalCount === 0) return "";
+  if (introSentences.length > 0) {
+    firstSentence = introSentences[0];
+    candidateSentences = [...introSentences.slice(1), ...bodySentences];
+  } else {
+    firstSentence = bodySentences[0];
+    candidateSentences = bodySentences.slice(1);
+  }
 
-    const docKeywords = getDocumentKeywords(cleanedBody + " " + introText, 12);
-    const scoredCandidates = [];
+  // 독립된 메타 문장 노이즈 제거
+  candidateSentences = candidateSentences.filter((s) => !isPureMetaSentence(s));
 
-    for (let index = 0; index < totalCount; index++) {
-        let text = rawSentences[index].trim();
-        const len = text.length;
+  if (candidateSentences.length === 0) {
+    return cleanSlice(firstSentence, maxLength);
+  }
 
-        if (len < 10 || len > 350) continue;
-        if (isIncompleteOrOpinionSentence(text)) continue;
-        if (HARD_NOISE_REGEX.test(text)) continue;
+  // 3. 남은 문장들에 대해 TextRank 계산
+  const matrix = buildSimilarityMatrix(candidateSentences);
+  const scores = pageRank(matrix);
 
-        let score = 10;
+  const ranked = candidateSentences
+    .map((sentence, index) => ({ sentence, score: scores[index], index }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, extraCount)
+    .sort((a, b) => a.index - b.index);
 
-        if (wikiTermRegex && wikiTermRegex.test(text)) {
-            score += 50;
-        }
+  const extraText = ranked
+    .map((item) => cleanLeadingConnectors(item.sentence))
+    .join(" ");
 
-        if (KEYWORD_REGEX.test(text)) {
-            score += 50;
-        }
-
-        let keywordHits = 0;
-        docKeywords.forEach(kw => {
-            if (text.includes(kw)) keywordHits++;
-        });
-        score += keywordHits * 8;
-
-        if (len >= 25 && len <= 180) score += 10;
-
-        scoredCandidates.push({
-            sentence: text,
-            index: index,
-            score: score
-        });
-    }
-
-    if (scoredCandidates.length === 0) return "";
-
-    scoredCandidates.sort((a, b) => b.score - a.score);
-
-    const selected = [];
-    for (const candidate of scoredCandidates) {
-        if (selected.length >= count) break;
-        
-        const existingTexts = selected.map(s => s.sentence);
-        if (!isTooSimilar(candidate.sentence, existingTexts)) {
-            selected.push(candidate);
-        }
-    }
-
-    selected.sort((a, b) => a.index - b.index);
-
-    return selected
-        .map((item, idx) => idx === 0 ? item.sentence : cleanLeadingConnectors(item.sentence))
-        .join(" ");
+  // 4. [첫 문장 + TextRank 추출문] 결합 및 반환
+  const finalResult = [firstSentence, extraText].filter(Boolean).join(" ");
+  return cleanSlice(finalResult, maxLength);
 }
 
-export function buildDescription(introText = "", bodyText = "", aliases = [], extraCount = 3, introThreshold = 150, maxLength = 630) { 
-    const rawTotal = ((introText || "") + " " + (bodyText || "")).trim();
-
-    if (rawTotal.length < 80) return "";
-
-    const wikiTerms = getWikiConceptTerms((introText || "") + " " + (bodyText || ""));
-    const wikiTermRegex = wikiTerms.length 
-        ? new RegExp(wikiTerms.map(escapeRegExp).join("|")) 
-        : null;
-
-    let introClean = removeMetaBySearch(cleanWikiText(introText));
-    let bodyClean = removeMetaBySearch(cleanWikiText(bodyText));
-
-    if (introClean && Array.isArray(aliases) && aliases.length > 0) {
-        const introSentences = splitSentences(introClean);
-        introClean = filterOtherPerson(introSentences, aliases).join(" ");
-    }
-    if (bodyClean && Array.isArray(aliases) && aliases.length > 0) {
-        const bodySentences = splitSentences(bodyClean);
-        bodyClean = filterOtherPerson(bodySentences, aliases).join(" ");
-    }
-
-    let intro = normalizeSpace(introClean || "");
-    let body = normalizeSpace(bodyClean || "");
-
-    const cleanSlice = (text) => {
-        if (text.length <= maxLength) return text;
-        const sliced = text.slice(0, maxLength);
-        const lastPeriod = sliced.lastIndexOf(".");
-        if (lastPeriod > maxLength * 0.5) {
-            return sliced.slice(0, lastPeriod + 1).trim();
-        }
-        return sliced;
-    };
-
-    if (!intro && !body) {
-        const fallback = normalizeSpace(removeMetaBySearch(cleanWikiText(introText) || cleanWikiText(bodyText)));
-        if (!fallback) return "";
-        return cleanSlice(fallback);
-    }
-
-    const introSentences = splitSentences(intro).filter(Boolean);
-    const selectedIntroSentences = [];
-
-    if (introSentences.length > 0) {
-        const first = introSentences[0];
-        const looksLikeName = first.length <= 50 && /^[가-힣a-zA-Z\.\- ]+$/.test(first);
-
-        // 개요의 첫 문장은 핵심 정의문이므로 문장이 유효하면(HARD_NOISE 예외 처리) 항상 최우선 채택
-        if (looksLikeName || !isIncompleteOrOpinionSentence(first)) {
-            selectedIntroSentences.push(first);
-        }
-
-        for (let i = 1; i < introSentences.length; i++) {
-            const sentence = introSentences[i];
-            const currentLen = selectedIntroSentences.join(" ").length;
-
-            if (currentLen >= 250 || selectedIntroSentences.length >= 2) break;
-
-            if (!isIncompleteOrOpinionSentence(sentence) && !HARD_NOISE_REGEX.test(sentence)) {
-                if (!isTooSimilar(sentence, selectedIntroSentences)) {
-                    selectedIntroSentences.push(cleanLeadingConnectors(sentence));
-                }
-            }
-        }
-    }
-
-    const introResultText = selectedIntroSentences.join(" ");
-    const remainingIntro = introSentences.slice(selectedIntroSentences.length).filter(Boolean).join(" ");
-    const targetBody = normalizeSpace([remainingIntro, body].filter(Boolean).join(" "));
-
-    let extra = "";
-    if (targetBody && targetBody.length > 10) {
-        extra = extractImportantSentences(targetBody, introResultText, wikiTermRegex, aliases, extraCount);
-    }
-
-    const merged = normalizeSpace([introResultText, extra].filter(Boolean).join(" "));
-    return cleanSlice(merged);
+// ==========================================================
+// 단일 텍스트 요약 함수 (기존 summarizeText 호환용)
+// ==========================================================
+export function summarizeText(text, topN = 5) {
+  return {
+    summary: buildDescription(text, "", [], topN - 1),
+    sentenceCount: splitSentences(text).length,
+    usedSentences: topN,
+  };
 }
