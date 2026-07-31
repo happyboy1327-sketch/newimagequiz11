@@ -155,6 +155,31 @@ function tokenize(sentence) {
     .filter((w) => w.length > 1);
 }
 
+function resolveAnaphora(sentence, allSentences, originalIndex) {
+  // "이 작품은", "그 조각은" 등으로 시작하는지 검사
+  const demoMatch = sentence.match(/^(?:이|그)\s+(작품|빌딩|건축물|그림|조각|서적|책|소설|시|음악|곡|연구|이론|문화재|유물)(?:은|는|이|가)?/);
+  if (!demoMatch) return sentence;
+
+  // 바로 앞 문장들(최대 3개 이전까지)을 거슬러 올라가며 고유명사/제목 탐색
+  for (let i = originalIndex - 1; i >= Math.max(0, originalIndex - 3); i--) {
+    const prevSentence = allSentences[i];
+    if (!prevSentence) continue;
+
+    // 1) 《...》, 「...」 형태의 작품명/유물명 탐색
+    const titleMatch = prevSentence.match(/[《「"'][^《》「」"']+[》」"']/);
+    if (titleMatch) {
+      return sentence.replace(/^(?:이|그)\s+(?:작품|빌딩|건축물|그림|조각|서적|책|소설|시|음악|곡|연구|이론|문화재|유물)(?:은|는|이|가)?/, `${titleMatch[0]}은`);
+    }
+
+    // 2) 문장 내 명시된 구체적 명칭(예: 피에타상, 다비드 등) 탐색
+    const specificNounMatch = prevSentence.match(/([가-힣]{2,}(?:상|탑|비|관|전|국|서|집))/);
+    if (specificNounMatch) {
+      return sentence.replace(/^(?:이|그)\s+(?:작품|빌딩|건축물|그림|조각|서적|책|소설|시|음악|곡|연구|이론|문화재|유물)(?:은|는|이|가)?/, `${specificNounMatch[1]}은`);
+    }
+  }
+
+  return sentence;
+}
 
 // ==========================================================
 // 5. 주제어 분석 및 TextRank 알고리즘
@@ -393,8 +418,13 @@ if (HERITAGE_ORBOOK_DESIGNATION_REGEX.test(sentence)) {
       score *= 0.7;
     }
 
-    return { sentence, score, index };
+    // 후보 문장이 전체 문서에서 몇 번째 위치인지 역산하여 역추적 함수에 전달
+    const originalGlobalIndex = introSentences.length + anchorCount + index;
+    const resolvedSentence = resolveAnaphora(sentence, allSentences, originalGlobalIndex);
+
+    return { sentence: resolvedSentence, score, index };
   });
+
 
   // 5) 상위 후보 추출 및 문맥 정렬
   const ranked = finalCandidates
