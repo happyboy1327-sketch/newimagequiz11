@@ -20,6 +20,10 @@
 // 1. 전처리 및 정제 헬퍼
 // ==========================================================
 
+   // ==========================================================
+// 1. 전처리 및 정제 헬퍼
+// ==========================================================
+
 function removeUnpairedParentheses(str) {
     if (!str) return "";
     const stack = [];
@@ -68,9 +72,7 @@ function removeMetaBySearch(text) {
     const keywords = "시호|본관|자|별호|아호|아명|태명|세례명|일명|당호|법명";
     const valToken = `(?:[^\\s,.\\(\\)\\u00B7]+(?:\\([^)]*\\)?)?)`;
     const valPattern = `${valToken}(?:\\s*[·ㆍ]\\s*${valToken})*`;
-    // ✅ FIX: "자" 같은 한 글자 키워드는 은/는/괄호 접미사 없이 바로 뒤 글자에 붙으면
-    //         "자리", "자신", "자연" 등 무관한 단어를 통째로 삭제해버렸음.
-    //         접미사가 없을 경우 값 앞에 반드시 공백이 있어야만 메타정보로 인정하도록 제한.
+    
     const keySuffixed = `(?:${keywords})(?:은|는|\\([^)]*\\))`;
     const keyBare = `(?:${keywords})`;
     const singleMeta = `(?<![가-힣])(?:${keySuffixed}\\s*${valPattern}|${keyBare}\\s+${valPattern})`;
@@ -109,57 +111,29 @@ function splitSentences(text) {
 }
 
 // ==========================================================
-// 2. 업적/직업 및 활동 관련 정규식 확장
+// 2. 키워드 및 타인/TMI 필터링 (주어 생략 보완)
 // ==========================================================
 
-// 🎯 업적, 직업, 창작, 활동, 수상 관련 키워드 대폭 확장
 const ACHIEVEMENT_REGEX = /(기여|설립|개발|발견|창시|주도|발표|영향|성공|구축|혁명|수상|창립|저술|총괄|개혁|정립|주창|체계화|확산|보급|창안|집대성|기틀|초석|승리|평정|확장|창시자|개척자|아버지|대표|중요한|업적|연구|논문|작품|창작|발명|개진|동조|지지|해석|반대|논쟁|부활|수로도|관측|역임|소설가|작가|문학|소설|시인|화가|음악가|철학자|사상가|정치가|과학자|물리학자|수학자|교수|활동|집필|출판|발간|언론인|기자|활동을|작업|완성)/;
 
-// 🎯 노이즈/TMI 키워드 (즉시 탈락)
+// TMI / 단순 출생/가족 관련 정제 대상
 const HARD_NOISE_REGEX = /(의\s*(?:아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|자녀|후손|부모)|결혼하|슬하에|일화|여담|소문|전해진다|체육관|유적|오차가\s*생긴다|차이를\s*보이고|이설이\s*있다|태어나|유학을|출생하였다|여행을|구글|두들|기념하여|제작되었다|생일을)/;
 
-// ✅ FIX: \b 는 ASCII 워드 경계만 인식하기 때문에 한글 대명사 뒤에서는 절대 매치되지 않았음.
-//         "다음 글자가 한글 음절이 아니거나 문자열 끝" 조건으로 교체.
-const PRONOUN_REGEX = /(?:^|\s)(?:그는|그가|그의|그를|그에게|그녀는|그녀가|그녀의|그녀를)(?=[^가-힣]|$)/;
-
+// 🎯 [핵심 수정] 주어가 생략된 한국어 문장도 잘리지 않고 정상 유지되도록 수정
 function filterOtherPerson(rawSentences, aliases = []) {
-    if (!Array.isArray(rawSentences)) return [];
-    const safeAliases = Array.isArray(aliases) ? aliases.filter(Boolean) : [];
-    if (safeAliases.length === 0) return rawSentences;
+    if (!Array.isArray(rawSentences) || rawSentences.length === 0) return [];
 
-    // ✅ FIX: "바로 앞 2문장"만 확인하던 방식은 "그는 ~. 그는 ~. 그는 ~."처럼
-    //         대명사가 3번 이상 연속되면 3번째 문장부터 걸러지는 문제가 있었음.
-    //         순차적으로 훑으면서 "지금 문맥이 본인 이야기인지" 상태(inSubjectContext)를
-    //         추적하고, 대명사 문장은 그 상태를 유지시켜 체인이 끊기지 않게 함.
-    let inSubjectContext = true; // 첫 문장은 항상 본인 소개로 간주
-
-    return rawSentences.map((sentence, index) => {
+    return rawSentences.filter((sentence, index) => {
         const text = sentence.trim();
-        if (!text) return null;
+        if (!text) return false;
+        if (index === 0) return true;
 
-        if (index === 0) {
-            inSubjectContext = true;
-            return text;
-        }
+        // TMI 또는 타인 관련 가족 서술 문장은 탈락
+        if (HARD_NOISE_REGEX.test(text)) return false;
 
-        const hasSelfName = safeAliases.some(alias => text.includes(alias));
-        if (hasSelfName) {
-            inSubjectContext = true;
-            return text;
-        }
-
-        const hasPronoun = PRONOUN_REGEX.test(text);
-        const hasOtherPersonNoise = HARD_NOISE_REGEX.test(text);
-
-        if (hasPronoun && inSubjectContext && !hasOtherPersonNoise) {
-            // 대명사 + 직전까지 본인 문맥이 이어지고 있었다면 계속 유지
-            return text;
-        }
-
-        // 대명사도 없고 본인 이름도 없는 문장(다른 인물 서술 가능성) → 문맥 종료
-        inSubjectContext = false;
-        return null;
-    }).filter(Boolean);
+        // 주어가 생략되었거나 대명사/본인 이름이 포함된 문장 모두 통과
+        return true;
+    });
 }
 
 function getDocumentKeywords(text, topN = 12) {
@@ -205,12 +179,14 @@ export function extractImportantSentences(bodyText, introText = "", aliases = []
         let text = rawSentences[index].trim();
         const len = text.length;
 
-        if (len < 15 || len > 350) continue;
+        if (len < 12 || len > 350) continue;
         if (isIncompleteSentence(text)) continue;
         if (HARD_NOISE_REGEX.test(text)) continue;
-        if (!ACHIEVEMENT_REGEX.test(text)) continue;
 
-        let score = 50;
+        let score = 10;
+
+        // 🎯 [핵심 수정] 하드 필터링 대신 높은 가산점 제공으로 문장 증발 방지
+        if (ACHIEVEMENT_REGEX.test(text)) score += 40;
 
         let keywordHits = 0;
         docKeywords.forEach(kw => {
@@ -295,10 +271,10 @@ export function buildDescription(introText, bodyText, aliases = [], extraCount =
     const targetBody = normalizeSpace([remainingIntro, body].filter(Boolean).join(" "));
 
     let extra = "";
-    if (targetBody && targetBody.length > 12) {
+    if (targetBody && targetBody.length > 10) {
         extra = extractImportantSentences(targetBody, introResultText, aliases, extraCount);
     }
 
     const merged = normalizeSpace([introResultText, extra].filter(Boolean).join(" "));
     return cleanSlice(merged);
-}
+}        
