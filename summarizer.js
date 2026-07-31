@@ -334,23 +334,27 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ex
     const selectedIntroSentences = [];
 
     if (introSentences.length > 0) {
-        if (!isIncompleteOrOpinionSentence(introSentences[0]) && !HARD_NOISE_REGEX.test(introSentences[0])) {
-            selectedIntroSentences.push(introSentences[0]);
-        }
+    const first = introSentences[0];
+    // 짧고 '이름/식별자'처럼 보이면(예: "루트비히 판 베토벤") 불완전 판정에도 포함
+    const looksLikeName = first.length <= 50 && /^[가-힣a-zA-Z\.\- ]+$/.test(first);
 
-        for (let i = 1; i < introSentences.length; i++) {
-            const sentence = introSentences[i];
-            const currentLen = selectedIntroSentences.join(" ").length;
+    if (looksLikeName || (!isIncompleteOrOpinionSentence(first) && !HARD_NOISE_REGEX.test(first))) {
+        selectedIntroSentences.push(first);
+    }
 
-            if (currentLen >= 250 || selectedIntroSentences.length >= 2) break;
+    for (let i = 1; i < introSentences.length; i++) {
+        const sentence = introSentences[i];
+        const currentLen = selectedIntroSentences.join(" ").length;
 
-            if (!isIncompleteOrOpinionSentence(sentence) && !HARD_NOISE_REGEX.test(sentence)) {
-                if (!isTooSimilar(sentence, selectedIntroSentences)) {
-                    selectedIntroSentences.push(cleanLeadingConnectors(sentence));
-                }
+        if (currentLen >= 250 || selectedIntroSentences.length >= 2) break;
+
+        if (!isIncompleteOrOpinionSentence(sentence) && !HARD_NOISE_REGEX.test(sentence)) {
+            if (!isTooSimilar(sentence, selectedIntroSentences)) {
+                selectedIntroSentences.push(cleanLeadingConnectors(sentence));
             }
         }
     }
+}
 
     const introResultText = selectedIntroSentences.join(" ");
     const remainingIntro = introSentences.slice(selectedIntroSentences.length).filter(Boolean).join(" ");
