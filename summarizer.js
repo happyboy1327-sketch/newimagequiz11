@@ -59,28 +59,54 @@ const HARD_NOISE_REGEX = new RegExp([
 
 function removeUnpairedParentheses(str) {
     if (!str) return "";
+
     const stack = [];
-    const toRemove = new Set();
+    const remove = new Set();
+
     for (let i = 0; i < str.length; i++) {
-        if (str[i] === '(') stack.push(i);
-        else if (str[i] === ')') stack.length ? stack.pop() : toRemove.add(i);
+        if (str[i] === "(") {
+            stack.push(i);
+        } else if (str[i] === ")") {
+            if (stack.length) {
+                stack.pop();
+            } else {
+                remove.add(i);
+            }
+        }
     }
-    stack.forEach(i => toRemove.add(i));
-    return str.split('').filter((_, i) => !toRemove.has(i)).join('');
+
+    for (const i of stack) {
+        remove.add(i);
+    }
+
+    return [...str]
+        .filter((_, i) => !remove.has(i))
+        .join("");
 }
+
 
 export function cleanWikiText(text) {
     if (!text) return "";
-    return removeUnpairedParentheses(
-        text
-            .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1") // [[링크|단어]] -> 단어로 변환
-            .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
-            .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "")
-            .replace(/\(\s*\)/g, "")
-    )
-    .replace(/\s+/g, " ")
-    .replace(/\s+\./g, ".")
-    .trim();
+
+    let result = text
+        // [[링크|표시명]]
+        .replace(/\[\[(?:[^|\]]+\|)?([^\]|]+)\]\]/g, "$1")
+
+        // 위키 각주 제거
+        .replace(/\[(?:\d+|출처\s*필요|각주)\]/g, "")
+
+        // 빈 괄호 제거
+        .replace(/\(\s*\)/g, "")
+
+        // 첫 번째, 2번째 등 제거
+        .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "");
+
+    result = removeUnpairedParentheses(result);
+
+    return result
+        .replace(/\s+/g, " ")
+        .replace(/\s+\./g, ".")
+        .trim();
 }
 
 function normalizeSpace(text = "") {
