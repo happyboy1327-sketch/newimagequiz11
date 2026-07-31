@@ -49,7 +49,6 @@ const HARD_NOISE_REGEX = new RegExp([
     "시대착오", "망신", "언론", "기사", "인터뷰", "전제한\\s*뒤", "거세다", "반발", "캠페인"
 ].join("|"));
 
-// 정규식 이스케이프 헬퍼
 function escapeRegExp(string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -120,18 +119,25 @@ function removeMetaBySearch(text) {
     if (!text) return "";
     let result = text;
 
-    const hoMetaRegex = /(?<![가-힣])호는\s+[^。.]{1,200}?(?:이다|였다|이었|이며|이고|\.|$)/g;
-    result = result.replace(hoMetaRegex, "");
+    // 1) 괄호 안의 메타 정보 정리 (예: (郭再祐, 1552년~1617년, 호는 망우당) -> (郭再祐, 1552년~1617년))
+    result = result.replace(/\(([^)]*)\)/g, (match, inner) => {
+        let cleanedInner = inner.replace(/(?:자는|호는|시호는|본관은|별호는|아호는|아명은|태명은|세례명은|일명은|당호는|법명은|자|호|시호|본관|별호|아호|아명|태명|세례명|일명|당호|법명)\s*[:=]?\s*[^,;)]+/g, "").trim();
+        cleanedInner = cleanedInner.replace(/^[\s,;]+|[\s,;]+$/g, "").replace(/[\s,;]{2,}/g, ", ");
+        return cleanedInner ? `(${cleanedInner})` : "";
+    });
 
-    const keywords = "시호|본관|별호|아호|아명|태명|세례명|일명|당호|법명";
-    const singleMeta = `(?:${keywords})(?:은|는|\\([^)]*\\))?\\s*[^,\\(\\)\\.]+(?:\\([^)]*\\))?`;
-    
-    // 안전한 선형 정규식으로 수정 (무한 멈춤 방지)
-    const metaChainRegex = new RegExp(`(?:,\\s*|\\s+)*(?:${singleMeta})+(?:이다|였다|이었다|이며|이고|이자|으로)?`, "g");
-    result = result.replace(metaChainRegex, "");
+    // 2) 독립된 메타 문장/절 제거 (괄호나 마침표, 줄바꿈을 넘어서 문장을 삼키지 않도록 [^,\(\)\.\n]{1,40} 으로 범위 제한)
+    const metaKeywords = "자는|호는|시호는|본관은|별호는|아호는|아명은|태명은|세례명은|일명은|당호는|법명은|자|호|시호|본관|별호|아호|아명|태명|세례명|일명|당호|법명";
+    const metaPattern = new RegExp(
+        `(?:(?<![가-힣])(?:${metaKeywords})(?:는|은)?\\s*[^,\\(\\)\\.\\n]{1,40}?(?:이다|였다|이었다|이며|이고|이자|으로)?(?:,\\s*|\\.\\s*|\\s+|$))`,
+        "g"
+    );
+    result = result.replace(metaPattern, "");
 
+    // 3) 잔여 공백 및 특수문자 정리
     return result
-        .replace(/\(\s*(?:본관|시호|아명|일명)[^;)]*;\s*/g, "(")
+        .replace(/\(\s*(?:본관|시호|아명|일명|자|호)[^;)]*;\s*/g, "(")
+        .replace(/\(\s*\)/g, "")
         .replace(/\.{2,}/g, ".")
         .replace(/\s+\./g, ".")
         .replace(/\s+/g, " ")
@@ -292,8 +298,6 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ex
 
     if (rawTotal.length < 80) return "";
 
-    
-    // 🎯 1. 특수문자가 포함되어도 안 죽도록 이스케이프 적용
     const wikiTerms = getWikiConceptTerms((introText || "") + " " + (bodyText || ""));
     const wikiTermRegex = wikiTerms.length 
         ? new RegExp(wikiTerms.map(escapeRegExp).join("|")) 
@@ -334,27 +338,27 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ex
     const selectedIntroSentences = [];
 
     if (introSentences.length > 0) {
-    const first = introSentences[0];
-    // 짧고 '이름/식별자'처럼 보이면(예: "루트비히 판 베토벤") 불완전 판정에도 포함
-    const looksLikeName = first.length <= 50 && /^[가-힣a-zA-Z\.\- ]+$/.test(first);
+        const first = introSentences[0];
+        const looksLikeName = first.length <= 50 && /^[가-힣a-zA-Z\.\- ]+$/.test(first);
 
-    if (looksLikeName || (!isIncompleteOrOpinionSentence(first) && !HARD_NOISE_REGEX.test(first))) {
-        selectedIntroSentences.push(first);
-    }
+        // 개요의 첫 문장은 핵심 정의문이므로 문장이 유효하면(HARD_NOISE 예외 처리) 항상 최우선 채택
+        if (looksLikeName || !isIncompleteOrOpinionSentence(first)) {
+            selectedIntroSentences.push(first);
+        }
 
-    for (let i = 1; i < introSentences.length; i++) {
-        const sentence = introSentences[i];
-        const currentLen = selectedIntroSentences.join(" ").length;
+        for (let i = 1; i < introSentences.length; i++) {
+            const sentence = introSentences[i];
+            const currentLen = selectedIntroSentences.join(" ").length;
 
-        if (currentLen >= 250 || selectedIntroSentences.length >= 2) break;
+            if (currentLen >= 250 || selectedIntroSentences.length >= 2) break;
 
-        if (!isIncompleteOrOpinionSentence(sentence) && !HARD_NOISE_REGEX.test(sentence)) {
-            if (!isTooSimilar(sentence, selectedIntroSentences)) {
-                selectedIntroSentences.push(cleanLeadingConnectors(sentence));
+            if (!isIncompleteOrOpinionSentence(sentence) && !HARD_NOISE_REGEX.test(sentence)) {
+                if (!isTooSimilar(sentence, selectedIntroSentences)) {
+                    selectedIntroSentences.push(cleanLeadingConnectors(sentence));
+                }
             }
         }
     }
-}
 
     const introResultText = selectedIntroSentences.join(" ");
     const remainingIntro = introSentences.slice(selectedIntroSentences.length).filter(Boolean).join(" ");
