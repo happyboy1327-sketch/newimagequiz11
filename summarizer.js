@@ -90,6 +90,9 @@ function removeUnmatchedParentheses(text) {
 }
 
 export function cleanWikiText(text) {
+    console.log(text);
+    let cleaned = cleanWikiText(text);
+    console.log(cleaned);
     if (!text) return "";
 
     let cleaned = text
