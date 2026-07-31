@@ -338,7 +338,7 @@ export function buildDescription(
       score *= 0.05;
     }
 
-    if (UNIVERSAL_NOISE_REGEX.test(sentence)) {
+    if (UNIVERSAL_NOISE_KEYWORDS.test(sentence)) {
       score *= 0.05;
     }
 
