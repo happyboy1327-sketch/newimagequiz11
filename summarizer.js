@@ -17,11 +17,7 @@
     
       // ==========================================================
       // ==========================================================
-
-
-
-// ==========================================================
-// 1. �꾩쿂由� 諛� �뺤젣 �ы띁
+// 1. 전처리 및 정제 헬퍼
 // ==========================================================
 
 function removeUnpairedParentheses(str) {
@@ -40,8 +36,8 @@ export function cleanWikiText(text) {
     if (!text) return "";
     return removeUnpairedParentheses(
         text
-            .replace(/\[\s*\*?\s*\]|\[\d+\]|\[異쒖쿂\s*�꾩슂\]|\[媛곸＜\]/g, "")
-            .replace(/\((泥�|��|��|��|�ㅼ꽢|\d+)\s*踰덉㎏\)/g, "")
+            .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
+            .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "")
             .replace(/\(\s*\)/g, "")
     )
     .replace(/\s+/g, " ")
@@ -51,12 +47,12 @@ export function cleanWikiText(text) {
 
 function normalizeSpace(text = "") {
     return String(text)
-        .replace(/([.!?��])([媛�-�즑-zA-Z])/g, "$1 $2")
+        .replace(/([.!?。])([가-힣a-zA-Z])/g, "$1 $2")
         .replace(/\s+/g, " ")
         .trim();
 }
 
-const REGEX_LEADING_CONNECTORS = /^(洹몃윭��|�섏�留�|洹몃윴��|�쒗렪|�곕씪��|寃뚮떎媛�|諛섎㈃|�댁뿉|�댄썑|寃곌뎅|洹�\s*��|�먰븳|洹몃━怨�),?\s*/;
+const REGEX_LEADING_CONNECTORS = /^(그러나|하지만|그런데|한편|따라서|게다가|반면|이에|이후|결국|그\s*후|또한|그리고),?\s*/;
 function cleanLeadingConnectors(sentence) {
     if (!sentence) return "";
     return sentence.replace(REGEX_LEADING_CONNECTORS, "").trim();
@@ -66,24 +62,24 @@ function removeMetaBySearch(text) {
     if (!text) return "";
     let result = text;
 
-    const hoMetaRegex = /(?<![媛�-��])�몃뒗\s+[^��.]{1,200}?(?:�대떎|����|�댁뿀|�대ŉ|�닿퀬|\.|$)/g;
+    const hoMetaRegex = /(?<![가-힣])호는\s+[^。.]{1,200}?(?:이다|였다|이었|이며|이고|\.|$)/g;
     result = result.replace(hoMetaRegex, "");
 
-    const keywords = "�쒗샇|蹂멸�|��|蹂꾪샇|�꾪샇|�꾨챸|�쒕챸|�몃�紐�|�쇰챸|�뱁샇|踰뺣챸";
+    const keywords = "시호|본관|자|별호|아호|아명|태명|세례명|일명|당호|법명";
     const valToken = `(?:[^\\s,.\\(\\)\\u00B7]+(?:\\([^)]*\\)?)?)`;
-    const valPattern = `${valToken}(?:\\s*[쨌��]\\s*${valToken})*`;
-    // �� FIX: "��" 媛숈� �� 湲��� �ㅼ썙�쒕뒗 ��/��/愿꾪샇 �묐��� �놁씠 諛붾줈 �� 湲��먯뿉 遺숈쑝硫�
-    //         "�먮━", "�먯떊", "�먯뿰" �� 臾닿��� �⑥뼱瑜� �듭㎏濡� ��젣�대쾭�몄쓬.
-    //         �묐��ш� �놁쓣 寃쎌슦 媛� �욎뿉 諛섎뱶�� 怨듬갚�� �덉뼱�쇰쭔 硫뷀��뺣낫濡� �몄젙�섎룄濡� �쒗븳.
-    const keySuffixed = `(?:${keywords})(?:��|��|\\([^)]*\\))`;
+    const valPattern = `${valToken}(?:\\s*[·ㆍ]\\s*${valToken})*`;
+    // ✅ FIX: "자" 같은 한 글자 키워드는 은/는/괄호 접미사 없이 바로 뒤 글자에 붙으면
+    //         "자리", "자신", "자연" 등 무관한 단어를 통째로 삭제해버렸음.
+    //         접미사가 없을 경우 값 앞에 반드시 공백이 있어야만 메타정보로 인정하도록 제한.
+    const keySuffixed = `(?:${keywords})(?:은|는|\\([^)]*\\))`;
     const keyBare = `(?:${keywords})`;
-    const singleMeta = `(?<![媛�-��])(?:${keySuffixed}\\s*${valPattern}|${keyBare}\\s+${valPattern})`;
+    const singleMeta = `(?<![가-힣])(?:${keySuffixed}\\s*${valPattern}|${keyBare}\\s+${valPattern})`;
 
-    const metaChainRegex = new RegExp(`(?:,\\s*|\\s+)*(?:${singleMeta}(?:,\\s*|\\s+�대ŉ|\\s+�닿퀬|\\s+)*)+(?:�대떎|����|�댁뿀��|�대ŉ|�닿퀬|�댁옄|�쇰줈)?`, "g");
+    const metaChainRegex = new RegExp(`(?:,\\s*|\\s+)*(?:${singleMeta}(?:,\\s*|\\s+이며|\\s+이고|\\s+)*)+(?:이다|였다|이었다|이며|이고|이자|으로)?`, "g");
     result = result.replace(metaChainRegex, "");
 
     return result
-        .replace(/\(\s*(?:蹂멸�|�쒗샇|��|�꾨챸|�쇰챸)[^;)]*;\s*/g, "(")
+        .replace(/\(\s*(?:본관|시호|자|아명|일명)[^;)]*;\s*/g, "(")
         .replace(/\.{2,}/g, ".")
         .replace(/\s+\./g, ".")
         .replace(/\s+/g, " ")
@@ -92,8 +88,8 @@ function removeMetaBySearch(text) {
 
 function isIncompleteSentence(sentence) {
     if (!sentence) return true;
-    const cleanEnd = sentence.replace(/[()"'\s.]+$|��/g, "").trim();
-    const validEndingRegex = /(?:��|����|�댁뿀��|�섏���|�먮떎|�쒕떎|�덈떎|�녿떎|�덈떎|�섏뿀��|�④꼈��|�숈“�섏���|吏�吏��섏���|媛쒖쭊�쒖섟��|��엫�덈떎|遺덈┛��)$/;
+    const cleanEnd = sentence.replace(/[()"'\s.]+$|》/g, "").trim();
+    const validEndingRegex = /(?:다|였다|이었다|하였다|됐다|된다|있다|없다|했다|되었다|남겼다|동조하였다|지지하였다|개진시켰다|역임했다|불린다)$/;
     return !validEndingRegex.test(cleanEnd);
 }
 
@@ -101,7 +97,7 @@ function splitSentences(text) {
     if (!text || typeof text !== "string") return [];
     const normalized = normalizeSpace(text).replace(/\n+/g, " ");
     return normalized
-        .split(/(?<!\b[a-zA-Z]|\d)([.!?��])(?=\s+|$)/)
+        .split(/(?<!\b[a-zA-Z]|\d)([.!?。])(?=\s+|$)/)
         .reduce((acc, curr, index, array) => {
             if (index % 2 === 0) {
                 const punctuation = array[index + 1] || "";
@@ -113,29 +109,29 @@ function splitSentences(text) {
 }
 
 // ==========================================================
-// 2. �낆쟻/吏곸뾽 諛� �쒕룞 愿��� �뺢퇋�� �뺤옣
+// 2. 업적/직업 및 활동 관련 정규식 확장
 // ==========================================================
 
-// �렞 �낆쟻, 吏곸뾽, 李쎌옉, �쒕룞, �섏긽 愿��� �ㅼ썙�� ���� �뺤옣
-const ACHIEVEMENT_REGEX = /(湲곗뿬|�ㅻ┰|媛쒕컻|諛쒓껄|李쎌떆|二쇰룄|諛쒗몴|�곹뼢|�깃났|援ъ텞|�곷챸|�섏긽|李쎈┰|����|珥앷큵|媛쒗쁺|�뺣┰|二쇱갹|泥닿퀎��|�뺤궛|蹂닿툒|李쎌븞|吏묐���|湲고�|珥덉꽍|�밸━|�됱젙|�뺤옣|李쎌떆��|媛쒖쿃��|�꾨쾭吏�|����|以묒슂��|�낆쟻|�곌뎄|�쇰Ц|�묓뭹|李쎌옉|諛쒕챸|媛쒖쭊|�숈“|吏�吏�|�댁꽍|諛섎�|�쇱웳|遺���|�섎줈��|愿�痢�|��엫|�뚯꽕媛�|�묎�|臾명븰|�뚯꽕|�쒖씤|�붽�|�뚯븙媛�|泥좏븰��|�ъ긽媛�|�뺤튂媛�|怨쇳븰��|臾쇰━�숈옄|�섑븰��|援먯닔|�쒕룞|吏묓븘|異쒗뙋|諛쒓컙|�몃줎��|湲곗옄|�쒕룞��|�묒뾽|�꾩꽦)/;
+// 🎯 업적, 직업, 창작, 활동, 수상 관련 키워드 대폭 확장
+const ACHIEVEMENT_REGEX = /(기여|설립|개발|발견|창시|주도|발표|영향|성공|구축|혁명|수상|창립|저술|총괄|개혁|정립|주창|체계화|확산|보급|창안|집대성|기틀|초석|승리|평정|확장|창시자|개척자|아버지|대표|중요한|업적|연구|논문|작품|창작|발명|개진|동조|지지|해석|반대|논쟁|부활|수로도|관측|역임|소설가|작가|문학|소설|시인|화가|음악가|철학자|사상가|정치가|과학자|물리학자|수학자|교수|활동|집필|출판|발간|언론인|기자|활동을|작업|완성)/;
 
-// �렞 �몄씠利�/TMI �ㅼ썙�� (利됱떆 �덈씫)
-const HARD_NOISE_REGEX = /(��\s*(?:�꾨뱾|��|�먯옄|�먮�|遺���|�꾨궡|�⑦렪|遺�移�|紐⑥튇|李⑤궓|�λ궓|�먮�|�꾩넀|遺�紐�)|寃고샎��|�ы븯��|�쇳솕|�щ떞|�뚮Ц|�꾪빐吏꾨떎|泥댁쑁愿�|�좎쟻|�ㅼ감媛�\s*�앷릿��|李⑥씠瑜�\s*蹂댁씠怨�|�댁꽕��\s*�덈떎|�쒖뼱��|�좏븰��|異쒖깮�섏���|�ы뻾��|援ш�|�먮뱾|湲곕뀗�섏뿬|�쒖옉�섏뿀��|�앹씪��)/;
+// 🎯 노이즈/TMI 키워드 (즉시 탈락)
+const HARD_NOISE_REGEX = /(의\s*(?:아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|자녀|후손|부모)|결혼하|슬하에|일화|여담|소문|전해진다|체육관|유적|오차가\s*생긴다|차이를\s*보이고|이설이\s*있다|태어나|유학을|출생하였다|여행을|구글|두들|기념하여|제작되었다|생일을)/;
 
-// �� FIX: \b �� ASCII �뚮뱶 寃쎄퀎留� �몄떇�섍린 �뚮Ц�� �쒓� ��紐낆궗 �ㅼ뿉�쒕뒗 �덈� 留ㅼ튂�섏� �딆븯��.
-//         "�ㅼ쓬 湲��먭� �쒓� �뚯젅�� �꾨땲嫄곕굹 臾몄옄�� ��" 議곌굔�쇰줈 援먯껜.
-const PRONOUN_REGEX = /(?:^|\s)(?:洹몃뒗|洹멸�|洹몄쓽|洹몃�|洹몄뿉寃�|洹몃���|洹몃�媛�|洹몃���|洹몃�瑜�)(?=[^媛�-��]|$)/;
+// ✅ FIX: \b 는 ASCII 워드 경계만 인식하기 때문에 한글 대명사 뒤에서는 절대 매치되지 않았음.
+//         "다음 글자가 한글 음절이 아니거나 문자열 끝" 조건으로 교체.
+const PRONOUN_REGEX = /(?:^|\s)(?:그는|그가|그의|그를|그에게|그녀는|그녀가|그녀의|그녀를)(?=[^가-힣]|$)/;
 
 function filterOtherPerson(rawSentences, aliases = []) {
     if (!Array.isArray(rawSentences)) return [];
     const safeAliases = Array.isArray(aliases) ? aliases.filter(Boolean) : [];
     if (safeAliases.length === 0) return rawSentences;
 
-    // �� FIX: "諛붾줈 �� 2臾몄옣"留� �뺤씤�섎뜕 諛⑹떇�� "洹몃뒗 ~. 洹몃뒗 ~. 洹몃뒗 ~."泥섎읆
-    //         ��紐낆궗媛� 3踰� �댁긽 �곗냽�섎㈃ 3踰덉㎏ 臾몄옣遺��� 嫄몃윭吏��� 臾몄젣媛� �덉뿀��.
-    //         �쒖감�곸쑝濡� �묒쑝硫댁꽌 "吏�湲� 臾몃㎘�� 蹂몄씤 �댁빞湲곗씤吏�" �곹깭(inSubjectContext)瑜�
-    //         異붿쟻�섍퀬, ��紐낆궗 臾몄옣�� 洹� �곹깭瑜� �좎��쒖폒 泥댁씤�� �딄린吏� �딄쾶 ��.
-    let inSubjectContext = true; // 泥� 臾몄옣�� ��긽 蹂몄씤 �뚭컻濡� 媛꾩＜
+    // ✅ FIX: "바로 앞 2문장"만 확인하던 방식은 "그는 ~. 그는 ~. 그는 ~."처럼
+    //         대명사가 3번 이상 연속되면 3번째 문장부터 걸러지는 문제가 있었음.
+    //         순차적으로 훑으면서 "지금 문맥이 본인 이야기인지" 상태(inSubjectContext)를
+    //         추적하고, 대명사 문장은 그 상태를 유지시켜 체인이 끊기지 않게 함.
+    let inSubjectContext = true; // 첫 문장은 항상 본인 소개로 간주
 
     return rawSentences.map((sentence, index) => {
         const text = sentence.trim();
@@ -156,11 +152,11 @@ function filterOtherPerson(rawSentences, aliases = []) {
         const hasOtherPersonNoise = HARD_NOISE_REGEX.test(text);
 
         if (hasPronoun && inSubjectContext && !hasOtherPersonNoise) {
-            // ��紐낆궗 + 吏곸쟾源뚯� 蹂몄씤 臾몃㎘�� �댁뼱吏�怨� �덉뿀�ㅻ㈃ 怨꾩냽 �좎�
+            // 대명사 + 직전까지 본인 문맥이 이어지고 있었다면 계속 유지
             return text;
         }
 
-        // ��紐낆궗�� �녾퀬 蹂몄씤 �대쫫�� �녿뒗 臾몄옣(�ㅻⅨ �몃Ъ �쒖닠 媛��μ꽦) �� 臾몃㎘ 醫낅즺
+        // 대명사도 없고 본인 이름도 없는 문장(다른 인물 서술 가능성) → 문맥 종료
         inSubjectContext = false;
         return null;
     }).filter(Boolean);
@@ -168,11 +164,11 @@ function filterOtherPerson(rawSentences, aliases = []) {
 
 function getDocumentKeywords(text, topN = 12) {
     if (!text) return [];
-    const words = text.match(/[媛�-�즑-zA-Z0-9]{2,}/g) || [];
+    const words = text.match(/[가-힣a-zA-Z0-9]{2,}/g) || [];
     const stopWords = new Set([
-        "����", "寃쎌슦", "愿���", "�듯빐", "�꾪빐", "�곕씪", "�먰븳", "洹몃━怨�", "�섏�留�", "�댄썑", 
-        "�뱀떆", "寃껋씠��", "�랁빐", "�섑빐", "�덈떎", "�녿떎", "�섏뼱", "�섏뿬", "�덈뒗", "�섎뒗",
-        "�щ엺", "�섎굹", "媛�吏�", "�먯떊��", "�꾪빐", "�뚮Ц", "愿���", "湲곕줉", "湲곕줉�섏뼱", "李⑥씠瑜�"
+        "대한", "경우", "관한", "통해", "위해", "따라", "또한", "그리고", "하지만", "이후", 
+        "당시", "것이다", "속해", "의해", "있다", "없다", "되어", "하여", "있는", "하는",
+        "사람", "하나", "가지", "자신의", "위해", "때문", "관련", "기록", "기록되어", "차이를"
     ]);
     const freqMap = {};
     for (const w of words) {
@@ -186,7 +182,7 @@ function getDocumentKeywords(text, topN = 12) {
 }
 
 // ==========================================================
-// 3. 硫붿씤 �붿빟 �앹꽦 濡쒖쭅
+// 3. 메인 요약 생성 로직
 // ==========================================================
 
 export function extractImportantSentences(bodyText, introText = "", aliases = [], count = 3) {
@@ -305,4 +301,4 @@ export function buildDescription(introText, bodyText, aliases = [], extraCount =
 
     const merged = normalizeSpace([introResultText, extra].filter(Boolean).join(" "));
     return cleanSlice(merged);
-}   
+}
