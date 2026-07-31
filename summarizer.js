@@ -1,6 +1,6 @@
 // summarizer.js
 // 위키 원문 정제(cleanWikiText) + 호/자 정제(stripMetainfo) + 서문 앵커(Anchor) 고정 요약 모듈
-
+const cache = {};
 // ==========================================================
 // 1. 위키 텍스트 전처리 정제 함수 (cleanWikiText)
 // ==========================================================
@@ -311,6 +311,8 @@ export function buildDescription(
   anchorCount = 3, // 서문 앵커 고정 문장 개수 (기본 2개)
   maxLength = 630
 ) {
+  const cacheKey = introText + bodyText;
+  if (cache[cacheKey]) return cache[cacheKey];
   // 1) cleanWikiText -> stripMetainfo 파이프라인
   const rawCleanIntro = cleanWikiText(introText);
   const rawCleanBody = cleanWikiText(bodyText);
@@ -435,7 +437,7 @@ if (HERITAGE_ORBOOK_DESIGNATION_REGEX.test(sentence)) {
     .sort((a, b) => a.index - b.index);
 
   // 6) 완벽한 문장 조립
-  return assembleCompleteSentences(anchorSentences, ranked, maxLength);
+  return (cache[cacheKey] = result);
 }
 
 export function summarizeText(text, topN = 3) {
