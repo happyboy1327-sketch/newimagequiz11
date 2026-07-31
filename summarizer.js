@@ -1,5 +1,5 @@
 // ==========================================================
-// 1. 위키 링크 개념어 초경량 탐침기 (12줄)
+// 1. 위키 링크 개념어 초경량 탐침기
 // ==========================================================
 export function getWikiConceptTerms(rawText, topN = 15) {
     if (!rawText || typeof rawText !== "string") return [];
@@ -49,17 +49,17 @@ const HARD_NOISE_REGEX = new RegExp([
     "시대착오", "망신", "언론", "기사", "인터뷰", "전제한\\s*뒤", "거세다", "반발", "캠페인"
 ].join("|"));
 
+// 정규식 이스케이프 헬퍼
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 // ==========================================================
 // 3. 헬퍼 함수
 // ==========================================================
 
-
-// 🎯 1. 짝이 안 맞는 ( 또는 ) 기호만 골라내어 완벽 제거하는 스택 함수
-// 🎯 O(N) 초고속 짝 없는 괄호 기호 적출 함수
-
 function removeUnpairedParentheses(str) {
     if (!str) return "";
-
     const stack = [];
     const remove = new Set();
 
@@ -79,26 +79,20 @@ function removeUnpairedParentheses(str) {
         remove.add(i);
     }
 
-    return [...str]
-        .filter((_, i) => !remove.has(i))
-        .join("");
+    let result = "";
+    for (let i = 0; i < str.length; i++) {
+        if (!remove.has(i)) result += str[i];
+    }
+    return result;
 }
-
 
 export function cleanWikiText(text) {
     if (!text) return "";
 
     let result = text
-        // [[링크|표시명]]
         .replace(/\[\[(?:[^|\]]+\|)?([^\]|]+)\]\]/g, "$1")
-
-        // 위키 각주 제거
         .replace(/\[(?:\d+|출처\s*필요|각주)\]/g, "")
-
-        // 빈 괄호 제거
         .replace(/\(\s*\)/g, "")
-
-        // 첫 번째, 2번째 등 제거
         .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "");
 
     result = removeUnpairedParentheses(result);
@@ -130,14 +124,10 @@ function removeMetaBySearch(text) {
     result = result.replace(hoMetaRegex, "");
 
     const keywords = "시호|본관|자|별호|아호|아명|태명|세례명|일명|당호|법명";
-    const valToken = `(?:[^\\s,.\\(\\)\\u00B7]+(?:\\([^)]*\\)?)?)`;
-    const valPattern = `${valToken}(?:\\s*[·ㆍ]\\s*${valToken})*`;
+    const singleMeta = `(?:${keywords})(?:은|는|\\([^)]*\\))?\\s*[^,\\(\\)\\.]+(?:\\([^)]*\\))?`;
     
-    const keySuffixed = `(?:${keywords})(?:은|는|\\([^)]*\\))`;
-    const keyBare = `(?:${keywords})`;
-    const singleMeta = `(?<![가-힣])(?:${keySuffixed}\\s*${valPattern}|${keyBare}\\s+${valPattern})`;
-
-    const metaChainRegex = new RegExp(`(?:,\\s*|\\s+)*(?:${singleMeta}(?:,\\s*|\\s+이며|\\s+이고|\\s+)*)+(?:이다|였다|이었다|이며|이고|이자|으로)?`, "g");
+    // 안전한 선형 정규식으로 수정 (무한 멈춤 방지)
+    const metaChainRegex = new RegExp(`(?:,\\s*|\\s+)*(?:${singleMeta})+(?:이다|였다|이었다|이며|이고|이자|으로)?`, "g");
     result = result.replace(metaChainRegex, "");
 
     return result
@@ -224,7 +214,7 @@ function getDocumentKeywords(text, topN = 12) {
 }
 
 // ==========================================================
-// 4. 핵심 추출 및 요약 생성 로직 (인자 순서 교정 완료)
+// 4. 핵심 추출 및 요약 생성 로직
 // ==========================================================
 
 export function extractImportantSentences(bodyText, introText = "", wikiTermRegex = null, aliases = [], count = 3) {
@@ -253,7 +243,6 @@ export function extractImportantSentences(bodyText, introText = "", wikiTermRege
 
         let score = 10;
 
-        // 🎯 위키 탐침 정규식 가산점 (+50점)
         if (wikiTermRegex && wikiTermRegex.test(text)) {
             score += 50;
         }
@@ -301,18 +290,17 @@ export function extractImportantSentences(bodyText, introText = "", wikiTermRege
 export function buildDescription(introText = "", bodyText = "", aliases = [], extraCount = 3, introThreshold = 150, maxLength = 630) { 
     const rawTotal = ((introText || "") + " " + (bodyText || "")).trim();
 
-    // ⛔ [탈락 조건 1] 전체 원본 글자 수가 80자 미만인 토막글은 즉시 철수
     if (rawTotal.length < 80) return "";
 
-    // ⛔ [탈락 조건 2] '태어났다/사망하였다' 단어를 빼고 나면 남는 실질 내용이 30자 미만일 때 탈락
     const substantiveText = cleanWikiText(rawTotal).replace(/(태어났다|사망하였다|출생|사망)/g, "").trim();
     if (substantiveText.length < 30) return "";
     
-    // 🎯 1. 대괄호 제거 전 원문에서 위키 개념어 탐침
+    // 🎯 1. 특수문자가 포함되어도 안 죽도록 이스케이프 적용
     const wikiTerms = getWikiConceptTerms((introText || "") + " " + (bodyText || ""));
-    const wikiTermRegex = wikiTerms.length ? new RegExp(wikiTerms.join("|")) : null;
+    const wikiTermRegex = wikiTerms.length 
+        ? new RegExp(wikiTerms.map(escapeRegExp).join("|")) 
+        : null;
 
-    // 🎯 2. 정제 수행
     let introClean = removeMetaBySearch(cleanWikiText(introText));
     let bodyClean = removeMetaBySearch(cleanWikiText(bodyText));
 
@@ -372,7 +360,6 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ex
 
     let extra = "";
     if (targetBody && targetBody.length > 10) {
-        // 🎯 3. 올바른 인자 순서로 전달: (bodyText, introText, wikiTermRegex, aliases, count)
         extra = extractImportantSentences(targetBody, introResultText, wikiTermRegex, aliases, extraCount);
     }
 
