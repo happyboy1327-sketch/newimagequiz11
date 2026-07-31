@@ -319,8 +319,9 @@ export function buildDescription(
   const cleanBody = stripMetainfo(rawCleanBody);
 
   const introSentences = splitSentences(cleanIntro);
-  const bodySentences = splitSentences(cleanBody);
-
+ const bodySentences = splitSentences(cleanBody);
+ const allSentences = [...introSentences, ...bodySentences];
+  
   if (introSentences.length === 0 && bodySentences.length === 0) return "";
 
   // 2) 앵커 문장(서문 첫 2문장) 및 후보 분석 문장 분리
