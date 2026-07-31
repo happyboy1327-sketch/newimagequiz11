@@ -37,8 +37,9 @@ const RAW_KEYWORDS = [
 ];
 
 const IMPORTANT_KEYWORDS = Array.from(new Set(RAW_KEYWORDS)).sort((a, b) => b.length - a.length);
-const KEYWORD_REGEX = new RegExp(IMPORTANT_KEYWORDS.join("|"));
-
+const KEYWORD_REGEX = new RegExp(
+    IMPORTANT_KEYWORDS.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")
+);
 const HARD_NOISE_REGEX = new RegExp([
     "(?:의\\s*(?:아들|딸|손자|손녀|부인|아내|남편|부친|모친|차남|장남|자녀|후손|부모|친척|사위|숙부|고모))",
     "결혼하", "슬하에", "일화", "여담", "소문", "전해진다", "야사", "전설", "민담",
@@ -57,17 +58,12 @@ const HARD_NOISE_REGEX = new RegExp([
 // 🎯 O(N) 초고속 짝 없는 괄호 기호 적출 함수
 
 export function cleanWikiText(text) {
-    console.log(text);
-    let cleaned = cleanWikiText(text);
-    console.log(cleaned);
     if (!text) return "";
 
     let cleaned = text
-        .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1") // [[링크|표기]] -> 표기
+        .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1")
         .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
         .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "");
-
-
 
     return cleaned
         .replace(/\s+/g, " ")
