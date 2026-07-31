@@ -267,6 +267,15 @@ export function extractImportantSentences(bodyText, introText = "", wikiTermRege
 }
 
 export function buildDescription(introText = "", bodyText = "", aliases = [], extraCount = 3, introThreshold = 150, maxLength = 630) { 
+    const rawTotal = ((introText || "") + " " + (bodyText || "")).trim();
+
+    // ⛔ [탈락 조건 1] 전체 원본 글자 수가 80자 미만인 토막글은 즉시 철수
+    if (rawTotal.length < 80) return "";
+
+    // ⛔ [탈락 조건 2] '태어났다/사망하였다' 단어를 빼고 나면 남는 실질 내용이 30자 미만일 때 탈락
+    const substantiveText = cleanWikiText(rawTotal).replace(/(태어났다|사망하였다|출생|사망)/g, "").trim();
+    if (substantiveText.length < 30) return "";
+    
     // 🎯 1. 대괄호 제거 전 원문에서 위키 개념어 탐침
     const wikiTerms = getWikiConceptTerms((introText || "") + " " + (bodyText || ""));
     const wikiTermRegex = wikiTerms.length ? new RegExp(wikiTerms.join("|")) : null;
