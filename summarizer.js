@@ -127,7 +127,8 @@ function filterOtherPerson(rawSentences, aliases = []) {
         const hasSelfName = safeAliases.some(alias => text.includes(alias));
         if (hasSelfName) return true;
 
-        const hasPronoun = /(?:^|\s)(?:그는|그가|그의|그를|그에게|그녀는|그녀가|그녀의|그녀를)\b/.test(text);
+        const PRONOUN_REGEX = /(?:^|\s)(?:그는|그가|그의|그를|그에게|그녀는|그녀가|그녀의|그녀를)(?=[^가-힣]|$)/;
+       const hasPronoun = PRONOUN_REGEX.test(text);
 
         if (hasPronoun) {
             for (let i = index - 1; i >= Math.max(0, index - 2); i--) {
