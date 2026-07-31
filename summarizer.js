@@ -55,39 +55,6 @@ const HARD_NOISE_REGEX = new RegExp([
 
 // 🎯 1. 짝이 안 맞는 ( 또는 ) 기호만 골라내어 완벽 제거하는 스택 함수
 // 🎯 O(N) 초고속 짝 없는 괄호 기호 적출 함수
-function removeUnmatchedParentheses(text) {
-    if (!text) return "";
-    const len = text.length;
-    const stack = [];
-    const unmatchedIndices = new Set();
-
-    for (let i = 0; i < len; i++) {
-        if (text[i] === '(') {
-            stack.push(i);
-        } else if (text[i] === ')') {
-            if (stack.length > 0) {
-                stack.pop(); // 정상적으로 짝이 맞음 (내용 전체 보존)
-            } else {
-                unmatchedIndices.add(i); // 짝 없는 ')'
-            }
-        }
-    }
-
-    // 닫히지 않고 끝난 짝 없는 '(' 제거 대상 등록
-    while (stack.length > 0) {
-        unmatchedIndices.add(stack.pop());
-    }
-
-    if (unmatchedIndices.size === 0) return text;
-
-    let result = "";
-    for (let i = 0; i < len; i++) {
-        if (!unmatchedIndices.has(i)) {
-            result += text[i];
-        }
-    }
-    return result;
-}
 
 export function cleanWikiText(text) {
     console.log(text);
@@ -100,8 +67,7 @@ export function cleanWikiText(text) {
         .replace(/\[\s*\*?\s*\]|\[\d+\]|\[출처\s*필요\]|\[각주\]/g, "")
         .replace(/\((첫|두|세|네|다섯|\d+)\s*번째\)/g, "");
 
-    // 정상적으로 닫힌 괄호(외국어명, 달력, 생몰년)는 100% 보존하고, 짝 없는 괄호만 제거
-    cleaned = removeUnmatchedParentheses(cleaned);
+
 
     return cleaned
         .replace(/\s+/g, " ")
