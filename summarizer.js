@@ -106,8 +106,7 @@ const TMI_NOISE_REGEX = /(?:부친|모친|조부|증조부|고조부|외가|오�
 // ==========================================================
 
 // 문화재/지정 관련 문장 정규식
-const HERITAGE_DESIGNATION_REGEX = /(?:보물|국보|사적|천연기념물|유형문화재|책|저서|작품)\s*(?:제?\d+호)?(?:로|에)\s*(?:지정|등록)/;
-
+const HERITAGE_ORBOOK_DESIGNATION_REGEX = /(?:(?:보물|국보|사적|천연기념물|유형문화재)\s*(?:제?\d+호)?\s*(?:로|에)\s*(?:지정|등록)|(?:책|저서|작품)\s*(?:을|를|으로|로|에)?\s*(?:저술|집필|간행|출판|발간|남김|대표|지정|등록))/;
 /**
  * 문장에 명확한 주어가 빠져있는지 확인 (단락/소제목 보완 필요 여부)
  */
@@ -371,7 +370,7 @@ export function buildDescription(
 }
 
 
-if (HERITAGE_DESIGNATION_REGEX.test(sentence)) {
+if (HERITAGE_ORBOOK_DESIGNATION_REGEX.test(sentence)) {
   const hasLocalSubject = /^[가-힣A-Za-z0-9\s]{1,15}(?:은|는|이|가)\b/.test(sentence);
   
   // 문장 자체에 주어가 없더라도 소제목 맥락(sectionTitle)이 있으면 감점하지 않음
