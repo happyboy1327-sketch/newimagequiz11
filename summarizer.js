@@ -25,8 +25,7 @@ export function cleanWikiText(text) {
   // 5) 문장 내 항목 번호 노이즈 제거 ("1) 왕대수 또는 2) 혈연상..." -> "왕대수 또는 혈연상...")
   cleaned = cleaned.replace(/(?<=\s|^)\d+\)\s*/g, "");
 
-  // [추가] Keller1880년 -> Keller 1880년
-  cleaned = cleaned.replace(/([a-zA-Z])(\d{4}년)/g, "$1 $2");
+  
   cleaned = cleaned.replace(/(?<=\s|^)\d+\)\s*/g, "");
   cleaned = cleaned.replace(/(?<=\s|^)\d+\.(?!\d)\s*/g, "");
   
