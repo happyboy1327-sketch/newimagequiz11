@@ -361,13 +361,23 @@ export function buildDescription(
     rawCandidates = bodySentences.slice(anchorCount);
   }
 
-  // 👈 [핵심 수정] 단순 slice(0, 20) 대신 TMI가 없고 업적/핵심 키워드가 포함된 문장을 문서 전체에서 수집
-  let candidateSentences = rawCandidates.filter((s) => {
-    // 족보/가계 TMI 문장 우선 제외
+  // [핵심 수정 1] TMI 문장은 후보군 생성 단계에서 완벽히 제외 (Hard Exclusion)
+  const cleanCandidates = rawCandidates.filter((s) => {
     if (TMI_NOISE_REGEX.test(s)) return false;
     if (UNIVERSAL_NOISE_KEYWORDS.some((kw) => s.includes(kw))) return false;
     return true;
   });
+
+  // [핵심 수정 2] 문서 전체(전반/중반/후반)에서 문장을 균등 수집하여 하얼빈/옥중 투쟁 반영
+  let candidateSentences = [];
+  if (cleanCandidates.length > 30) {
+    const step = Math.floor(cleanCandidates.length / 30);
+    for (let i = 0; i < cleanCandidates.length && candidateSentences.length < 30; i += step) {
+      candidateSentences.push(cleanCandidates[i]);
+    }
+  } else {
+    candidateSentences = cleanCandidates;
+  }
 
   // TMI 필터링 후에도 후보가 너무 많다면 전체 문서에 걸쳐 35개 추출
   if (candidateSentences.length > 35) {
@@ -376,7 +386,7 @@ export function buildDescription(
 
   // 예외 처리: TMI 필터링으로 다 빠졌을 경우 원본에서 보완
   if (candidateSentences.length === 0) {
-    candidateSentences = rawCandidates.slice(0, 20);
+    candidateSentences = rawCandidates.slice(0, 18);
   }
 
   // 3) 주제어 추출 및 TextRank 계산
@@ -408,7 +418,8 @@ export function buildDescription(
       return { sentence, score: 0, index };
     }
 
-    const positionFactor = 1.0 / (1 + index * 0.06);
+    // [핵심 수정 3] 위치 패널티 완화 (0.06 -> 0.01) : 후반부 주요 업적 보호
+    const positionFactor = 1.0 / (1 + index * 0.01);
     score *= positionFactor;
 
     const tokens = tokenize(sentence);
