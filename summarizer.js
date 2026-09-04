@@ -360,6 +360,8 @@ export function buildDescription(
     anchorSentences = bodySentences.slice(0, anchorCount);
     rawCandidates = bodySentences.slice(anchorCount);
   }
+  
+  const anchorContextText = anchorSentences.join(" ");
 
   // [핵심 수정 1] TMI 문장은 후보군 생성 단계에서 완벽히 제외 (Hard Exclusion)
   const cleanCandidates = rawCandidates.filter((s) => {
