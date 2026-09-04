@@ -324,7 +324,7 @@ export function buildDescription(
   bodyText = "",
   aliases = [],
   extraCount = 4,   // 👈 핵심 문장을 충분히 담도록 추출 개수를 4개 이상으로 확보
-  anchorCount = 2,
+  anchorCount = 3,
   maxLength = 630,
   sectionTitle = ""
 ) {
