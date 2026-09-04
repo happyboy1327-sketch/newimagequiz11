@@ -27,7 +27,9 @@ export function cleanWikiText(text) {
 
   // [추가] Keller1880년 -> Keller 1880년
   cleaned = cleaned.replace(/([a-zA-Z])(\d{4}년)/g, "$1 $2");
-
+  cleaned = cleaned.replace(/(?<=\s|^)\d+\)\s*/g, "");
+  cleaned = cleaned.replace(/(?<=\s|^)\d+\.(?!\d)\s*/g, "");
+  
   // 6) 중복 공백 정리
   return cleaned.replace(/\s+/g, " ").trim();
 }
@@ -160,7 +162,7 @@ function splitSentences(text) {
   if (!text) return [];
   const cleaned = text.replace(/\s+/g, " ").trim();
   return cleaned
-    .split(/(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/)
+    .split(/(?<=[.!?])(?<!\d\.\d+)\s+(?=[가-힣A-Za-z0-9"'(])/)
     .map((s) => s.trim())
     .filter((s) => s.length > 8);
 }
