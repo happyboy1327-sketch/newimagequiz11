@@ -370,20 +370,43 @@ export function buildDescription(
     return true;
   });
 
-  // [핵심 수정 2] 문서 전체(전반/중반/후반)에서 문장을 균등 수집하여 하얼빈/옥중 투쟁 반영
+// [핵심 보완] 스마트 step 샘플링: VIP 문장은 100% 보존 + 일반 문장만 step 추출
   let candidateSentences = [];
-  if (cleanCandidates.length > 30) {
-    const step = Math.floor(cleanCandidates.length / 30);
-    for (let i = 0; i < cleanCandidates.length && candidateSentences.length < 30; i += step) {
-      candidateSentences.push(cleanCandidates[i]);
+
+  if (cleanCandidates.length > 35) {
+    // 1) 무조건 살려야 하는 VIP 핵심 문장 조건 (업적 동사, 주요 키워드, 서적/작품명)
+    const isVipSentence = (s) => 
+      ACHIEVEMENT_VERB_REGEX.test(s) ||
+      CORE_SIGNIFICANCE_REGEX.test(s) ||
+      /[《「"'][^《》「」"']+[》」"']/.test(s) ||
+      /(?:노벨상|훈장|의거|독립운동|저격|창설|창시|발견|저술|선언|혁명)/.test(s);
+
+    const vipSentences = [];
+    const normalSentences = [];
+
+    // 2) VIP 문장과 일반 문장 분리
+    cleanCandidates.forEach((s) => {
+      if (isVipSentence(s)) {
+        vipSentences.push(s);
+      } else {
+        normalSentences.push(s);
+      }
+    });
+
+    // 3) 일반 문장에만 step 간격 추출 적용
+    const targetNormalCount = Math.max(10, 35 - vipSentences.length);
+    const step = Math.max(1, Math.floor(normalSentences.length / targetNormalCount));
+    const sampledNormals = [];
+
+    for (let i = 0; i < normalSentences.length; i += step) {
+      sampledNormals.push(normalSentences[i]);
     }
+
+    // 4) VIP 문장 전체 + step 추출된 일반 문장을 합친 후 원본 순서(Index)대로 재정렬
+    const candidateSet = new Set([...vipSentences, ...sampledNormals]);
+    candidateSentences = cleanCandidates.filter((s) => candidateSet.has(s));
   } else {
     candidateSentences = cleanCandidates;
-  }
-
-  // TMI 필터링 후에도 후보가 너무 많다면 전체 문서에 걸쳐 35개 추출
-  if (candidateSentences.length > 35) {
-    candidateSentences = candidateSentences.slice(0, 35);
   }
 
   // 예외 처리: TMI 필터링으로 다 빠졌을 경우 원본에서 보완
