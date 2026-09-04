@@ -85,13 +85,16 @@ export function stripMetainfo(text) {
 // ==========================================================
 
 const CORE_SIGNIFICANCE_KEYWORDS = [
-  "원리", "구조", "기능", "작용", "현상", "이론", "연구", "발견", "규명", "증명", 
+  "원리", "구조", "기능", "작용", "현상", "이론", "연구", "발견", "규명", "증명", "설명", 
   "분석", "기반", "시스템", "메커니즘", "특징", "성질", "분류", "상태", "상호작용", "개척",
   "제도", "정책", "사회", "경제", "체계", "관계", "변화", "전개", "성장", "효과", 
   "원인", "결과", "분포", "개혁", "조약", "협정", "시장", "구조적", "통일", "통합", "정합", 
   "양식", "사상", "문화", "작품", "기법", "전통", "유형", "형성", "창작", "유산", "완화", 
   "대표", "영향", "의의", "기여", "발전", "역사", "중심", "주요", "핵심", "주요한",
-  "지정", "설립", "주도", "구성", "기록", "도입", "확립", "공격", "격퇴", "정벌", "함락", "영향"
+  "지정", "설립", "주도", "구성", "기록", "도입", "확립", "공격", "격퇴", "정벌", "함락",
+  // 독립운동 / 인물 업적 관련 키워드 추가
+  "독립운동", "의병", "하얼빈", "저격", "사살", "의거", "단지동맹", "동양평화론",
+  "국채보상운동", "삼흥학교", "구국", "대한의군", "뤼순", "유묵", "참모중장"
 ];
 
 const UNIVERSAL_NOISE_KEYWORDS = [
@@ -320,15 +323,14 @@ export function buildDescription(
   introText = "",
   bodyText = "",
   aliases = [],
-  extraCount = 3,
-  anchorCount = 3,
+  extraCount = 4,   // 👈 핵심 문장을 충분히 담도록 추출 개수를 4개 이상으로 확보
+  anchorCount = 2,
   maxLength = 630,
-  sectionTitle = "" // 👈 [수정 1] sectionTitle 매개변수 추가 (ReferenceError 방지)
+  sectionTitle = ""
 ) {
   const cacheKey = introText + bodyText;
   if (cache[cacheKey]) return cache[cacheKey];
 
-  // 1) cleanWikiText -> stripMetainfo 파이프라인
   const rawCleanIntro = cleanWikiText(introText);
   const rawCleanBody = cleanWikiText(bodyText);
 
@@ -338,29 +340,36 @@ export function buildDescription(
   const introSentences = splitSentences(cleanIntro);
   const bodySentences = splitSentences(cleanBody);
   const allSentences = [...introSentences, ...bodySentences];
-  
+
   if (introSentences.length === 0 && bodySentences.length === 0) return "";
 
-  // 2) 앵커 문장 및 후보 분석 문장 분리
   let anchorSentences = [];
-  let candidateSentences = [];
+  let rawCandidates = [];
 
   if (introSentences.length > 0) {
     anchorSentences = introSentences.slice(0, anchorCount);
-    candidateSentences = [...introSentences.slice(anchorCount), ...bodySentences];
+    rawCandidates = [...introSentences.slice(anchorCount), ...bodySentences];
   } else {
     anchorSentences = bodySentences.slice(0, anchorCount);
-    candidateSentences = bodySentences.slice(anchorCount);
+    rawCandidates = bodySentences.slice(anchorCount);
   }
 
-  // 👈 [수정 2] 후보 문장을 상위 20개로 제한하여 PageRank 연산 속도 30배 이상 향상
-  if (candidateSentences.length > 20) {
-    candidateSentences = candidateSentences.slice(0, 20);
+  // 👈 [핵심 수정] 단순 slice(0, 20) 대신 TMI가 없고 업적/핵심 키워드가 포함된 문장을 문서 전체에서 수집
+  let candidateSentences = rawCandidates.filter((s) => {
+    // 족보/가계 TMI 문장 우선 제외
+    if (TMI_NOISE_REGEX.test(s)) return false;
+    if (UNIVERSAL_NOISE_KEYWORDS.some((kw) => s.includes(kw))) return false;
+    return true;
+  });
+
+  // TMI 필터링 후에도 후보가 너무 많다면 전체 문서에 걸쳐 35개 추출
+  if (candidateSentences.length > 35) {
+    candidateSentences = candidateSentences.slice(0, 35);
   }
 
+  // 예외 처리: TMI 필터링으로 다 빠졌을 경우 원본에서 보완
   if (candidateSentences.length === 0) {
-    const defaultResult = assembleCompleteSentences(anchorSentences, [], maxLength);
-    return (cache[cacheKey] = defaultResult);
+    candidateSentences = rawCandidates.slice(0, 20);
   }
 
   // 3) 주제어 추출 및 TextRank 계산
