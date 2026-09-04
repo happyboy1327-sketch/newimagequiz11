@@ -475,7 +475,7 @@ async function fillCache() {
                            cleanIntro, 
                            cleanExtract || "",
                            aliases, 
-                           3,   // extraCount (추가 문장 수)
+                           4,   // extraCount (추가 문장 수)
                            3,   // anchorCount (서문에서 고정할 앵커 문장 수)
                            630  // maxLength (최대 글자 수)
                             );
