@@ -25,6 +25,9 @@ export function cleanWikiText(text) {
   // 5) 문장 내 항목 번호 노이즈 제거 ("1) 왕대수 또는 2) 혈연상..." -> "왕대수 또는 혈연상...")
   cleaned = cleaned.replace(/(?<=\s|^)\d+\)\s*/g, "");
 
+  // [추가] Keller1880년 -> Keller 1880년
+  cleaned = cleaned.replace(/([a-zA-Z])(\d{4}년)/g, "$1 $2");
+
   // 6) 중복 공백 정리
   return cleaned.replace(/\s+/g, " ").trim();
 }
@@ -113,6 +116,8 @@ const PASSIVE_BG_REGEX = /(?:(?:지점|시대|무렵|해|곳)이다|위치해\s*
 
 // TMI 노이즈 패턴 (가족, 출생 순서, 혼인, 위인전 일화 소스 통합 감점)
 const TMI_NOISE_REGEX = /(?:부친|모친|조부|증조부|고조부|외가|오대손녀|첫\s*부인|둘째\s*부인|가계도|손자|처남|장인|결혼|이혼|혼인|재혼|파혼|배우자|남편|아내|며느리|사위|처가|딸|아들|시댁|장남|차남|장녀|차녀|외아들|외딸|\d남|\d녀|가정교사|야학|위인전|그림위인전기|계몽사|출판사|소설가|에\s*따르면|에\s*의하면|족보|족보소|\d+대조|입향시조|후사|종친|문중|항렬)/;
+// [신설]
+const DEMONSTRATIVE_REF_REGEX = /^(?:이|그|해당)\s+(작품|빌딩|건축물|그림|조각|서적|책|소설|시|음악|곡|연구|이론|문화재|유물|병|질병|질환|사건|전쟁|조약|운동|개혁|현상)(?:은|는|이|가|으로|에)?/;
 
 // ==========================================================
 // Cultural Heritage Context Patch
@@ -382,6 +387,20 @@ export function buildDescription(
   // 4) 가중치 계산
   const finalCandidates = candidateSentences.map((sentence, index) => {
     let score = baseScores[index] / maxBaseScore;
+
+    const demoMatch = sentence.match(DEMONSTRATIVE_REF_REGEX);
+    if (demoMatch) {
+      const refNoun = demoMatch[1]; // 예: "병", "사건"
+      // 앞선 앵커 문장에 해당 키워드나 연관어가 없는 경우 단독 선발 방지
+      const hasAnchorContext = 
+        anchorContextText.includes(refNoun) ||
+        (refNoun === "병" && /(?:열병|질병|질환|병환|감염)/.test(anchorContextText)) ||
+        (refNoun === "사건" && /(?:의거|저격|참사|소요|사태)/.test(anchorContextText));
+
+      if (!hasAnchorContext) {
+        score *= 0.1; // 앞 맥락에 원인이 없으면 "이 병은..." 문장 단독 선발 방지!
+      }
+    } 
 
     if (/(?:[인과의는은를을에서로으로임함중]\s*\.?$|[A-Z]\.\s*$)/i.test(sentence.trim())) {
       return { sentence, score: 0, index };
