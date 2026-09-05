@@ -25,43 +25,59 @@ export function stripMetainfo(text) {
   if (!text) return "";
   let result = text;
 
-  result = result.replace(/(?<![가-힣])(?:본관|시호|아호|별호|아명|법명|묘호|당호|세례명|일명|호|자)\s*\([^)]+\)/g, "$1");
-  result = result.replace(/\(([^()]+)\)/g, (match, inner) => {
+  // 1) 괄호 안 족보 TMI 도려내기
+  result = result.replace(/\([^)]*(?:부친|모친|조부|증조부|고조부|외가|손자|처남|장인|남씨|윤씨|씨)[^)]*\)/g, "");
+
+  // 2) 출생절 및 파손 조각 완전 제거
+  result = result.replace(
+    /(?:(?:의\s*)?(?:첫|둘째|셋째|넷째|다섯째|막내)?\s*(?:번째|째)?\s*(?:아들|딸|남|녀|장남|차남|삼남|사남|오남|장녀|차녀|삼녀|사녀|외아들|외딸)?(?:로|으로)?\s*태어났(?:다|으며|고)|(?:의\s*로\s*태어났(?:다|으며|고)))/g,
+    ""
+  );
+
+  // 3) 족보/보계/시조/세손/후손 문장절 도려내기
+  result = result.replace(/[^,.!?\n]{1,50}?(?:\d+세손|\d+대손|시조|후손)(?:이다|이며|이고|이었다|였다)[,;\s]*/g, "");
+
+  // 4) 혼인/처가/시댁 거주 관련 절 도려내기
+  result = result.replace(
+    /(?:(?:[가-힣]+(?:와|과)\s*)?(?:결혼|혼인|성혼|재혼|이혼|파혼)(?:했|하였|되었|됐|하|하고|이후|이후엔)?(?:다|으며|고|자|음|나|엔)?[,;\s]*)/g,
+    ""
+  );
+  result = result.replace(/(?:(?:처가|시댁)(?:인|에서|의)?\s*[^,.!?\n]{1,30}?(?:지냈다|살았다|거주했다)[,;\s]*)/g, "");
+
+  // 5) 자녀 명명/형제 이름 나열 절 도려내기
+  result = result.replace(/[^,.!?\n]{1,50}?(?:아들|딸|자녀)(?:에게|들의|의)\s*[^,.!?\n]{1,50}?(?:이름|이름자)[^,.!?\n]{1,30}?(?:지었다|붙였다)[,;\s]*/g, "");
+
+  // 6) 메타 라벨(본관, 호, 자 등) 도려내기 (생몰년 날짜 괄호 보호)
+  const metaLabelPattern = "(?:(?:본관|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|호|자|묘)(?:는|은|\\s*[:=]))";
+
+  const innerMetaRegex = new RegExp(`${metaLabelPattern}\\s*[^,;)]+(?:\\([^)]*\\))?`, "g");
+  result = result.replace(/\(([^()]+(?:\([^()]*\)[^()]*)*)\)/g, (match, inner) => {
     if (/(?:\d{3,4}년|~)/.test(inner)) return match;
-    if (/(?:본관|시호|아호|별호|아명|법명|묘호|세례명|호|자|부친|모친|조부|문화어|출처)/.test(inner) || /^[\s\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff,·~-]+$/.test(inner)) {
-      return "";
-    }
-    return match;
+    let cleanedInner = inner.replace(innerMetaRegex, "").trim();
+    cleanedInner = cleanedInner.replace(/^[\s,;]+|[\s,;]+$/g, "").replace(/[\s,;]{2,}/g, ", ");
+    return cleanedInner ? `(${cleanedInner})` : "";
   });
 
-  result = result.replace(
-  /(?<![가-힣])(?:자\(字\)|호|본관|시호|세례명|태명|일명|아호|별호)\s*.*?(?:있다|있었다|전해진다)\.?/g,
-  ""
-);
-  result = result.replace(
-  /(?<![가-힣])(?:본관|시호|아호|별호|아명|법명|묘호|당호|세례명|태명|일명|호|자(?:\(字\))?)\s*(?:[:=]\s*|(?:은|는|이|가)\s+)[^.!?\n]*?(?:이다|였다|있다|있었다|전해진다)\.?\s*/g,
-  ""
-);
+  const standaloneMetaRegex = new RegExp(
+    `(?:(?<=[,.\\s]|^))${metaLabelPattern}\\s*[^,;.\\n()]*\\s*(?:\\([^()]*\\)[^,;.\\n()]*)*\\s*(?:이다|였다|이었다|이며|이고|이자|으로|임)?(?:,\\s*|\\.\\s*|\\s+|$)`,
+    "g"
+  );
+  result = result.replace(standaloneMetaRegex, "");
 
-  result = result.replace(/,\s*(?<![가-힣])(?:자\(字\)|호|본관|시호|세례명|태명|일명|아호|별호)\s*[:=는은이]?\s*[^.!?]*[?:본관|시호|아호|별호|호|자|이다|였다]\.?/g, "이다.");
-  result = result.replace(
-  /(?<![가-힣])(?:본관|시호|아호|별호|아명|세례명|태명|일명|법명|묘호|호|자\(字\))\s*(?:[:=]\s*|(?:은|는|이|가)\s+)[^.!?\n]*?(?:이며|이고|이자)\s*/g,
-  ""
-);
-
-
+  // 7) 구두점 및 다중 공백 정리
   result = result
+    .replace(/,\s*,/g, ",")
+    .replace(/^\s*,\s*/, "")
+    .replace(/\s*,\s*$/, "")
     .replace(/\(\s*\)/g, "")
-    .replace(/\(\s*,\s*/g, "(")
-    .replace(/(?:,\s*)+,/g, ",")
-    .replace(/,\s*\./g, ".")
-    .replace(/(?:\.\s*){2,}/g, ".")
+    .replace(/\.{2,}/g, ".")
     .replace(/\s+\./g, ".")
-    .replace(/^\s*\.\s*/, "")
-    .replace(/([가-힣]+)(?:으로|며|이고|이자|이며)(?:이다)?\s*\./g, "$1이다.")
     .replace(/\s+/g, " ")
     .trim();
-  
+
+  // 8) 문장 끝 유령 조사/찌꺼기만 정제 (전체 파기 방지)
+  result = result.replace(/(?:[인과의는은를을에서로으로임함]\s*\.?$|[A-Z]\.\s*$)/i, ".");
+
   const words = result.match(/[가-힣a-zA-Z0-9]{2,}/g) || [];
   if (words.length <= 2) return "";
 
