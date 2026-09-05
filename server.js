@@ -3,7 +3,7 @@ import path from "path";
 import axios from "axios";
 import dotenv from "dotenv";
 import { load } from "cheerio";
-import { buildDescription, summarizeText } from "./summarizer.js";
+import { buildDescription} from "./summarizer.js";
 
 dotenv.config();
 const app = express();
