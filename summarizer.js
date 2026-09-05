@@ -98,8 +98,8 @@ export function stripMetainfo(text) {
 // 2. 키워드 및 업적·생애 전용 표적 벡터(Target Vector) 설정
 // ==========================================================
 const CORE_SIGNIFICANCE_KEYWORDS = [
-  "원리", "구조", "기능", "작용", "현상", "이론", "연구", "발견", "규명", "증명", "설명", 
-  "분석", "기반", "시스템", "메커니즘", "특징", "성질", "분류", "상태", "상호작용", "개척",
+  "원리", "구조", "기능", "작용", "현상", "이론", "연구", "발견", "규명", "증명", "설명", "기록", "저서", 
+  "분석", "기반", "시스템", "메커니즘", "특징", "성질", "분류", "상태", "상호작용", "개척", "출판", "저술", 
   "제도", "정책", "사회", "경제", "체계", "관계", "변화", "전개", "성장", "효과", "수립", "조직", 
   "원인", "결과", "분포", "개혁", "조약", "협정", "시장", "구조적", "통일", "통합", "정합", 
   "양식", "사상", "문화", "작품", "기법", "전통", "유형", "형성", "창작", "유산", "완화", 
@@ -455,7 +455,7 @@ export function buildDescription(
 
     const keywordMatches = sentence.match(CORE_SIGNIFICANCE_TEST_REGEX);
     if (keywordMatches) {
-      score += keywordMatches.length * 0.25;
+      score += keywordMatches.length * 0.42;
     }
 
     if (ACADEMIC_CONCEPT_REGEX.test(sentence)) score += 0.3;
