@@ -546,13 +546,24 @@ export function summarizeText(text, topN = 4) {
   if (!text) return { summary: "", sentenceCount: 0, usedSentences: 0 };
 
   const cleanedText = stripMetainfo(cleanWikiText(text));
+  console.log("========== summarizeText ==========");
+  console.log("A 원본:", text);
+  console.log("B cleanWikiText:", cleanWikiText(text));
+  console.log("C stripMetainfo:", cleanedText);
+  
   const totalSentences = splitSentences(cleanedText).length;
 
   const anchorCount = Math.min(3, topN);
   const extraCount = Math.max(0, topN - anchorCount);
 
   const summary = buildDescription(text, "", [], extraCount, anchorCount);
+  
+  console.log("D buildDescription:", summary);
+  console.log("E 최종 splitSentences:", splitSentences(summary));
+
   const actualUsedSentences = splitSentences(summary).length;
+
+  console.log("===================================");
 
   return {
     summary,
