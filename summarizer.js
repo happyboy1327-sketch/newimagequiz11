@@ -543,10 +543,17 @@ export function buildDescription(
 }
 
 export function summarizeText(text, topN = 4) {
-  if (!text) return { summary: "", sentenceCount: 0, usedSentences: 0 };
+  // 1. 함수가 호출되었는지, text가 뭔지 맨 먼저 확인
+  console.log("========== summarizeText 시작 ==========");
+  console.log("들어온 text 값:", text);
+
+  // text가 비어있으면 여기서 종료됨
+  if (!text) {
+    console.log("❌ text가 비어있어(null/undefined/빈문자열) 조기 종료됨");
+    return { summary: "", sentenceCount: 0, usedSentences: 0 };
+  }
 
   const cleanedText = stripMetainfo(cleanWikiText(text));
-  console.log("========== summarizeText ==========");
   console.log("A 원본:", text);
   console.log("B cleanWikiText:", cleanWikiText(text));
   console.log("C stripMetainfo:", cleanedText);
