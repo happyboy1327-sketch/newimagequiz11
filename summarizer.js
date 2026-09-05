@@ -591,10 +591,26 @@ export function buildDescription(
 }
 
 
-export function summarizeText(text, topN = 3) {
+export function summarizeText(text, topN = 4) {
+  if (!text) return { summary: "", sentenceCount: 0, usedSentences: 0 };
+
+  // 1) 정제 후 정확한 전체 문장 수 산출
+  const cleanedText = stripMetainfo(cleanWikiText(text));
+  const totalSentences = splitSentences(cleanedText).length;
+
+  // 2) 앵커 문장 3개 기준 분배 (topN이 3 미만이면 topN에 맞춤)
+  const anchorCount = Math.min(3, topN);
+  const extraCount = Math.max(0, topN - anchorCount);
+
+  // 3) 요약문 생성
+  const summary = buildDescription(text, "", [], extraCount, anchorCount);
+
+  // 4) 실제 생성된 문장 수 산출
+  const actualUsedSentences = splitSentences(summary).length;
+
   return {
-    summary: buildDescription(text, "", [], topN - 1, 2),
-    sentenceCount: splitSentences(text).length,
-    usedSentences: topN,
+    summary,
+    sentenceCount: totalSentences,
+    usedSentences: actualUsedSentences,
   };
 }
