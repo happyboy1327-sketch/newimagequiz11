@@ -43,7 +43,6 @@ export function stripMetainfo(text) {
     .replace(/\(\s*,\s*/g, "(")
     .replace(/(?:,\s*)+,/g, ",")
     .replace(/,\s*\./g, ".")
-    .replace(/(?<=\.|\b|^)\s*,\s*/g, "")
     .replace(/(?:\.\s*){2,}/g, ".")
     .replace(/\s+\./g, ".")
     .replace(/^\s*\.\s*/, "")
