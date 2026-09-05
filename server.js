@@ -3,7 +3,7 @@ import path from "path";
 import axios from "axios";
 import dotenv from "dotenv";
 import { load } from "cheerio";
-import { buildDescription } from "./summarizer.js";
+import { buildDescription, summarizeText } from "./summarizer.js";
 
 dotenv.config();
 const app = express();
@@ -471,14 +471,8 @@ async function fillCache() {
                         let cleanIntro = exintro.replace(/\s+/g, " ").trim();
 
                         // 5. 설명 및 힌트 생성 (수정된 summarizer.js와 안전 연동)
-                        const finalDescription = buildDescription(
-                           cleanIntro, 
-                           cleanExtract || "",
-                           aliases, 
-                           4,   // extraCount (추가 문장 수)
-                           3,   // anchorCount (서문에서 고정할 앵커 문장 수)
-                           630  // maxLength (최대 글자 수)
-                            );
+                        // 기존 buildDescription 대신 summarizeText 호출
+                       const { summary: finalDescription } = summarizeText(cleanIntro, 4);
 
                         if (finalDescription) {
                             QUIZ_CACHE.push({
