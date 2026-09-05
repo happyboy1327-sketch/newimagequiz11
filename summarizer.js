@@ -133,21 +133,28 @@ function tokenize(sentence) {
 }
 
 function resolveAnaphora(sentence, allSentences, originalIndex) {
-  const demoMatch = sentence.match(/^(?:이|그)\s+(작품|빌딩|건축물|그림|조각|서적|책|소설|시|음악|곡|연구|이론|문화재|유물)(?:은|는|이|가)?/);
+  // 🔴 [수정] 문장 맨 앞뿐만 아니라 중간(주어 뒤 등)에 나오는 지시어까지 폭넓게 탐지
+  const demoMatch = sentence.match(/(?:^|[,\s])((?:이|그)\s+(?:작품|빌딩|건축물|그림|조각|서적|책|소설|시|음악|곡|연구|이론|문화재|유물)(?:은|는|을|를|이|가)?)/);
   if (!demoMatch) return sentence;
 
+  const targetPhrase = demoMatch[1]; // 예: "이 작품을"
+
+  // 바로 앞 문장들을 거슬러 올라가며 《...》 형태의 작품명/유물명 탐색
   for (let i = originalIndex - 1; i >= Math.max(0, originalIndex - 3); i--) {
     const prevSentence = allSentences[i];
     if (!prevSentence) continue;
 
     const titleMatch = prevSentence.match(/[《「"'][^《》「」"']+[》」"']/);
     if (titleMatch) {
-      return sentence.replace(/^(?:이|그)\s+(?:작품|빌딩|건축물|그림|조각|서적|책|소설|시|음악|곡|연구|이론|문화재|유물)(?:은|는|이|가)?/, `${titleMatch[0]}은`);
+      // "이 작품을" -> "《피에타》를" 형태로 안전하게 교체
+      const replacedPhrase = targetPhrase.replace(/(?:이|그)\s+(?:작품|빌딩|건축물|그림|조각|서적|책|소설|시|음악|곡|연구|이론|문화재|유물)/, titleMatch[0]);
+      return sentence.replace(targetPhrase, replacedPhrase);
     }
 
     const specificNounMatch = prevSentence.match(/([가-힣]{2,}(?:상|탑|비|관|전|국|서|집))/);
     if (specificNounMatch) {
-      return sentence.replace(/^(?:이|그)\s+(?:작품|빌딩|건축물|그림|조각|서적|책|소설|시|음악|곡|연구|이론|문화재|유물)(?:은|는|이|가)?/, `${specificNounMatch[1]}은`);
+      const replacedPhrase = targetPhrase.replace(/(?:이|그)\s+(?:작품|빌딩|건축물|그림|조각|서적|책|소설|시|음악|곡|연구|이론|문화재|유물)/, specificNounMatch[1]);
+      return sentence.replace(targetPhrase, replacedPhrase);
     }
   }
 
