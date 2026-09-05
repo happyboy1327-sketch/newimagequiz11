@@ -19,49 +19,97 @@ export function cleanWikiText(text) {
 
 export function stripMetainfo(text) {
   if (!text) return "";
-  
-  // 1. 문장 단위 분할
+
+  // 1) 기본 공백 정리 + 문장 단위 분할
   const rawSentences = text
     .replace(/\s+/g, " ")
     .trim()
     .split(/(?<=[.!?])(?<!\d\.\d+)\s+(?=[가-힣A-Za-z0-9"'(])/);
 
-  const cleanSentences = rawSentences.map((sentence) => {
-    let s = sentence.trim();
+  const cleanSentences = rawSentences
+    .map((sentence) => {
+      let s = sentence.trim();
 
-    // 1) 괄호 안 족보/가계 TMI 트림 (생몰년/재위기간/날짜 보호)
-    s = s.replace(/\([^)]*(?:부친|모친|조부|증조부|고조부|외가|손자|처남|장인|[가-힣]{1,3}씨)[^)]*\)/g, "");
+      // 2) 괄호 안 족보/가계 TMI 제거
+      // 생몰년/재위기간 등 일반적인 날짜 괄호는 최대한 보호
+      s = s.replace(
+        /\([^)]*(?:부친|모친|조부|증조부|고조부|외가|손자|처남|장인|[가-힣]{1,3}씨)[^)]*\)/g,
+        ""
+      );
 
-    // 2) 위키 각주 및 주석 찌꺼기 제거
-    s = s.replace(/\[\d+\]|\[참고\s*\d+\]/g, "");
+      // 3) 인라인 메타 정보 정밀 제거
+      // "본관은 ○○이며", "자는 ○○이고", "호는 ○○이다" 등
+      // 1글자 라벨의 오탐 방지를 위해 한글 앞 경계 조건 적용
+      const inlineMetaRegex =
+        /(?:(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호)(?:는|은)|(?<![가-힣])(?:호|자|묘|성|씨|휘)(?:는|은))\s+[^,;.\n()]+(?:\([^()]*\))?\s*(?:이며|이고|이자|인|임|이다|였다|이었다)[,\s]*/g;
 
-    return s.trim();
-  }).filter((s) => {
-    if (!s || s.length < 5) return false;
+      s = s.replace(inlineMetaRegex, "");
 
-    // 3) 문장 전체가 메타 정보(본관, 자, 호, 시호, 성, 휘) 블록인 경우 문장째 드롭
-    const isPureMetaSentence = /^(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|호|자|묘|성|씨|휘)(?:는|은|\s*[:=])/.test(s);
-    if (isPureMetaSentence) return false;
+      // 4) 인라인 메타 제거 후 구두점/공백 정리
+      s = s
+        .replace(/,\s*,/g, ",")
+        .replace(/^\s*,\s*/, "")
+        .replace(/\s*,\s*/g, ", ")
+        .replace(/\s*,\s*\./g, ".")
+        .replace(/\(\s*\)/g, "")
+        .replace(/\.{2,}/g, ".")
+        .replace(/\s+\./g, ".")
+        .replace(/\s+/g, " ")
+        .trim();
 
-    // 4) 출생 서순 및 pure 가계도 나열 문장 통째로 드롭 (업적 단어가 없는 경우에만)
-    const isFamilyTmiSentence = /(?:부친|모친|조부|증조부|어머니|아버지|사이에서\s*태어|장남|차남|장녀|차녀)/.test(s) &&
-      !/(?:전투|저술|개혁|통일|격퇴|창작|발견|설립|주도|의거|혁명)/.test(s);
-    if (isFamilyTmiSentence) return false;
+      return s;
+    })
+    .filter((s) => {
+      if (!s || s.length < 5) return false;
 
-    // 5) 문장 완결성 검증 (어미가 터지거나 "사이에서." 처럼 잘린 유령 문장 차단)
-    const isValidEnding = /[가-힣0-9A-Za-z)]+(?:이다|이었다|였다|있다|없었다|하였다|했다|됐다|되었다|의하여|위함이다|함이다|음이다|\.)\s*$/.test(s);
-    if (!isValidEnding) return false;
+      // 5) 문장 전체가 순수 메타 정보면 통째로 제거
+      const isPureMetaSentence =
+        /^(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|호|자|묘|성|씨|휘)(?:는|은|\s*[:=])/.test(
+          s
+        );
 
-    return true;
-  });
+      if (isPureMetaSentence) return false;
 
-  const result = cleanSentences.join(" ").replace(/\s+/g, " ").trim();
+      // 6) 순수 가계/출생 정보 문장 제거
+      // 실제 업적이나 사건이 포함되어 있으면 보존
+      const isFamilyTmiSentence =
+        /(?:부친|모친|조부|증조부|고조부|어머니|아버지|사이에서\s*태어|장남|차남|장녀|차녀)/.test(
+          s
+        ) &&
+        !/(?:전투|저술|개혁|통일|격퇴|창작|발견|설립|주도|의거|혁명)/.test(
+          s
+        );
 
+      if (isFamilyTmiSentence) return false;
+
+      // 7) 문장 완결성 검증
+      const isValidEnding =
+        /[가-힣0-9A-Za-z)]+(?:이다|이었다|였다|있다|없었다|하였다|했다|됐다|되었다|의하여|위함이다|함이다|음이다|\.)\s*$/.test(
+          s
+        );
+
+      if (!isValidEnding) return false;
+
+      return true;
+    });
+
+  // 8) 문장 합치기 + 최종 공백 정리
+  const result = cleanSentences
+    .join(" ")
+    .replace(/,\s*,/g, ",")
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/\s+\./g, ".")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // 9) 결과가 너무 짧거나 실질적인 단어가 거의 없으면 제거
   const words = result.match(/[가-힣a-zA-Z0-9]{2,}/g) || [];
+
   if (words.length <= 2) return "";
 
   return result;
 }
+
 
 // ==========================================================
 // 2. 키워드 및 업적·생애 전용 표적 벡터(Target Vector) 설정
