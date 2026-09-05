@@ -19,7 +19,7 @@ export function cleanWikiText(text) {
 }
 
 // ==========================================================
-// 2. 메타 정보 및 메타 라벨 안전 정제 함수 (stripMetainfo)
+// 2. 메타 정보 및 메타 라벨 안전 정제 함수 (stripMetainfo) -- 현재 문제 있음 고도로 수정할것,
 // ==========================================================
 export function stripMetainfo(text) {
   if (!text) return "";
@@ -42,11 +42,15 @@ export function stripMetainfo(text) {
     .replace(/\(\s*\)/g, "")
     .replace(/\(\s*,\s*/g, "(")
     .replace(/(?:,\s*)+,/g, ",")
+    .replace(/,\s*\./g, ".")
+    .replace(/(?<=\.|\b|^)\s*,\s*/g, "")
+    .replace(/(?:\.\s*){2,}/g, ".")
+    .replace(/\s+\./g, ".")
     .replace(/^\s*\.\s*/, "")
     .replace(/([가-힣]+)(?:으로|며|이고|이자|이며)(?:이다)?\s*\./g, "$1이다.")
     .replace(/\s+/g, " ")
     .trim();
-
+  
   const words = result.match(/[가-힣a-zA-Z0-9]{2,}/g) || [];
   if (words.length <= 2) return "";
 
