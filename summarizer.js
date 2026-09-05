@@ -20,62 +20,64 @@ export function cleanWikiText(text) {
 export function stripMetainfo(text) {
   if (!text || typeof text !== "string") return "";
 
-  const BOUNDARY = "(?<=^|[\\s,;(\"'\\-])";
-  
-  // "스승이자", "문신이자", "학자이자" 등 선행 복합 수식어 패턴
-  const MODIFIER = "(?:[가-힣]{1,10}(?:이자|이며|이고|인|였던|이던|의)\\s+)*";
+  // 1. 따옴표 내부 텍스트 마스킹 (비유적 표현 '인상주의의 아버지' 오탐 차단)
+  const quotes = [];
+  let maskedText = text.replace(/(['"])(.*?)\1/g, (match) => {
+    quotes.push(match);
+    return `__QUOTE_${quotes.length - 1}__`;
+  });
 
-  const MULTI_META = [
-    "이름", "본관", "본적", "시호", "아호", "별호", "아명", "태명", "세례명",
-    "법명", "묘호", "당호", "부친", "모친", "아버지", "어머니", "조부", "증조부",
-    "고조부", "외조부", "외조모", "장인", "처남", "장남", "차남", "장녀", "차녀", "막내", "외가"
-  ].join("|");
-
-  const SINGLE_META = "(?:자|호|묘|성|씨|휘)";
-
-  // 키워드 서술 어미 결합 확장 (~인, ~이자, ~였던 등)
-  const META_NOUN = `(?:(?:${MULTI_META})(?:은|는|이|가|인|이었던|이던|이자|이며|이고)?|${SINGLE_META}(?:은|는|이|가|인|이자|:))`;
-
-  // 수식어 + 메타 키워드 통합 패턴
-  const META_PATTERN = `${BOUNDARY}${MODIFIER}${META_NOUN}`;
-
-  const PAREN_REGEX = new RegExp(`\\([^)]*${BOUNDARY}(?:${MULTI_META}|부친|모친|조부|외가)[^)]*\\)`, "g");
-  const FULL_META_REGEX = new RegExp(`^(?:그의|그녀의|본)?\\s*${META_PATTERN}\\s+.+$`);
-  const CLAUSE_META_REGEX = new RegExp(
-    `${META_PATTERN}\\s*[^.!?]*?(?:등이다|등이었다|이며|이고|이자|이었다|였다|이다|임)(?:\\s*,)?`,
-    "g"
+  // 2. 괄호 속 가계 TMI 제거
+  maskedText = maskedText.replace(
+    /\([^)]*(?:부친|모친|조부|증조부|고조부|외가|손자|처남|장인)[^)]*\)/g,
+    ""
   );
 
-  // 1. 괄호 내 가계 메타 제거 & 공백 정리
-  let cleaned = text.replace(PAREN_REGEX, "").replace(/\s+/g, " ").trim();
+  // 3. 문장 단위 분할
+  const sentences = maskedText
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(/(?<=[.!?])\s+/);
 
-  // 2. 문장 단위 처리
-  const sentences = cleaned.split(/(?<=[.!?])\s+/);
   const result = [];
+
+  const META_KEYS = "이름|본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|자|호|묘|성|씨|휘";
+  const FAMILY_KEYS = "부친|모친|아버지|어머니|조부|증조부|고조부|외조부|외조모|장인|처남|장남|차남|장녀|차녀|막내";
+
+  const PURE_META = new RegExp(`^(?:그의|그녀의|본)?\\s*(?:${META_KEYS})\\s*(?:는|은|:)\\s+.+$`);
+  const PURE_FAMILY = new RegExp(`^(?:그의|그녀의)?\\s*(?:${FAMILY_KEYS})\\s*(?:은|는|이|가)\\s+.+(?:이다|이었다|임|등이다)\\.$`);
+
+  // 절 단위 제거 패턴 (호칭/비유 서술어 '~로 불리는', '~라는' 등이 뒤따르면 제거 대상에서 제외)
+  const META_CLAUSE = new RegExp(
+    `(?:^|(?<=[,;]\\s*))(?:${META_KEYS})\\s*(?:는|은|:)\\s+[^.!?]*?(?:등이다|등이었다|이며|이고|이자|이었다|였다|이다|임)(?:\\s*,)?`,
+    "g"
+  );
+  const FAMILY_CLAUSE = new RegExp(
+    `(?:^|(?<=[,;]\\s*))(?:${FAMILY_KEYS})\\s*(?:은|는|이|가)\\s+(?!.*?(?:로|라)\\s*불리|.*?라는\\s*칭호)[^.!?]*?(?:등이다|등이었다|이며|이고|이자|이었다|였다|이다|임)(?:\\s*,)?`,
+    "g"
+  );
 
   for (let sentence of sentences) {
     let s = sentence.trim();
     if (!s) continue;
 
-    if (FULL_META_REGEX.test(s)) continue;
+    if (PURE_META.test(s) || PURE_FAMILY.test(s)) continue;
 
-    s = s.replace(CLAUSE_META_REGEX, "");
+    s = s.replace(META_CLAUSE, "").replace(FAMILY_CLAUSE, "");
 
-    // 찌꺼기 문장부호 및 공백 정리
+    // 문법 찌꺼기 정리
     s = s
-      .replace(/^[,\s]+|[,\s]+$/g, "")
       .replace(/,\s*,+/g, ",")
-      .replace(/\s*,\s*/g, ", ")
-      .replace(/\s+\./g, ".")
+      .replace(/,\s*\./g, ".")
+      .replace(/^\s*,\s*/g, "")
       .replace(/\(\s*\)/g, "")
       .replace(/\s+/g, " ")
       .trim();
 
-    // 수식어 제거 후 남은 찌꺼기 어미 정리
-    if (/(?:으로|로|에서|에게|부터|까지|하며|이고|이며|이자|인|였던)\s*\.$/.test(s)) {
+    if (/(?:으로|로|에서|에게|부터|까지|하며|이고|이며|이자)\s*\.$/.test(s)) {
       continue;
     }
-    s = s.replace(/^(?:으로|로|이고|이며|이자|인|였던)\s*,?\s*/, "");
+    s = s.replace(/^(?:으로|로|이고|이며|이자)\s*,?\s*/, "");
 
     if (s.length >= 5 && /[가-힣A-Za-z0-9]/.test(s)) {
       if (!/[.!?]$/.test(s)) s += ".";
@@ -83,13 +85,17 @@ export function stripMetainfo(text) {
     }
   }
 
-  // 3. 최종 검증
-  const finalContent = result.join(" ").replace(/\s+/g, " ").trim();
-  const validWords = finalContent.match(/[가-힣A-Za-z0-9]{2,}/g) || [];
+  // 4. 따옴표 복원 및 최종 결합
+  let finalContent = result.join(" ");
+  quotes.forEach((q, idx) => {
+    finalContent = finalContent.replace(`__QUOTE_${idx}__`, q);
+  });
 
-  return validWords.length > 2 ? finalContent : "";
+  finalContent = finalContent.replace(/\s+/g, " ").trim();
+  const words = finalContent.match(/[가-힣A-Za-z0-9]{2,}/g) || [];
+
+  return words.length > 2 ? finalContent : "";
 }
-
 
 // ==========================================================
 // 2. 키워드 및 업적·생애 전용 표적 벡터(Target Vector) 설정
