@@ -456,7 +456,7 @@ async function fillCache() {
                         }
 
                         // 2. 불필요한 하단 섹션 제거
-                        const cutIndex = extractBody.search(/\n==\s*(각주|같이 보기|참고 문헌|외부 링크|주석)\s*==/i);
+                        const cutIndex = extractBody.search(/\n==\s*(각주|같이 보기|참고 문헌|참고 자료|기타|외부 링크|주석)\s*==/i);
                         if (cutIndex !== -1) {
                             extractBody = extractBody.substring(0, cutIndex);
                         }
