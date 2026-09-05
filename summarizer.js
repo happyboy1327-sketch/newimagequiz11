@@ -14,7 +14,6 @@ export function cleanWikiText(text) {
   cleaned = cleaned.replace(/\[(?:각주|출처\s*필요|편집|주석)\]/g, "");
   cleaned = cleaned.replace(/\(\s*재위\s*:[^)]+\)/g, "");
   cleaned = cleaned.replace(/(?<=\s|^)\d+\)\s*/g, "");
-  cleaned = cleaned.replace(/(?<=\s|^)\d+\.(?!\d)\s*/g, "");
 
   return cleaned.replace(/\s+/g, " ").trim();
 }
