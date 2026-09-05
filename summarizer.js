@@ -25,7 +25,7 @@ export function stripMetainfo(text) {
   if (!text) return "";
   let result = text;
 
-  result = result.replace(/(?<![가-힣])(본관|시호|아호|별호|아명|법명|묘호|당호|세례명|일명|호|자)\s*\([^)]+\)/g, "$1");
+  result = result.replace(/(?<![가-힣])(?:본관|시호|아호|별호|아명|법명|묘호|당호|세례명|일명|호|자)\s*\([^)]+\)/g, "$1");
   result = result.replace(/\(([^()]+)\)/g, (match, inner) => {
     if (/(?:\d{3,4}년|~)/.test(inner)) return match;
     if (/(?:본관|시호|아호|별호|아명|법명|묘호|세례명|호|자|부친|모친|조부|문화어|출처)/.test(inner) || /^[\s\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff,·~-]+$/.test(inner)) {
@@ -34,7 +34,11 @@ export function stripMetainfo(text) {
     return match;
   });
 
-  result = result.replace(/(?<![가-힣])(?:자\(字\)|호|본관|시호|세례명|태명|일명|아호|별호)\b.*?(?:있다|있었다|전해진다)\.?/g, "");
+  result = result.replace(
+  /(?<![가-힣])(?:자\(字\)|호|본관|시호|세례명|태명|일명|아호|별호)\s*.*?(?:있다|있었다|전해진다)\.?/g,
+  ""
+);
+
   result = result.replace(/,\s*(?<![가-힣])(?:자\(字\)|호|본관|시호|세례명|태명|일명|아호|별호)\s*[:=는은이]?\s*[^.!?]*[본관|시호|아호|별호|호|자|이다|였다]\.?/g, "이다.");
   result = result.replace(
   /(?<![가-힣])(?:본관|시호|아호|별호|아명|세례명|태명|일명|법명|묘호|호|자\(字\))\s*(?:[:=]\s*|(?:은|는|이|가)\s+)[^.!?\n]*?(?:이며|이고|이자)\s*/g,
