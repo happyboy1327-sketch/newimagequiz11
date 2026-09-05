@@ -19,61 +19,43 @@ export function cleanWikiText(text) {
 
 export function stripMetainfo(text) {
   if (!text) return "";
-  let result = text;
+  
+  // 1. 문장 단위 분할
+  const rawSentences = text
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(/(?<=[.!?])(?<!\d\.\d+)\s+(?=[가-힣A-Za-z0-9"'(])/);
 
-  // 1) 괄호 안 족보/가계 TMI 제거 (생몰년/재위기간 보호)
-  result = result.replace(/\([^)]*(?:부친|모친|조부|증조부|고조부|외가|손자|처남|장인|남씨|윤씨|씨)[^)]*\)/g, "");
+  const cleanSentences = rawSentences.map((sentence) => {
+    let s = sentence.trim();
 
-  // 2) 출생 서순 및 순수 가족관계 TMI 제거 (단순 '태어났다' 문맥은 보존)
-  result = result.replace(
-    /(?:(?:의\s*)?(?:첫|둘째|셋째|넷째|다섯째|막내)?\s*(?:번째|째)?\s*(?:아들|딸|남|녀|장남|차남|삼남|사남|오남|장녀|차녀|삼녀|사녀|외아들|외딸)\s*(?:로|으로)?\s*태어났(?:다|으며|고)[,;\s]*)/g,
-    ""
-  );
+    // 1) 괄호 안 족보/가계 TMI 트림 (생몰년/재위기간/날짜 보호)
+    s = s.replace(/\([^)]*(?:부친|모친|조부|증조부|고조부|외가|손자|처남|장인|[가-힣]{1,3}씨)[^)]*\)/g, "");
 
-  // 3) 족보/보계/시조 절 제거
-  result = result.replace(/[^,.!?\n]{1,50}?(?:\d+세손|\d+대손|시조|후손)(?:이다|이며|이고|이었다|였다)[,;\s]*/g, "");
+    // 2) 위키 각주 및 주석 찌꺼기 제거
+    s = s.replace(/\[\d+\]|\[참고\s*\d+\]/g, "");
 
-  // 4) 혼인 및 처가/시댁 거주 TMI 제거
-  result = result.replace(/(?:(?:결혼|혼인|성혼|재혼|이혼|파혼)(?:했|하였|되었|됐)?(?:다|으며|고)[,;\s]*)/g, "");
-  result = result.replace(/(?:(?:처가|시댁)(?:인|에서|의)?\s*[^,.!?\n]{1,30}?(?:지냈다|살았다|거주했다)[,;\s]*)/g, "");
+    return s.trim();
+  }).filter((s) => {
+    if (!s || s.length < 5) return false;
 
-  // 5) 자녀 명명/형제 이름 나열 제거
-  result = result.replace(/[^,.!?\n]{1,50}?(?:아들|딸|자녀)(?:에게|들의|의)\s*[^,.!?\n]{1,50}?(?:이름|이름자)[^,.!?\n]{1,30}?(?:지었다|붙였다)[,;\s]*/g, "");
+    // 3) 문장 전체가 메타 정보(본관, 자, 호, 시호, 성, 휘) 블록인 경우 문장째 드롭
+    const isPureMetaSentence = /^(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|호|자|묘|성|씨|휘)(?:는|은|\s*[:=])/.test(s);
+    if (isPureMetaSentence) return false;
 
-  // 앞에 한글이 붙어있지 않은(독립된 단어 형태) 1글자 메타 라벨 정밀 타격
- const metaLabelPattern = "(?:(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호)(?:는|은|\\s*[:=])|(?<![가-힣])(?:호|자|묘|성|씨|휘)(?:는|은|\\s*[:=]))";
+    // 4) 출생 서순 및 pure 가계도 나열 문장 통째로 드롭 (업적 단어가 없는 경우에만)
+    const isFamilyTmiSentence = /(?:부친|모친|조부|증조부|어머니|아버지|사이에서\s*태어|장남|차남|장녀|차녀)/.test(s) &&
+      !/(?:전투|저술|개혁|통일|격퇴|창작|발견|설립|주도|의거|혁명)/.test(s);
+    if (isFamilyTmiSentence) return false;
 
-  const innerMetaRegex = new RegExp(`${metaLabelPattern}\\s*[^,;)]+(?:\\([^)]*\\))?`, "g");
-  result = result.replace(/\(([^()]+(?:\([^()]*\)[^()]*)*)\)/g, (match, inner) => {
-    if (/(?:\d{3,4}년|~)/.test(inner)) return match;
-    let cleanedInner = inner.replace(innerMetaRegex, "").trim();
-    cleanedInner = cleanedInner.replace(/^[\s,;]+|[\s,;]+$/g, "").replace(/[\s,;]{2,}/g, ", ");
-    return cleanedInner ? `(${cleanedInner})` : "";
+    // 5) 문장 완결성 검증 (어미가 터지거나 "사이에서." 처럼 잘린 유령 문장 차단)
+    const isValidEnding = /[가-힣0-9A-Za-z)]+(?:이다|이었다|였다|있다|없었다|하였다|했다|됐다|되었다|의하여|위함이다|함이다|음이다|\.)\s*$/.test(s);
+    if (!isValidEnding) return false;
+
+    return true;
   });
 
-  const midSentenceMetaRegex = new RegExp(
-    `(?:(?<=[,\\s]|^))${metaLabelPattern}\\s*[^,;.\\n()]*?\\s*(?:\\([^()]*\\)[^,;.\\n()]*?)*?\\s*(?:이며|이고|이자|인|임|이다|였다|이었다)?[,\\s]*`,
-    "g"
-  );
-  result = result.replace(midSentenceMetaRegex, "");
-
-  // 7) 구두점 정제 및 연결 어미 자동 다듬기
-  result = result
-    .replace(/,\s*,/g, ",")
-    .replace(/^\s*,\s*/, "")
-    .replace(/\s*,\s*/g, ", ")
-    .replace(/\s*,\s*\./g, ".")
-    .replace(/\(\s*\)/g, "")
-    .replace(/\.{2,}/g, ".")
-    .replace(/\s+\./g, ".")
-    .replace(/([가-힣]+)(?:이며|이고|이자|며)\s*\./g, "$1이다.")
-    .replace(/([가-힣]+)(?:이었으며|이었고)\s*\./g, "$1이었다.")
-    .replace(/([가-힣]+)(?:였으며|였고)\s*\./g, "$1였다.")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  // 8) 문장 끝 유령 조사 정제
-  result = result.replace(/(?:[인과의는은를을에서로으로임함]\s*\.?$|[A-Z]\.\s*$)/i, ".");
+  const result = cleanSentences.join(" ").replace(/\s+/g, " ").trim();
 
   const words = result.match(/[가-힣a-zA-Z0-9]{2,}/g) || [];
   if (words.length <= 2) return "";
