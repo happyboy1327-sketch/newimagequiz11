@@ -543,9 +543,9 @@ export function buildDescription(
 }
 
 export function summarizeText(text, topN = 4) {
-  return {
-    summary: buildDescription(text, "", [], topN - 1, 2),
-    sentenceCount: splitSentences(text).length,
-    usedSentences: topN,
-  };
+  if (!text) return "";
+  const anchorCount = Math.min(3, topN);
+  const extraCount = Math.max(0, topN - anchorCount);
+
+  return buildDescription(text, "", [], extraCount, anchorCount);
 }
