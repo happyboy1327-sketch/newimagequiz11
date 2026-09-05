@@ -1,4 +1,3 @@
-// summarizer.js
 const cache = {};
 
 // ==========================================================
@@ -18,9 +17,6 @@ export function cleanWikiText(text) {
   return cleaned.replace(/\s+/g, " ").trim();
 }
 
-// ==========================================================
-// 2. 메타 정보 및 메타 라벨 안전 정제 함수 (stripMetainfo) -- 현재 문제 있음 고도로 수정할것,
-// ==========================================================
 export function stripMetainfo(text) {
   if (!text) return "";
   let result = text;
@@ -28,7 +24,7 @@ export function stripMetainfo(text) {
   // 1) 괄호 안 족보 TMI 도려내기
   result = result.replace(/\([^)]*(?:부친|모친|조부|증조부|고조부|외가|손자|처남|장인|남씨|윤씨|씨)[^)]*\)/g, "");
 
-  // 2) 출생절 및 파손 조각 완전 제거
+  // 2) 출생 서순/가족관계 TMI 제거 (단순 '태어났다'는 보존)
   result = result.replace(
     /(?:(?:의\s*)?(?:첫|둘째|셋째|넷째|다섯째|막내)?\s*(?:번째|째)?\s*(?:아들|딸|남|녀|장남|차남|삼남|사남|오남|장녀|차녀|삼녀|사녀|외아들|외딸)\s*(?:로|으로)?\s*태어났(?:다|으며|고)[,;\s]*)/g,
     ""
@@ -47,9 +43,10 @@ export function stripMetainfo(text) {
   // 5) 자녀 명명/형제 이름 나열 절 도려내기
   result = result.replace(/[^,.!?\n]{1,50}?(?:아들|딸|자녀)(?:에게|들의|의)\s*[^,.!?\n]{1,50}?(?:이름|이름자)[^,.!?\n]{1,30}?(?:지었다|붙였다)[,;\s]*/g, "");
 
-  // 6) 메타 라벨(본관, 호, 자 등) 도려내기 (생몰년 날짜 괄호 보호)
+  // 6) 문장 중간/끝 메타 라벨(본관, 본적, 호, 자 등) 및 절 단위 정제
   const metaLabelPattern = "(?:(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|호|자|묘)(?:는|은|\\s*[:=]))";
 
+  // 6-1. 괄호 내부 메타 정제
   const innerMetaRegex = new RegExp(`${metaLabelPattern}\\s*[^,;)]+(?:\\([^)]*\\))?`, "g");
   result = result.replace(/\(([^()]+(?:\([^()]*\)[^()]*)*)\)/g, (match, inner) => {
     if (/(?:\d{3,4}년|~)/.test(inner)) return match;
@@ -58,24 +55,30 @@ export function stripMetainfo(text) {
     return cleanedInner ? `(${cleanedInner})` : "";
   });
 
-  const standaloneMetaRegex = new RegExp(
-    `(?:(?<=[,.\\s]|^))${metaLabelPattern}\\s*[^,;.\\n()]*\\s*(?:\\([^()]*\\)[^,;.\\n()]*)*\\s*(?:이다|였다|이었다|이며|이고|이자|으로|임)?(?:,\\s*|\\.\\s*|\\s+|$)`,
+  // 6-2. 문장 중간/단독 메타 절 제거 ("본관은 ...이며", "본적은 ...이고" 등)
+  const midSentenceMetaRegex = new RegExp(
+    `(?:(?<=[,\\s]|^))${metaLabelPattern}\\s*[^,;.\\n()]*?\\s*(?:\\([^()]*\\)[^,;.\\n()]*?)*?\\s*(?:이며|이고|이자|인|임|이다|였다|이었다)?[,\\s]*`,
     "g"
   );
-  result = result.replace(standaloneMetaRegex, "");
+  result = result.replace(midSentenceMetaRegex, "");
 
-  // 7) 구두점 및 다중 공백 정리
+  // 7) 구두점 정리 및 문장 어미 자동 다듬기 (중간 메타 제거 후 끝난 어미 보정)
   result = result
     .replace(/,\s*,/g, ",")
     .replace(/^\s*,\s*/, "")
-    .replace(/\s*,\s*$/, "")
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/\s*,\s*\./g, ".")
     .replace(/\(\s*\)/g, "")
     .replace(/\.{2,}/g, ".")
     .replace(/\s+\./g, ".")
+    // 문장 중간 절이 잘려 연결 어미로 문장이 끝난 경우 종결 어미로 보정
+    .replace(/([가-힣]+)(?:이며|이고|이자|며)\s*\./g, "$1이다.")
+    .replace(/([가-힣]+)(?:이었으며|이었고)\s*\./g, "$1이었다.")
+    .replace(/([가-힣]+)(?:였으며|였고)\s*\./g, "$1였다.")
     .replace(/\s+/g, " ")
     .trim();
 
-  // 8) 문장 끝 유령 조사/찌꺼기만 정제 (전체 파기 방지)
+  // 8) 문장 끝 유령 조사/부호 정리
   result = result.replace(/(?:[인과의는은를을에서로으로임함]\s*\.?$|[A-Z]\.\s*$)/i, ".");
 
   const words = result.match(/[가-힣a-zA-Z0-9]{2,}/g) || [];
