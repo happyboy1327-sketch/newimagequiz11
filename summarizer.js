@@ -17,86 +17,234 @@ export function cleanWikiText(text) {
   return cleaned.replace(/\s+/g, " ").trim();
 }
 
+/**
+ * 메타 정보 및 가계 TMI 정밀 필터링 모듈 (Production Grade)
+ */
+
+// ============================================================================
+// 1. 사전 데이터 및 규칙 정의
+// ============================================================================
+
+const META_KEYS = new Set([
+  "이름", "본관", "본적", "시호", "아호", "별호", "아명", "태명", 
+  "세례명", "법명", "묘호", "당호", "자", "호", "묘", "성", "씨", "휘"
+]);
+
+const FAMILY_KEYS = new Set([
+  "부친", "모친", "아버지", "어머니", "조부", "증조부", "고조부", 
+  "외조부", "외조모", "장인", "처남", "장남", "차남", "장녀", "차녀", "막내", "외가", "손자"
+]);
+
+// 비유적/상징적 표현 보호 단어 (예: '인상주의의 아버지' 오탐 원천 차단)
+const PROTECTED_METAPHORS = [
+  "인상주의의 아버지", "음악의 아버지", "철학의 아버지", "독립운동의 대부",
+  "국모", "백성의 어머니", "현대 물리학의 아버지", "소설의 아버지"
+];
+
+// ============================================================================
+// 2. 따옴표 및 문맥 마스킹 엔진
+// ============================================================================
+
+class ContextMasker {
+  constructor() {
+    this.masks = [];
+  }
+
+  // 큰따옴표/작은따옴표 내부 텍스트 마스킹
+  maskQuotes(text) {
+    return text.replace(/(['"])(.*?)\1/g, (match) => {
+      const token = `__QUOTE_TOKEN_${this.masks.length}__`;
+      this.masks.push({ token, original: match });
+      return token;
+    });
+  }
+
+  // 비유적 표현 사전 마스킹
+  maskMetaphors(text) {
+    let result = text;
+    for (const metaphor of PROTECTED_METAPHORS) {
+      if (result.includes(metaphor)) {
+        const token = `__METAPHOR_TOKEN_${this.masks.length}__`;
+        this.masks.push({ token, original: metaphor });
+        result = result.split(metaphor).join(token);
+      }
+    }
+    return result;
+  }
+
+  // 마스킹 복원
+  unmask(text) {
+    let result = text;
+    for (let i = this.masks.length - 1; i >= 0; i--) {
+      const { token, original } = this.masks[i];
+      result = result.split(token).join(original);
+    }
+    return result;
+  }
+}
+
+// ============================================================================
+// 3. 중첩 괄호 파서 (괄호 속 메타만 골라 제거)
+// ============================================================================
+
+function removeFamilyBrackets(text) {
+  let result = "";
+  let depth = 0;
+  let currentBuffer = "";
+  
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    
+    if (char === "(") {
+      if (depth === 0) {
+        result += currentBuffer;
+        currentBuffer = "";
+      }
+      depth++;
+      currentBuffer += char;
+    } else if (char === ")") {
+      currentBuffer += char;
+      depth--;
+      if (depth === 0) {
+        // 괄호 내용에 실제 가계/메타 키워드가 포함되어 있는지 검사
+        const hasMeta = Array.from(FAMILY_KEYS).some(k => currentBuffer.includes(k)) ||
+                        Array.from(META_KEYS).some(k => currentBuffer.includes(k));
+        if (!hasMeta) {
+          result += currentBuffer; // 일반 괄호(출생년도, 한자 등)는 보존
+        }
+        currentBuffer = "";
+      }
+    } else {
+      currentBuffer += char;
+    }
+  }
+  
+  if (depth === 0) {
+    result += currentBuffer;
+  }
+  
+  return result;
+}
+
+// ============================================================================
+// 4. 문장 및 절 분석기
+// ============================================================================
+
+function isPureMetaSentence(sentence) {
+  const clean = sentence.trim();
+  const metaKeysStr = Array.from(META_KEYS).join("|");
+  const pattern = new RegExp(
+    `^(?:그의|그녀의|본)?\\s*(?:${metaKeysStr})\\s*(?:은|는|:)\\s+[^.!?]+(?:이다|이었다|임|등이다)\\.$`
+  );
+  return pattern.test(clean);
+}
+
+function removeMetaClauses(sentence) {
+  let s = sentence;
+
+  // 메타 절 패턴 (자, 호, 아명, 본관 등) - 한자(\u4E00-\u9FFF) 범위 포함
+  const metaKeysStr = Array.from(META_KEYS).join("|");
+  const metaClauseRegex = new RegExp(
+    `(?:^|(?<=[,;]\\s*))(?:${metaKeysStr})\\s*(?:은|는|:)\\s+[가-힣\\u4E00-\\u9FFF\\s(·)]+?(?:등이다|등이었다|이며|이고|이자|이었다|였다|이다|임)(?:\\s*,)?`,
+    "g"
+  );
+
+  // 가계 절 패턴 (부친, 어머니, 조부 등)
+  const familyKeysStr = Array.from(FAMILY_KEYS).join("|");
+  const familyClauseRegex = new RegExp(
+    `(?:^|(?<=[,;]\\s*))(?:${familyKeysStr})\\s*(?:은|는|이|가)\\s+[가-힣\\u4E00-\\u9FFF\\s(·)]+?(?:등이다|등이었다|이며|이고|이자|이었다|였다|이다|임)(?:\\s*,)?`,
+    "g"
+  );
+
+  s = s.replace(metaClauseRegex, "");
+  s = s.replace(familyClauseRegex, "");
+
+  return s;
+}
+
+// ============================================================================
+// 5. 문법 복원 및 찌꺼기 정돈 엔진
+// ============================================================================
+
+function repairGrammar(sentence) {
+  let s = sentence.trim();
+
+  // 다중 쉼표 및 부호 정돈
+  s = s.replace(/,\s*,+/g, ",")
+       .replace(/,\s*\./g, ".")
+       .replace(/^\s*,\s*/, "")
+       .replace(/\(\s*\)/g, "")
+       .replace(/\s+/g, " ");
+
+  // 절이 지워져 문장 끝이 어색해진 연결어미 복원 (~독립운동가로. -> ~독립운동가이다.)
+  s = s.replace(/(?:으로|로)\s*\.$/, "이다.")
+       .replace(/(?:이며|이고|이자)\s*\.$/, "이다.")
+       .replace(/(?:하며|되었으며)\s*\.$/, "되었다.");
+
+  // 문장 시작의 불필요한 어미 제거
+  s = s.replace(/^(?:으로|로|이고|이며|이자)\s*,?\s*/, "");
+
+  return s;
+}
+
+// ============================================================================
+// 6. 메인 진입점 함수 (stripMetainfo)
+// ============================================================================
+
 export function stripMetainfo(text) {
   if (!text || typeof text !== "string") return "";
 
-  // 1. 따옴표 내부 텍스트 마스킹 (비유적 표현 '인상주의의 아버지' 오탐 차단)
-  const quotes = [];
-  let maskedText = text.replace(/(['"])(.*?)\1/g, (match) => {
-    quotes.push(match);
-    return `__QUOTE_${quotes.length - 1}__`;
-  });
+  const masker = new ContextMasker();
 
-  // 2. 괄호 속 가계 TMI 제거
-  maskedText = maskedText.replace(
-    /\([^)]*(?:부친|모친|조부|증조부|고조부|외가|손자|처남|장인)[^)]*\)/g,
-    ""
-  );
+  // Step 1: 따옴표 및 비유적 수식어 마스킹 보호
+  let processed = masker.maskQuotes(text);
+  processed = masker.maskMetaphors(processed);
 
-  // 3. 문장 단위 분할
-  const sentences = maskedText
+  // Step 2: 중첩 괄호 내 가계/메타 TMI 정밀 제거
+  processed = removeFamilyBrackets(processed);
+
+  // Step 3: 공백 정돈 및 문장 분할 (한자 \u4E00-\u9FFF 포함)
+  const sentenceBoundaryRegex = /(?<=[.!?])\s+(?=[가-힣\u4E00-\u9FFF A-Za-z0-9"'(])/;
+  const rawSentences = processed
     .replace(/\s+/g, " ")
     .trim()
-    .split(/(?<=[.!?])\s+/);
+    .split(sentenceBoundaryRegex);
 
-  const result = [];
+  const cleanSentences = [];
 
-  const META_KEYS = "이름|본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|자|호|묘|성|씨|휘";
-  const FAMILY_KEYS = "부친|모친|아버지|어머니|조부|증조부|고조부|외조부|외조모|장인|처남|장남|차남|장녀|차녀|막내";
-
-  const PURE_META = new RegExp(`^(?:그의|그녀의|본)?\\s*(?:${META_KEYS})\\s*(?:는|은|:)\\s+.+$`);
-  const PURE_FAMILY = new RegExp(`^(?:그의|그녀의)?\\s*(?:${FAMILY_KEYS})\\s*(?:은|는|이|가)\\s+.+(?:이다|이었다|임|등이다)\\.$`);
-
-  // 절 단위 제거 패턴 (호칭/비유 서술어 '~로 불리는', '~라는' 등이 뒤따르면 제거 대상에서 제외)
-  const META_CLAUSE = new RegExp(
-    `(?:^|(?<=[,;]\\s*))(?:${META_KEYS})\\s*(?:는|은|:)\\s+[^.!?]*?(?:등이다|등이었다|이며|이고|이자|이었다|였다|이다|임)(?:\\s*,)?`,
-    "g"
-  );
-  const FAMILY_CLAUSE = new RegExp(
-    `(?:^|(?<=[,;]\\s*))(?:${FAMILY_KEYS})\\s*(?:은|는|이|가)\\s+(?!.*?(?:로|라)\\s*불리|.*?라는\\s*칭호)[^.!?]*?(?:등이다|등이었다|이며|이고|이자|이었다|였다|이다|임)(?:\\s*,)?`,
-    "g"
-  );
-
-  for (let sentence of sentences) {
-    let s = sentence.trim();
+  for (let rawSentence of rawSentences) {
+    let s = rawSentence.trim();
     if (!s) continue;
 
-    if (PURE_META.test(s) || PURE_FAMILY.test(s)) continue;
+    // Step 4: 문장 전체가 완전한 단독 메타 정보인 경우 건너뜀
+    if (isPureMetaSentence(s)) continue;
 
-    s = s.replace(META_CLAUSE, "").replace(FAMILY_CLAUSE, "");
+    // Step 5: 문장 내 부분 메타/가계 절 정밀 삭제
+    s = removeMetaClauses(s);
 
-    // 문법 찌꺼기 정리
-    s = s
-      .replace(/,\s*,+/g, ",")
-      .replace(/,\s*\./g, ".")
-      .replace(/^\s*,\s*/g, "")
-      .replace(/\(\s*\)/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
+    // Step 6: 문법 찌꺼기 정리 및 종결어미 정돈
+    s = repairGrammar(s);
 
-    if (/(?:으로|로|에서|에게|부터|까지|하며|이고|이며|이자)\s*\.$/.test(s)) {
-      continue;
-    }
-    s = s.replace(/^(?:으로|로|이고|이며|이자)\s*,?\s*/, "");
-
-    if (s.length >= 5 && /[가-힣A-Za-z0-9]/.test(s)) {
+    // Step 7: 최소 길이 검증 및 결과 수집
+    if (s.length >= 3) {
       if (!/[.!?]$/.test(s)) s += ".";
-      result.push(s);
+      cleanSentences.push(s);
     }
   }
 
-  // 4. 따옴표 복원 및 최종 결합
-  let finalContent = result.join(" ");
-  quotes.forEach((q, idx) => {
-    finalContent = finalContent.replace(`__QUOTE_${idx}__`, q);
-  });
+  // Step 8: 결합 및 마스킹 복원
+  let resultText = cleanSentences.join(" ");
+  resultText = masker.unmask(resultText);
 
-  finalContent = finalContent.replace(/\s+/g, " ").trim();
-  const words = finalContent.match(/[가-힣A-Za-z0-9]{2,}/g) || [];
+  // Step 9: 한자 포함 유효 단어 수 검증
+  const validWords = resultText.match(/[가-힣\u4E00-\u9FFF A-Za-z0-9]{2,}/g) || [];
+  if (validWords.length < 2) {
+    return "";
+  }
 
-  return words.length > 2 ? finalContent : "";
+  return resultText.replace(/\s+/g, " ").trim();
 }
-
+  
 // ==========================================================
 // 2. 키워드 및 업적·생애 전용 표적 벡터(Target Vector) 설정
 // ==========================================================
