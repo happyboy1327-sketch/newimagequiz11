@@ -276,6 +276,72 @@ function pageRank(matrix, damping = 0.85, iterations = 40, tolerance = 1e-5) {
   return scores;
 }
 
+// ==========================================================
+// TF-IDF 센트로이드 벡터 공간 모델 (Vector Space Model)
+// ==========================================================
+function calculateCentroidSimilarity(sentences) {
+  if (!sentences || sentences.length === 0) return [];
+
+  const tokenizedDocs = sentences.map(tokenize);
+  const N = sentences.length;
+
+  // 1) DF (Document Frequency) 계산
+  const dfMap = {};
+  tokenizedDocs.forEach((tokens) => {
+    const uniqueTokens = new Set(tokens);
+    uniqueTokens.forEach((token) => {
+      dfMap[token] = (dfMap[token] || 0) + 1;
+    });
+  });
+
+  // 2) 문장별 TF-IDF 벡터 구축
+  const sentenceVectors = tokenizedDocs.map((tokens) => {
+    const tfMap = {};
+    tokens.forEach((t) => (tfMap[t] = (tfMap[t] || 0) + 1));
+
+    const vector = {};
+    for (const [token, count] of Object.entries(tfMap)) {
+      const tf = count / Math.max(tokens.length, 1);
+      const idf = Math.log((N + 1) / ((dfMap[token] || 0) + 1)) + 1;
+      vector[token] = tf * idf;
+    }
+    return vector;
+  });
+
+  // 3) 문서 전체 중심(Centroid) 벡터 계산
+  const centroidVector = {};
+  sentenceVectors.forEach((vec) => {
+    for (const [token, val] of Object.entries(vec)) {
+      centroidVector[token] = (centroidVector[token] || 0) + val / N;
+    }
+  });
+
+  let centroidNorm = 0;
+  for (const val of Object.values(centroidVector)) {
+    centroidNorm += val * val;
+  }
+  centroidNorm = Math.sqrt(centroidNorm);
+
+  if (centroidNorm === 0) return new Array(N).fill(0);
+
+  // 4) 각 문장 벡터와 센트로이드 벡터 간 코사인 유사도 산출
+  return sentenceVectors.map((vec) => {
+    let dotProduct = 0;
+    let vecNorm = 0;
+
+    for (const [token, val] of Object.entries(vec)) {
+      vecNorm += val * val;
+      if (centroidVector[token]) {
+        dotProduct += val * centroidVector[token];
+      }
+    }
+    vecNorm = Math.sqrt(vecNorm);
+
+    if (vecNorm === 0) return 0;
+    return dotProduct / (vecNorm * centroidNorm);
+  });
+}
+
 
 // ==========================================================
 // 6. 완벽 문장 조립 (서문 앵커 우선 배치 + TextRank 보완)
@@ -418,11 +484,17 @@ export function buildDescription(
   const matrix = buildSimilarityMatrix(candidateSentences);
   const baseScores = pageRank(matrix);
 
+  // 🔴 [벡터 유사도 계산 추가]
+  const vectorScores = calculateCentroidSimilarity(candidateSentences);
+
   const maxBaseScore = Math.max(...baseScores, 0.001);
 
   // 4) 가중치 계산
   const finalCandidates = candidateSentences.map((sentence, index) => {
     let score = baseScores[index] / maxBaseScore;
+
+    const vectorSim = vectorScores[index] || 0;
+    score *= (1 + vectorSim * 0.8);
 
     const demoMatch = sentence.match(DEMONSTRATIVE_REF_REGEX);
     if (demoMatch) {
