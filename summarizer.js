@@ -135,9 +135,11 @@ const CORE_SIGNIFICANCE_TEST_REGEX = new RegExp(CORE_SIGNIFICANCE_KEYWORDS.join(
 // ==========================================================
 // 3. 헬퍼 함수 및 지시어 해독
 // ==========================================================
-const REGEX_LEADING_CONNECTORS = /^(?:그러나|하지만|그런데|한편|따라서|게다가|반면|이에|이후|결국|그\s*후|또한|그 이후|그러고 나서|그리고),?\s*/;
+const REGEX_LEADING_CONNECTORS = /^(?:그러나|하지만|그런데|한편|따라서|게다가|반면|이에|이후|결국|그\s*후|또한|그\s*이후|그러고\s*나서|그리고)(?:,\s*|\s+)/;
+
 function cleanLeadingConnectors(sentence) {
-  return sentence ? sentence.replace(REGEX_LEADING_CONNECTORS, "").trim() : "";
+  if (!sentence) return "";
+  return REGEX_LEADING_CONNECTORS.test(sentence.trim()) ? "" : sentence.trim();
 }
 
 function splitSentences(text) {
