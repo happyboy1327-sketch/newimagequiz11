@@ -107,6 +107,9 @@ const UNIVERSAL_NOISE_KEYWORDS = [
   "차이를 보이고", "별명", "소문", "야사", "미디어에서", "여담으로", "설이 있다", "추측", "미디어 분류가 있습니다."
 ];
 
+// '란' 또는 '난'으로 끝나는 3~4글자 전란/사건 및 해전·전투 정규식
+const MAJOR_HISTORICAL_EVENT_REGEX = /(?:[가-힣]{2,3}[란난]|해전|대첩|승첩|전투|의거|혁명)/;
+
 const ACADEMIC_CONCEPT_REGEX = /[가-힣]{2,}(?:설|론|주의)\b/;
 
 // 분야별 업적 동사 가산 정규식
@@ -414,12 +417,28 @@ export function buildDescription(
 
   if (introSentences.length === 0 && bodySentences.length === 0) return "";
 
+  // 기존: anchorSentences = introSentences.slice(0, anchorCount);
+  // 🔴 [수정] 앵커 오염 방지: 첫 문장 유지 + 관직 나열 제외 및 주요 사건 문장 우선 채택
   let anchorSentences = [];
   let rawCandidates = [];
 
   if (introSentences.length > 0) {
-    anchorSentences = introSentences.slice(0, anchorCount);
-    rawCandidates = [...introSentences.slice(anchorCount), ...bodySentences];
+    const firstSentence = introSentences[0];
+    const restIntro = introSentences.slice(1);
+
+    // 단순 관직 나열 문장은 앵커 우선순위에서 뒤로 미룸
+    const priorityIntro = restIntro.filter(s => 
+      !RANK_LISTING_REGEX.test(s) || MAJOR_HISTORICAL_EVENT_REGEX.test(s)
+    );
+    const lowPriorityIntro = restIntro.filter(s => !priorityIntro.includes(s));
+
+    const sortedIntro = [firstSentence, ...priorityIntro, ...lowPriorityIntro];
+    
+    anchorSentences = sortedIntro.slice(0, anchorCount);
+    
+    // 앵커에 뽑히지 않은 나머지 서문 문장들과 본문 문장들을 후보군으로 결합
+    const unusedIntro = sortedIntro.slice(anchorCount);
+    rawCandidates = [...unusedIntro, ...bodySentences];
   } else {
     anchorSentences = bodySentences.slice(0, anchorCount);
     rawCandidates = bodySentences.slice(anchorCount);
@@ -442,6 +461,7 @@ export function buildDescription(
     const isVipSentence = (s) => 
       ACHIEVEMENT_VERB_REGEX.test(s) ||
       CORE_SIGNIFICANCE_REGEX.test(s) ||
+      MAJOR_HISTORICAL_EVENT_REGEX.test(s) ||
       /[《「"'][^《》「」"']+[》」"']/.test(s) ||
       /(?:노벨상|훈장|의거|독립운동|저격|창설|창시|발견|저술|선언|혁명)/.test(s);
 
