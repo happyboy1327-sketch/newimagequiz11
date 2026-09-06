@@ -38,27 +38,19 @@ export function cleanWikiText(text) {
   if (!text) return "";
   let result = text;
 
-  // ---------------------------------------------------------
-  // 1) 1번 방식: 한자 유니코드 Hex 범위를 이용한 한자 및 괄호 정제
-  // ---------------------------------------------------------
-  const HANJA_REGEX = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/g;
 
-  // 1-1) 괄호 내부 정리: 생몰년/연도는 보존하고 한자만 제거, 순수 한자/메타 괄호는 통째 삭제
+  // 1) 괄호 내부 정리: 생몰년/연도 및 한자 표기 등은 보존하고 메타 괄호만 통째 삭제
   result = result.replace(/\(([^()]+)\)/g, (match, inner) => {
-    // 생몰년/연도(음력 포함)가 포함되어 있으면 한자만 지우고 괄호 보존
+    // 생몰년/연도(음력 포함)가 포함되어 있으면 괄호 내용 전체 보존
     if (/(?:\d{3,4}년|~|음력)/.test(inner)) {
-      const cleanedInner = inner.replace(HANJA_REGEX, "").replace(/\s+/g, " ").trim();
-      return cleanedInner ? `(${cleanedInner})` : "";
+      return `(${inner.trim()})`;
     }
-    // 자/호/본관 키워드가 있거나 순수 한자/메타 정보인 경우 괄호째 삭제
-    if (/(?:본관|시호|아호|별호|아명|법명|묘호|호|자|부친|모친|조부|문화어|출처)/.test(inner) || /^[\s\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff,·~-]+$/.test(inner)) {
+    // 자/호/본관 등 메타 정보인 경우 괄호째 삭제
+    if (/(?:본관|시호|아호|별호|아명|법명|묘호|호|자|부친|모친|조부|문화어|출처)/.test(inner)) {
       return "";
     }
     return match;
   });
-
-  // 1-2) 괄호 밖 잔여 한자 제거 (예: 자(字) -> 자, 호(號) -> 호)
-  result = result.replace(HANJA_REGEX, "");
 
   // 1-3) 한자가 지워진 후 남은 빈 괄호 () 정리
   result = result.replace(/,\s*\(\s*\)/g, "").replace(/\(\s*\)/g, "");
