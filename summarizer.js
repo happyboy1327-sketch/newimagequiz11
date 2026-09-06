@@ -299,10 +299,22 @@ export function buildDescription(
     candidateSentences = bodySentences.slice(anchorCount);
   }
 
-  // 후보 문장 최대 25개까지만 분석
-  if (candidateSentences.length > 25) {
-    candidateSentences = candidateSentences.slice(0, 25);
-  }
+const forwardCandidates = candidateSentences.slice(0, 15);
+const middleCandidates = candidateSentences.slice(
+  Math.floor(candidateSentences.length / 2) - 7,
+  Math.floor(candidateSentences.length / 2) + 8
+);
+const backwardCandidates = candidateSentences.slice(-15);
+
+const selectedCandidates = new Set([
+  ...forwardCandidates,
+  ...middleCandidates,
+  ...backwardCandidates
+]);
+
+candidateSentences = candidateSentences.filter(
+  (sentence) => selectedCandidates.has(sentence)
+);
 
   const allSentences = [
     ...anchorSentences,
