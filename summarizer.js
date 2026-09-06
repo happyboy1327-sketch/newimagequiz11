@@ -140,17 +140,19 @@ function resolveAnaphora(sentence, allSentences, originalIndex) {
 
   return resolved;
 }
-
-// ==========================================================
-// 4. 필터링 및 점수 계산
-// ==========================================================
-function isDisqualifiedSentence(sentence) {
+function isDisqualifiedSentence(sentence, isFirstIntroSentence = false) {
   if (!sentence) return true;
   if (DISQUALIFIED_CONNECTORS_REGEX.test(sentence.trim())) return true;
-  if (TMI_NOISE_REGEX.test(sentence)) return true;
+  
+  // 서문 맨 첫 문장이 아닐 때만 TMI 필터 적용 (첫 문장은 TMI 키워드가 있어도 통과)
+  if (!isFirstIntroSentence && TMI_NOISE_REGEX.test(sentence)) return true;
+  
   if (UNIVERSAL_NOISE_KEYWORDS.some(kw => sentence.includes(kw))) return true;
   return false;
 }
+// ==========================================================
+// 4. 필터링 및 점수 계산
+// ==========================================================
 
 function scoreSentence(item) {
   let score = 1.0;
@@ -200,7 +202,10 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ma
     introQuota = 7;
   }
 
-  const validIntroSentences = flatIntroSentences.filter(item => !isDisqualifiedSentence(item.cleaned));
+  const validIntroSentences = flatIntroSentences.filter((item, idx) => {
+    const isFirstIntroSentence = (idx === 0);
+    return !isDisqualifiedSentence(item.cleaned, isFirstIntroSentence);
+  });
 
   for (let idx = 0; idx < validIntroSentences.length && selectedSentences.length < introQuota; idx++) {
     const item = validIntroSentences[idx];
@@ -211,7 +216,7 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ma
       selectedSentences.push(resolved);
       currentLength += resolved.length + 1;
     } else {
-      break; // maxLength 초과 시 서문 수집 중단
+      break;
     }
   }
 
