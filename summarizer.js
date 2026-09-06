@@ -17,9 +17,9 @@ const UNIVERSAL_NOISE_RULES = [
   /(?:활동|졸업|조직|출신|입학|결혼)\s*이다\.?$/
 ];
 
-const ACHIEVEMENT_VERB_REGEX = /(?:저술|집필|설계|고안|집대성|제시|편찬|주창|발명|창안|개혁|건축|축조|간행|통찰|창작|창시|정리|도입|확립|반영|기여|주도|설립|격퇴|정벌|연구|지휘|승리|격파|격침|건조|수호|통제|구원|평정|혁신|창설|발견|작곡)/;
-const MAJOR_HISTORICAL_EVENT_REGEX = /(?:[가-힣]{2,3}[란난]|해전|대첩|승첩|전투|의거|혁명|박해|정변|운동|연주\s*여행)/;
-const ACADEMIC_CONCEPT_REGEX = /[가-힣]{2,}(?:설|론|주의|학|법|교향곡|협주곡|오페라|세레나데|레퀴엠)\b/;
+const ACHIEVEMENT_VERB_REGEX = /(?:저술|집필|설계|고안|집대성|제시|편찬|주창|발명|창안|개혁|건축|축조|간행|통찰|창작|창시|정리|도입|확립|반영|기여|주도|설립|격퇴|정벌|연구|지휘|승리|격파|격침|건조|수호|통제|구원|평정|혁신|창설|발견)/;
+const MAJOR_HISTORICAL_EVENT_REGEX = /(?:[가-힣]{2,3}[란난]|해전|대첩|승첩|전투|의거|혁명|박해|정변|운동)/;
+const ACADEMIC_CONCEPT_REGEX = /[가-힣]{2,}(?:설|론|주의|학|법)\b/;
 
 // ==========================================================
 // 2. 위키 원문 정제 & 문장 보정
@@ -41,8 +41,10 @@ export function stripMetainfo(text) {
   if (!text) return "";
   let result = text;
 
-  // 1) 문두 찌꺼기 부호 정제
-  result = result.replace(/^[\s.,;:\)\>]+/, "");
+  // 1) 문두 찌꺼기 부호 및 `.1운동` 표기 자동 복구
+  result = result
+    .replace(/^[\s.,;:\)\>]+/, "")
+    .replace(/(?<!\d)\.1운동/g, "3.1운동");
 
   // 2) 괄호 내부 메타 정보 제거 (연도/생몰년 보존)
   result = result.replace(/\(([^()]+)\)/g, (match, inner) => {
@@ -104,7 +106,7 @@ export function stripMetainfo(text) {
 }
 
 // ==========================================================
-// 3. 문장 분리 (작품번호 K./Op./No. 및 소수점 보호)
+// 3. 문장 분리 (소수점/날짜 보호) & 타인 주어 필터링
 // ==========================================================
 
 export function splitSentences(text) {
@@ -112,8 +114,8 @@ export function splitSentences(text) {
   return text
     .replace(/\s+/g, " ")
     .trim()
-    // K. 1a, Op. 12, No. 1 등 영문 알파벳/약어 마침표 및 수치 소수점 오독 차단 Lookbehind
-    .split(/(?<=[.!?])(?<!\b[A-Za-z]\.)(?<!\b[A-Za-z]{2,3}\.)(?<!\d\.)\s+(?=[가-힣A-Za-z0-9"'(《])/)
+    // 수치/날짜 소수점(?<!\d\.\d) 및 일반 마침표 구분 처리
+    .split(/(?<=[.!?])(?<!\d\.\d?)\s+(?=[가-힣A-Za-z0-9"'(])/)
     .map((s) => s.trim())
     .filter((s) => s.length > 8);
 }
@@ -127,6 +129,29 @@ function isValidSentenceStructure(sentence) {
   if (openParen !== closeParen) return false;
 
   return true;
+}
+
+function isOtherSubject(sentence, docTitle) {
+  if (!docTitle) return false;
+
+  // 문두 첫 주어 추출 (날짜/장소/사건 부사구 제외 후 순수 주어 파악)
+  const trimmed = sentence.replace(/^[\d\s년월일시분초계절소속기관명성명등\.,\-~가-힣]+(?:에|에서|부터|까지|에도)\s+/, "");
+  const firstSubjectMatch = trimmed.match(/^[가-힣]{2,5}(?:은|는|이|(?<!다)가)\b/);
+  
+  if (!firstSubjectMatch) return false;
+
+  const subject = firstSubjectMatch[0].replace(/(?:은|는|이|가)$/, "");
+  const ALLOWED_PRONOUNS = ["그", "그는", "그의", "그녀", "그녀는", "이들은", "왕은", "황제는", "아버지는", "모친은", "조부는", "스승은", "열사는"];
+
+  if (
+    !ALLOWED_PRONOUNS.includes(subject) &&
+    !docTitle.includes(subject) &&
+    !subject.includes(docTitle.trim())
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 // ==========================================================
@@ -243,17 +268,28 @@ export function buildDescription(
   const docTF = computeTF(docTokens);
   const docVector = computeTFIDF(docTF, idfDict);
 
-  // --- 후보 문장 스코어링 (isOtherSubject 제거로 유실 차단) ---
+  // --- 후보 문장 스코어링 ---
   const finalCandidates = candidateSentences.map((sentence, index) => {
+    // 1. 앵커 바로 뒤 첫 후보 문장이거나(index === 0), 구조적 결함이 있는 경우만 1차 체크
+    // 문서의 핵심인 첫 부분 문장들은 주어 검사(isOtherSubject)를 Bypass
+    const isFirstPart = index === 0 && anchorSentences.length < 2;
+
     if (!isValidSentenceStructure(sentence)) {
       return { sentence, score: 0, index };
     }
 
+    // 첫 문장 영역이 아니고, 확실히 다른 주어일 때만 타인 주어로 판정하여 차단
+    if (!isFirstPart && isOtherSubject(sentence, docTitle)) {
+      return { sentence, score: 0, index };
+    }
+
+    // 2. TF-IDF 코사인 유사도 연산
     const tokens = tokenize(sentence);
     const sentenceTF = computeTF(tokens);
     const sentenceVector = computeTFIDF(sentenceTF, idfDict);
     const similarityScore = cosineSimilarity(sentenceVector, docVector);
 
+    // 3. 가산점 부여
     let score = similarityScore * (1.0 / (1 + index * 0.05));
     if (ACHIEVEMENT_VERB_REGEX.test(sentence)) score *= 1.5;
     if (ACADEMIC_CONCEPT_REGEX.test(sentence)) score *= 1.4;
