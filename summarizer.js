@@ -7,6 +7,7 @@ export function cleanWikiText(text) {
     .replace(/<ref\b[^>]*>[\s\S]*?<\/ref>/gi, "")
     .replace(/<ref\b[^>]*\/>/gi, "")
     .replace(/<blockquote\b[^>]*>[\s\S]*?<\/blockquote>/gi, "")
+    .replace(/<poem\b[^>]*>[\s\S]*?<\/poem>/gi, "")
     .replace(/<[^>]+>/g, "")
     .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1")
     .replace(/\[\d+\]/g, "")
@@ -132,7 +133,8 @@ function scoreSentence(item) {
 export function extractAnnotatedParagraphs(rawText) {
   if (!rawText) return [];
 
-  const paragraphs = rawText.split(/\n+|\n?==+[^=]+==+\n?/).filter(p => p.trim());
+  const cleanedGlobalText = cleanWikiText(rawText);
+  const paragraphs = cleanedGlobalText.split(/\n+|\n?==+[^=]+==+\n?/).filter(p => p.trim());
   const structuredParagraphs = [];
 
   for (const p of paragraphs) {
@@ -244,12 +246,13 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ma
 export function summarizeText(text) {
   if (!text) return { summary: "", sentenceCount: 0, usedSentences: 0 };
 
-  const paragraphs = text.split(/\n+|\n?==+[^=]+==+\n?/).filter(p => p.trim());
+  const cleanedFullText = cleanWikiText(text);
+  const paragraphs = cleanedFullText.split(/\n+|\n?==+[^=]+==+\n?/).filter(p => p.trim());
   const introText = paragraphs[0] || "";
   const bodyText = paragraphs.slice(1).join("\n\n");
 
   const summary = buildDescription(introText, bodyText);
-  const totalSentences = text.split(/(?<=[.!?])\s+/).length;
+  const totalSentences = cleanedFullText.split(/(?<=[.!?])\s+/).length;
   const usedSentences = summary ? summary.split(/(?<=[.!?])\s+/).length : 0;
 
   return { summary, sentenceCount: totalSentences, usedSentences };
