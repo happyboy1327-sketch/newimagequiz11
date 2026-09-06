@@ -362,140 +362,28 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ma
     candidateBodyItems.push(...scoredItems.slice(0, 3));
   }
 
-export function buildDescription(introText = "", bodyText = "", aliases = [], maxLength = 800) {
-  const cacheKey = `${introText.slice(0, 60)}_${bodyText.slice(0, 60)}_${maxLength}`;
-  if (cache[cacheKey]) return cache[cacheKey];
-
-  const deathMatch = introText.match(/~\s*(\d{4})년/);
-  const deathYear = deathMatch ? parseInt(deathMatch[1], 10) : null;
-
-  const parsedIntroParagraphs = extractAnnotatedParagraphs(introText);
-  const parsedBodyParagraphs = extractAnnotatedParagraphs(bodyText);
-
-  const flatIntroSentences = parsedIntroParagraphs.flat();
-  const flatBodySentences = parsedBodyParagraphs.flat();
-  const allFlatSentences = [...flatIntroSentences, ...flatBodySentences];
-
-  // 새 resolveAnaphora를 buildDescription 실행 시 사용할 수 있도록
-  // 문장들을 순회하면서 실제로 먼저 해소한다.
-  const resolvedAllSentences = allFlatSentences.map((item, index) => {
-    const cleaned = item?.cleaned || item || "";
-
-    return resolveAnaphora(
-      cleaned,
-      allFlatSentences,
-      index
-    );
-  });
-
-  let currentLength = 0;
-  const selectedSentences = [];
-  const seenContents = new Set();
-
-  let introQuota = 4;
-  const introAchievementMatches = introText.match(ACHIEVEMENT_VERB_REGEX);
-
-  if (introAchievementMatches && introAchievementMatches.length >= 3) {
-    introQuota = 7;
-  }
-
-  const validIntroSentences = flatIntroSentences.filter((item, idx) => {
-    const isFirstIntroSentence = idx === 0;
-
-    return !isDisqualifiedSentence(
-      item.cleaned,
-      isFirstIntroSentence,
-      deathYear
-    );
-  });
-
-  for (
-    let idx = 0;
-    idx < validIntroSentences.length &&
-    selectedSentences.length < introQuota;
-    idx++
-  ) {
-    const item = validIntroSentences[idx];
-    const globalIdx = flatIntroSentences.indexOf(item);
-
-    // 새 resolveAnaphora 실행 결과 사용
-    const resolved = resolvedAllSentences[globalIdx];
-
-    const keyFingerprint = resolved
-      .replace(/[^가-힣0-9]/g, "")
-      .slice(0, 15);
-
-    if (
-      !seenContents.has(keyFingerprint) &&
-      currentLength + resolved.length + 1 <= maxLength
-    ) {
-      selectedSentences.push(resolved);
-      seenContents.add(keyFingerprint);
-      currentLength += resolved.length + 1;
-    }
-  }
-
-  const candidateBodyItems = [];
-
-  for (const paragraphSentences of parsedBodyParagraphs) {
-    const validParagraphItems = paragraphSentences.filter(
-      item => !isDisqualifiedSentence(
-        item.cleaned,
-        false,
-        deathYear
-      )
-    );
-
-    if (validParagraphItems.length === 0) continue;
-
-    const scoredItems = validParagraphItems
-      .map(item => ({
-        item,
-        score: scoreSentence(item),
-        globalIdx: allFlatSentences.indexOf(item)
-      }))
-      .sort((a, b) => b.score - a.score);
-
-    candidateBodyItems.push(...scoredItems.slice(0, 3));
-  }
-
   candidateBodyItems.sort((a, b) => b.score - a.score);
 
   const pickedBodyItems = [];
-
   for (const candidate of candidateBodyItems) {
-    // 새 resolveAnaphora 실행 결과 사용
-    const resolved = resolvedAllSentences[candidate.globalIdx];
+    const resolved = resolveAnaphora(candidate.item.cleaned, allFlatSentences, candidate.globalIdx);
+    const keyFingerprint = resolved.replace(/[^가-힣0-9]/g, "").slice(0, 15);
 
-    const keyFingerprint = resolved
-      .replace(/[^가-힣0-9]/g, "")
-      .slice(0, 15);
-
-    if (
-      !seenContents.has(keyFingerprint) &&
-      currentLength + resolved.length + 1 <= maxLength
-    ) {
-      pickedBodyItems.push({
-        ...candidate,
-        resolved
-      });
-
+    if (!seenContents.has(keyFingerprint) && currentLength + resolved.length + 1 <= maxLength) {
+      pickedBodyItems.push({ ...candidate, resolved });
       seenContents.add(keyFingerprint);
       currentLength += resolved.length + 1;
     }
   }
 
   pickedBodyItems.sort((a, b) => a.globalIdx - b.globalIdx);
-
   for (const item of pickedBodyItems) {
     selectedSentences.push(item.resolved);
   }
 
   const result = selectedSentences.join(" ");
-
   return (cache[cacheKey] = result);
 }
-
   
 export function summarizeText(text) {
   if (!text) return { summary: "", sentenceCount: 0, usedSentences: 0 };
