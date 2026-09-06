@@ -29,7 +29,10 @@ export function cleanWikiText(text) {
     .replace(/<[^>]+>/g, "")
     .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1")
     .replace(/\[\d+\]|\[(?:각주|출처\s*필요|편집|주석)\]/g, "")
-    .replace(/\(\s*재위\s*:[^)]+\)/g, "")
+    .replace(/<ref\b[^>]*>[\s\S]*?<\/ref>/gi, "")
+    .replace(/<ref\b[^>]*\/>/gi, "")
+    .replace(/<blockquote\b[^>]*>[\s\S]*?<\/blockquote>/gi, "")
+    .replace(/\{\{인용문\s*\|[\s\S]*?\}\}/g, "")
     .replace(/(?<=\s|^)\d+\)\s*/g, "")
     .replace(/\s+/g, " ")
     .trim();
