@@ -4,6 +4,7 @@ export function cleanWikiText(text) {
   if (!text) return "";
   return text
     .replace(/\{\{인용문\s*\|[\s\S]*?\}\}/g, "")
+    .replace(/(?:^|\s*)(?:자|호|휘|시호|아명|태명)\s*(?:은|는|:)\s*[^.,\n]{1,15}(?:[.,]|\s*)/g, "")
     .replace(/<ref\b[^>]*>[\s\S]*?<\/ref>/gi, "")
     .replace(/<ref\b[^>]*\/>/gi, "")
     .replace(/<blockquote\b[^>]*>[\s\S]*?<\/blockquote>/gi, "")
