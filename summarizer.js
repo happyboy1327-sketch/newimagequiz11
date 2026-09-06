@@ -13,6 +13,9 @@ const UNIVERSAL_NOISE_RULES = [
   /(?:추측해 본다|추측된다|명확히 기술되지|알 수 없다|여담으로|설이 있다)/
 ];
 
+const BAD_WIKI_SENTENCE_REGEX =
+  /\d{4}-\d{1,2}-\d{1,2}|웨이백\s*머신|보관됨|\d{4}년\s*\d{1,2}월\s*\d{1,2}일자\s*기사/;
+
 const CORE_SIGNIFICANCE_KEYWORDS = [
   "원리", "구조", "기능", "작용", "현상", "이론", "연구", "발견", "발명", "규명", "증명", 
   "분석", "기반", "시스템", "메커니즘", "특징", "성질", "분류", "상태", "상호작용", "개척",
@@ -272,11 +275,13 @@ export function buildDescription(
 
   const introSentences = rawIntroSentences
   .map((s, i) => i === 0 ? s : stripMetainfo(s))
-  .filter(Boolean);
+  .filter(Boolean)
+  .filter((s) => !BAD_WIKI_SENTENCE_REGEX.test(s));
 
   const bodySentences = rawBodySentences
     .map((s) => stripMetainfo(s))
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((s) => !BAD_WIKI_SENTENCE_REGEX.test(s));
 
   let anchorSentences = [];
   let candidateSentences = [];
