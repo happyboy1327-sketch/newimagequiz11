@@ -288,41 +288,43 @@ export function buildDescription(
 
   // --- 서문 앵커 문장 ---
   if (introSentences.length > 0) {
-  // 서문 첫 문장만 고정
   anchorSentences = introSentences.slice(0, 1);
 
-  // 나머지 서문 + 본문 전체를 후보로
   candidateSentences = [
     ...introSentences.slice(1),
     ...bodySentences
   ];
 } else {
-  // 서문이 없으면 본문 첫 문장만 고정
   anchorSentences = bodySentences.slice(0, 1);
-
-  // 나머지 본문 전체를 후보로
   candidateSentences = bodySentences.slice(1);
 }
 
-const candidates = [];
+// 후보를 앞쪽 25개 + 가운데 10개 + 뒤쪽 10개로 추적
+const forwardCandidates = candidateSentences.slice(0, 25);
 
-for (let i = 0; i < candidateSentences.length; i++) {
-  candidates.push(...candidateSentences.slice(i, i + 1));
+const middleStart = Math.max(
+  0,
+  Math.floor(candidateSentences.length / 2) - 5
+);
+const middleCandidates = candidateSentences.slice(
+  middleStart,
+  middleStart + 10
+);
 
-  const reverseIndex = candidateSentences.length - 1 - i;
+const backwardCandidates = candidateSentences.slice(-10);
 
-  if (reverseIndex !== i) {
-    candidates.push(
-      ...candidateSentences.slice(reverseIndex, reverseIndex + 1)
-    );
-  }
+// 중복 제거 후 원래 순서 유지
+const selectedCandidates = new Set([
+  ...forwardCandidates,
+  ...middleCandidates,
+  ...backwardCandidates
+]);
 
-  if (candidates.length >= 30) break;
-}
+candidateSentences = candidateSentences.filter(
+  sentence => selectedCandidates.has(sentence)
+);
 
-candidateSentences = [...new Set(candidates)].slice(0, 30);
-  
-const allSentences = [
+  const allSentences = [
   ...anchorSentences,
   ...candidateSentences
 ];
