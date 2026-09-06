@@ -486,7 +486,7 @@ async function fillCache() {
                             aliases, 
                             3,   
                             150, 
-                            630  
+                            720  
                         );
                            if (finalDescription) {
                                QUIZ_CACHE.push({
