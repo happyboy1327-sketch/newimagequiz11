@@ -1,20 +1,57 @@
 const cache = {};
+// 중첩된 태그도 안전하게 통째로 제거하는 헬퍼
+function stripBalancedTag(str, tagName) {
+  const tagPattern = new RegExp(`<(/?)${tagName}\\b[^>]*>`, "gi");
+  let depth = 0;
+  let result = "";
+  let lastIndex = 0;
+  let match;
+
+  while ((match = tagPattern.exec(str)) !== null) {
+    const isClosing = match[1] === "/";
+
+    if (!isClosing) {
+      if (depth === 0) {
+        // 블록 시작 직전까지의 텍스트는 보존
+        result += str.slice(lastIndex, match.index);
+      }
+      depth++;
+    } else if (depth > 0) {
+      depth--;
+      if (depth === 0) {
+        // 블록이 완전히 닫힌 지점부터 다시 텍스트 수집 시작
+        lastIndex = match.index + match[0].length;
+      }
+    }
+  }
+
+  // 짝이 맞아 depth가 0으로 끝났을 때만 나머지 텍스트를 붙임
+  if (depth === 0) {
+    result += str.slice(lastIndex);
+  }
+  return result;
+}
 
 export function cleanWikiText(text) {
   if (!text) return "";
-  return text
-    .replace(/\{\{인용문\s*\|[\s\S]*?\}\}/g, "")
-    .replace(/(?:^|\s*)(?:본관|자|호|휘|시호|아명|태명)\s*(?:은|는|:)\s*[^.,\n]{1,15}(?:[.,]|\s*)/g, "")
-    .replace(/<ref\b[^>]*>[\s\S]*?<\/ref>/gi, "")
+
+  let t = text.replace(/\{\{인용문\d?\s*\|[\s\S]*?\}\}/g, ""); // 인용문, 인용문2, 인용문3 등 모두 대응
+  t = t.replace(/(?:^|\s*)(?:본관|자|호|휘|시호|아명|태명)\s*(?:은|는|:)\s*[^.,\n]{1,15}(?:[.,]|\s*)/g, "");
+
+  t = stripBalancedTag(t, "ref");
+  t = stripBalancedTag(t, "blockquote");
+  t = stripBalancedTag(t, "poem");
+
+  t = t
     .replace(/<ref\b[^>]*\/>/gi, "")
-    .replace(/<blockquote\b[^>]*>[\s\S]*?<\/blockquote>/gi, "")
-    .replace(/<poem\b[^>]*>[\s\S]*?<\/poem>/gi, "")
     .replace(/<[^>]+>/g, "")
     .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1")
     .replace(/\[\d+\]/g, "")
     .replace(/\[(?:각주|출처\s*필요|편집|주석)\]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+
+  return t;
 }
 
 const RE_SENTENCE_SPLIT = /(?<!\d\.)(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i;
