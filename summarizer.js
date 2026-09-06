@@ -18,7 +18,7 @@ export function cleanWikiText(text) {
 
 const RE_SENTENCE_SPLIT = /(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<!\d\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i;
 
-export function stripMetainfo(text) {
+//export function stripMetainfo(text) {
 const RE_QUOTE = /(['"])(.*?)\1/g;
 const RE_SPACE = /\s+/g;
 const RE_PAREN_META = /\([^)]*(?:부친|모친|조부|증조부|고조부|외가|장인|처남|자|호|본관|시호|아명|태명|법명)\s*:[^)]*\)/g;
