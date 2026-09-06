@@ -1,9 +1,5 @@
 const cache = {};
 
-// ==========================================================
-// 1. 위키 텍스트 정제 및 파싱 규격
-// ==========================================================
-
 export function cleanWikiText(text) {
   if (!text) return "";
   return text
@@ -15,22 +11,20 @@ export function cleanWikiText(text) {
     .trim();
 }
 
-// 숫자+마침표(3.1운동, 1902. 12. 16.) 및 영문 약어 전방위 보존 정규식
 const RE_SENTENCE_SPLIT = /(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<!\d\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i;
+
+export const CUT_SECTION_REGEX = /(?:^|\n)\s*={2,}\s*(각주|가족|같이 보기|참고 문헌|참고 자료|기타|외부 링크|주석|여담|갤러리|가계도|계보|[가-힣\s]*작품(?:\s*목록)?|[가-힣\s]*저서|출연작|음반|디스코그래피)\s*={2,}/i;
 
 export function stripMetainfo(text) {
   if (!text) return "";
   let cleaned = cleanWikiText(text);
 
-  // 문두 단독 메타 서술어 제한적 정제 (최대 15자)
   cleaned = cleaned.replace(/(?:^|\s*)(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|자|호|휘)\s*(?:은|는|:)\s*[^.,\n]{1,15}(?:[.,]|\s*)/g, "");
 
-  // 짝 없는 닫는 괄호(')') 찌꺼기 완벽 정제
   while (/\)/.test(cleaned) && !/\(/.test(cleaned)) {
     cleaned = cleaned.replace(/\)/g, "");
   }
 
-  // 문두 찌꺼기(중앙점, 공백, 닫는 괄호) 제거
   cleaned = cleaned.replace(/^[·\s\)]+/, "");
 
   return cleaned
@@ -39,10 +33,6 @@ export function stripMetainfo(text) {
     .replace(/\s+/g, " ")
     .trim();
 }
-
-// ==========================================================
-// 2. 키워드 및 노이즈 필터 정의
-// ==========================================================
 
 const CORE_SIGNIFICANCE_KEYWORDS = [
   "원리", "구조", "기능", "작용", "현상", "이론", "연구", "발견", "규명", "증명", "설명", "기록", "저서", 
@@ -53,7 +43,8 @@ const CORE_SIGNIFICANCE_KEYWORDS = [
   "대표", "영향", "의의", "기여", "발전", "역사", "중심", "주요", "핵심", "주요한", 
   "지정", "설립", "주도", "구성", "도입", "확립", "공격", "격퇴", "정벌", "함락",
   "독립운동", "의병", "하얼빈", "저격", "사살", "의거", "단지동맹", "동양평화론",
-  "국채보상운동", "구국", "대한의군", "유묵", "도량형", "만리장성", "천하통일", "거중기", "실학", "상대성이론", "양자역학"
+  "국채보상운동", "구국", "대한의군", "유묵", "도량형", "만리장성", "천하통일", "거중기", "실학", "상대성이론", "양자역학",
+  "시인", "작가", "문단", "등단", "체포", "구금", "사상범"
 ];
 
 const UNIVERSAL_NOISE_KEYWORDS = [
@@ -62,20 +53,14 @@ const UNIVERSAL_NOISE_KEYWORDS = [
   "차이를 보이고", "별명", "소문", "야사", "미디어에서", "여담으로", "설이 있다", "추측", "보고 있다", "미디어 분류가 있습니다."
 ];
 
-// 문두 시간·전환 접속사
-const DISQUALIFIED_CONNECTORS_REGEX = /^(?:그러나|하지만|그런데|한편|이후|당시|그\s*후|그\s*뒤|그러던\s*중|이에\s*따라|그\s*당시|그\s*이후|그러고\s*나서|그때|이때|이듬해|훗날|마침내)/;
+const DISQUALIFIED_CONNECTORS_REGEX = /^(?:그러나|하지만|그런데|한편|이후|당시|그\s*후|그\s*뒤|그러던\s*중|이에\s*따라|그\s*당시|그\s*이후|그러고\s*나서|그때|이때|이듬해|훗날|마침내|이와\s*달리|그러다가|이로써|따라서|결과적으로)/;
 
-// 사후 공헌 논쟁, 타인 연구, TMI 완벽 차단
-const TMI_NOISE_REGEX = /(?:부친|모친|조부|증조부|고조부|외가|첫\s*부인|둘째\s*부인|가계도|손자|처남|장인|결혼|이혼|혼인|재혼|배우자|남편|아내|딸|아들|처가|시댁|장남|차남|장녀|차녀|외아들|외딸|\d남|\d녀|위인전|출판사|족보|입향시조|후사|종친|문중|호적|예규|성씨|두음법칙|실질적인\s*기여|동의하지\s*않는다|목격자\s*증언|서한들)/;
+const TMI_NOISE_REGEX = /(?:부친|모친|조부|조모|증조부|고조부|외가|첫\s*부인|둘째\s*부인|가계도|손자|처남|장인|결혼|이혼|혼인|재혼|배우자|남편|아내|딸|아들|처가|시댁|장남|차남|장녀|차녀|외아들|외딸|\d남|\d녀|위인전|출판사|족보|입향시조|후사|종친|문중|호적|예규|성씨|두음법칙|실질적인\s*기여|동의하지\s*않는다|목격자\s*증언|서한들|할아버지|할머니|아버지|어머니|부모|형제|자매|친척|번지)/;
 
 const MAJOR_HISTORICAL_EVENT_REGEX = /(?:[가-힣]{2,3}[란난]|해전|대첩|승첩|전투|의거|혁명|박해)/;
 const ACADEMIC_CONCEPT_REGEX = /[가-힣]{2,}(?:설|론|주의|학)\b/;
-const ACHIEVEMENT_VERB_REGEX = /(?:저술|집필|설계|고안|집대성|제시|편찬|주창|발명|창안|개혁|건축|축조|간행|통찰|창작|창시|정리|도입|확립|반영|기여|주도|설립|격퇴|정벌|연구|지휘|승리|격파|격침|건조|수호|통제|구원|평정|혁신|창설|발견|노벨상|통일|단행)/g;
+const ACHIEVEMENT_VERB_REGEX = /(?:저술|집필|설계|고안|집대성|제시|편찬|주창|발명|창안|개혁|건축|축조|간행|통찰|창작|창시|정리|도입|확립|반영|기여|주도|설립|격퇴|정벌|연구|지휘|승리|격파|격침|건조|수호|통제|구원|평정|혁신|창설|발견|노벨상|통일|단행|졸업|등단|발표|체포)/g;
 const CORE_SIGNIFICANCE_TEST_REGEX = new RegExp(CORE_SIGNIFICANCE_KEYWORDS.join("|"));
-
-// ==========================================================
-// 3. 지시어 해독(Anaphora Resolution) 및 필터링
-// ==========================================================
 
 function resolveAnaphora(sentence, allSentences, originalIndex) {
   let resolved = sentence;
@@ -113,11 +98,9 @@ function isDisqualifiedSentence(sentence, isFirstIntroSentence = false, deathYea
   if (!sentence) return true;
   if (DISQUALIFIED_CONNECTORS_REGEX.test(sentence.trim())) return true;
   
-  // 서문 첫 문장(isFirstIntroSentence=true)은 TMI 필터 무조건 통과
   if (!isFirstIntroSentence && TMI_NOISE_REGEX.test(sentence)) return true;
   if (UNIVERSAL_NOISE_KEYWORDS.some(kw => sentence.includes(kw))) return true;
 
-  // 사망 연도 필터링: 사망 연도 이후에 일어난 타인의 활동 문장 배제
   if (deathYear) {
     const yearMatch = sentence.match(/(\d{4})년/);
     if (yearMatch && parseInt(yearMatch[1], 10) > deathYear) {
@@ -147,14 +130,10 @@ function scoreSentence(item) {
   return score;
 }
 
-// ==========================================================
-// 4. 문단/문장 단위 추출 파서
-// ==========================================================
-
 export function extractAnnotatedParagraphs(rawText) {
   if (!rawText) return [];
 
-  const paragraphs = rawText.split(/\n\s*\n|\n?==+[^=]+==+\n?/).filter(p => p.trim());
+  const paragraphs = rawText.split(/\n+|\n?==+[^=]+==+\n?/).filter(p => p.trim());
   const structuredParagraphs = [];
 
   for (const p of paragraphs) {
@@ -162,7 +141,6 @@ export function extractAnnotatedParagraphs(rawText) {
     const parsedSentences = [];
 
     for (let raw of rawSentences) {
-      // 문두 날짜 콜론 및 불필요한 찌꺼기 전처리
       raw = raw.replace(/^(\d+년\s*\d+월\s*\d+일)\s*:\s*/, "$1 ").replace(/^[·\s\)]+/, "");
 
       const hasBold = /'''|<b>|<strong>/.test(raw);
@@ -184,15 +162,10 @@ export function extractAnnotatedParagraphs(rawText) {
   return structuredParagraphs;
 }
 
-// ==========================================================
-// 5. 메인 요약 생성
-// ==========================================================
-
 export function buildDescription(introText = "", bodyText = "", aliases = [], maxLength = 800) {
   const cacheKey = `${introText.slice(0, 50)}_${bodyText.slice(0, 50)}_${maxLength}`;
   if (cache[cacheKey]) return cache[cacheKey];
 
-  // 서문에서 대상자의 사망 연도 추출
   const deathMatch = introText.match(/~\s*(\d{4})년/);
   const deathYear = deathMatch ? parseInt(deathMatch[1], 10) : null;
 
@@ -213,7 +186,6 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ma
     introQuota = 7;
   }
 
-  // 1. 서문 추출 (첫 문장 보호 및 사후 문장 차단)
   const validIntroSentences = flatIntroSentences.filter((item, idx) => {
     const isFirstIntroSentence = (idx === 0);
     return !isDisqualifiedSentence(item.cleaned, isFirstIntroSentence, deathYear);
@@ -223,7 +195,6 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ma
     const item = validIntroSentences[idx];
     const globalIdx = flatIntroSentences.indexOf(item);
     
-    // 지시어 해독 (Anaphora Resolution) 연동 복구
     const resolved = resolveAnaphora(item.cleaned, allFlatSentences, globalIdx);
     const keyFingerprint = resolved.replace(/[^가-힣0-9]/g, "").slice(0, 15);
 
@@ -234,7 +205,6 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ma
     }
   }
 
-  // 2. 본문 후보 선출
   const candidateBodyItems = [];
   for (const paragraphSentences of parsedBodyParagraphs) {
     const validParagraphItems = paragraphSentences.filter(item => !isDisqualifiedSentence(item.cleaned, false, deathYear));
