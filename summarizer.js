@@ -141,25 +141,23 @@ function isValidSentenceStructure(sentence) {
 function isOtherSubject(sentence, docTitle) {
   if (!docTitle) return false;
 
-  // 1. '~다가' 연결어미 및 '-가(家)' 접미사를 주격 조사 '가'로 오인하지 않도록 1차 정제
-  const cleanedSentence = sentence
-    .replace(/[가-힣]+다가\b/g, "") 
-    .replace(/(?:정치가|전문가|작가|화가|음악가|사업가|건축가|사상가|유교가)\b/g, "");
+  // 1. 문장 맨 앞(문두)에 등장하는 첫 주어만 추출
+  // 2. (?<!다)가 : '다' 바로 뒤의 '가'는 100% 연결어미(~다가)이므로 주격조사에서 제외
+  const firstSubjectMatch = sentence.trim().match(/^[가-힣]{2,4}(?:은|는|이|(?<!다)가)\b/);
+  if (!firstSubjectMatch) return false;
 
-  // 2. 정제된 문장에서 실제 주어 조사(은/는/이/가) 추출
-  const matches = [...cleanedSentence.matchAll(/([가-힣]{2,4})(?:은|는|이|가)\b/g)];
+  const subject = firstSubjectMatch[0].replace(/(?:은|는|이|가)$/, "");
   const ALLOWED_PRONOUNS = ["그", "그는", "그의", "이들은", "왕은", "황제는", "아버지는", "모친은", "조부는", "스승은"];
 
-  for (const match of matches) {
-    const subject = match[1];
-    if (
-      !ALLOWED_PRONOUNS.includes(subject) &&
-      !docTitle.includes(subject) &&
-      !subject.includes(docTitle.trim())
-    ) {
-      return true;
-    }
+  // 추출된 문두 주어가 대명사도 아니고 문서 제목(주인공)도 아닐 때만 타인 주어로 판정
+  if (
+    !ALLOWED_PRONOUNS.includes(subject) &&
+    !docTitle.includes(subject) &&
+    !subject.includes(docTitle.trim())
+  ) {
+    return true;
   }
+
   return false;
 }
 
