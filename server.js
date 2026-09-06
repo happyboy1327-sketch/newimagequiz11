@@ -484,11 +484,11 @@ async function fillCache() {
                                cleanIntro,
                                cleanExtract,
                                aliases || [],
-                               3,       // extraCount (추가 추출 문장 수) 
-                               3,       // anchorCount (서문 앵커 문장 수)
-                               660,     // maxLength (최대 글자 수)
-                               sectionTitle,      // 
-                               docTitle    // docTitle (서버의 문서 제목 변수명)
+                               3,                 
+                               3,                 
+                               660,               
+                               "",                
+                               pageData.title     
                            );
   
                            if (finalDescription) {
