@@ -3,6 +3,7 @@ const cache = {};
 export function cleanWikiText(text) {
   if (!text) return "";
   return text
+    .replace(/\{\{인용문\s*\|[\s\S]*?\}\}/g, "")
     .replace(/<ref\b[^>]*>[\s\S]*?<\/ref>/gi, "")
     .replace(/<ref\b[^>]*\/>/gi, "")
     .replace(/<blockquote\b[^>]*>[\s\S]*?<\/blockquote>/gi, "")
