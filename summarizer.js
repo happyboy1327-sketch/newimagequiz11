@@ -16,7 +16,7 @@ export function cleanWikiText(text) {
     .trim();
 }
 
-const RE_SENTENCE_SPLIT = /(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<!\d\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i;
+const RE_SENTENCE_SPLIT = /(?<!\d\.)(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i;
 
 //export function stripMetainfo(text) {
 const RE_QUOTE = /(['"])(.*?)\1/g;
