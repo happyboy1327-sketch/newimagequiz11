@@ -76,6 +76,7 @@ export function cleanWikiText(text) {
     .replace(/(?:,\s*)+,/g, ",")
     .replace(/,\s*\./g, ".")
     .replace(/^\s*,\s*/, "")
+    .replace(/\s*\.+\s*(?:\.+\s*)+/g, ".")
     .replace(/([가-힣]+)(?:으로|며|이고|이자|이며)\s*\./g, "$1이다.")
     .replace(/([가-힣]+)으로(?!이다)\s*\./g, "$1이다.") // "으로." 형태만 타겟팅
     .replace(/\s+/g, " ")
@@ -383,7 +384,7 @@ export function buildDescription(
   aliases = [],
   extraCount = 3,
   anchorCount = 3,
-  maxLength = 630,
+  maxLength = 720,
   sectionTitle = "" // 👈 [수정 1] sectionTitle 매개변수 추가 (ReferenceError 방지)
 ) {
   const cacheKey = introText + bodyText;
