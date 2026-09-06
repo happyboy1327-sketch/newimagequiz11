@@ -478,7 +478,7 @@ async function fillCache() {
                                cleanIntro, 
                                cleanExtract,
                                aliases || [], 
-                               630 // maxLength (최대 글자 수)
+                               800 // maxLength (최대 글자 수)
                            );
                            if (finalDescription) {
                                QUIZ_CACHE.push({
