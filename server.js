@@ -481,11 +481,16 @@ async function fillCache() {
   
                            // 4. 개작된 summarizer.js 시그니처(introText, bodyText, aliases, maxLength)에 맞춰 연동
                            const finalDescription = buildDescription(
-                               cleanIntro, 
+                               cleanIntro,
                                cleanExtract,
-                               aliases || [], 
-                               720 // maxLength (최대 글자 수)
+                               aliases || [],
+                               3,       // extraCount (추가 추출 문장 수) 
+                               3,       // anchorCount (서문 앵커 문장 수)
+                               660,     // maxLength (최대 글자 수)
+                               "",      // sectionTitle
+                               title    // docTitle (서버의 문서 제목 변수명)
                            );
+  
                            if (finalDescription) {
                                QUIZ_CACHE.push({
                                    name: pageData.title,
