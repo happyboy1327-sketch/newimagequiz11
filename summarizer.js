@@ -225,7 +225,7 @@ function scoreSentence(item) {
 // ==========================================================
 // 5. 메인 요약 생성 함수 (buildDescription)
 // ==========================================================
-export function buildDescription(introText = "", bodyText = "", aliases = [], maxLength = 1500) {
+export function buildDescription(introText = "", bodyText = "", aliases = [], maxLength = 800) {
   const cacheKey = `${introText}_${bodyText}_${maxLength}`;
   if (cache[cacheKey]) return cache[cacheKey];
 
