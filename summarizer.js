@@ -288,42 +288,48 @@ export function buildDescription(
 
   // --- 서문 앵커 문장 ---
   if (introSentences.length > 0) {
-    anchorSentences = introSentences.slice(0, anchorCount);
+  // 서문 첫 문장만 고정
+  anchorSentences = introSentences.slice(0, 1);
 
-    candidateSentences = [
-      ...introSentences.slice(anchorCount),
-      ...bodySentences
-    ];
-  } else {
-    anchorSentences = bodySentences.slice(0, anchorCount);
-    candidateSentences = bodySentences.slice(anchorCount);
-  }
-
-const forwardCandidates = candidateSentences.slice(0, 15);
-const middleCandidates = candidateSentences.slice(
-  Math.floor(candidateSentences.length / 2) - 7,
-  Math.floor(candidateSentences.length / 2) + 8
-);
-const backwardCandidates = candidateSentences.slice(-15);
-
-const selectedCandidates = new Set([
-  ...forwardCandidates,
-  ...middleCandidates,
-  ...backwardCandidates
-]);
-
-candidateSentences = candidateSentences.filter(
-  (sentence) => selectedCandidates.has(sentence)
-);
-
-  const allSentences = [
-    ...anchorSentences,
-    ...candidateSentences
+  // 나머지 서문 + 본문 전체를 후보로
+  candidateSentences = [
+    ...introSentences.slice(1),
+    ...bodySentences
   ];
+} else {
+  // 서문이 없으면 본문 첫 문장만 고정
+  anchorSentences = bodySentences.slice(0, 1);
 
-  if (allSentences.length === 0) {
-    return "";
+  // 나머지 본문 전체를 후보로
+  candidateSentences = bodySentences.slice(1);
+}
+
+const candidates = [];
+
+for (let i = 0; i < candidateSentences.length; i++) {
+  candidates.push(...candidateSentences.slice(i, i + 1));
+
+  const reverseIndex = candidateSentences.length - 1 - i;
+
+  if (reverseIndex !== i) {
+    candidates.push(
+      ...candidateSentences.slice(reverseIndex, reverseIndex + 1)
+    );
   }
+
+  if (candidates.length >= 30) break;
+}
+
+candidateSentences = [...new Set(candidates)].slice(0, 30);
+  
+const allSentences = [
+  ...anchorSentences,
+  ...candidateSentences
+];
+
+if (allSentences.length === 0) {
+  return "";
+}
 
   // --- TF-IDF 계산 ---
   const sentenceTokensList = allSentences.map((s) => tokenize(s));
