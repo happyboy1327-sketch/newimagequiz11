@@ -1,35 +1,37 @@
+const cache = {};
+
 // ==========================================================
-// 1. 위키 정제 및 파싱 로직
+// 1. 위키 텍스트 정제 및 파싱 규격
 // ==========================================================
 
-// HTML 태그, 각주, 위키 링크만 정제 (괄호 및 내부 메타 정보 100% 보존)
 export function cleanWikiText(text) {
   if (!text) return "";
   return text
-    .replace(/<[^>]+>/g, "")                         // HTML 태그 제거
-    .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1") // 위키 링크 [[A|B]] -> B
-    .replace(/\[\d+\]/g, "")                         // 각주 [1] 제거
+    .replace(/<[^>]+>/g, "")
+    .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1")
+    .replace(/\[\d+\]/g, "")
     .replace(/\[(?:각주|출처\s*필요|편집|주석)\]/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-// 문장 단위 정밀 분리 정규식 (숫자.숫자, 날짜, 영문 약어 분리 완전 방지)
-const RE_SENTENCE_SPLIT = /(?<!\d\.)(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i;
+// 숫자+마침표(3.1운동, 1902. 12. 16.) 및 영문 약어 전방위 보존 정규식
+const RE_SENTENCE_SPLIT = /(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<!\d\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i;
 
-// 부차적 목차 절단 정규식
-export const CUT_SECTION_REGEX = /(?:^|\n)\s*={2,}\s*(각주|가족|같이 보기|참고 문헌|참고 자료|기타|외부 링크|주석|여담|갤러리|가계도|계보|[가-힣\s]*작품(?:\s*목록)?|[가-힣\s]*저서|출연작|음반|디스코그래피)\s*={2,}/i;
-
-// 단독 메타 문구 및 문두 파편 정리 (본문 파괴 방지)
 export function stripMetainfo(text) {
   if (!text) return "";
   let cleaned = cleanWikiText(text);
 
-  // 문장 시작 부분의 불필요한 단독 메타 서술어만 제한적 정제 (최대 15자)
+  // 문두 단독 메타 서술어 제한적 정제 (최대 15자)
   cleaned = cleaned.replace(/(?:^|\s*)(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|자|호|휘)\s*(?:은|는|:)\s*[^.,\n]{1,15}(?:[.,]|\s*)/g, "");
 
-  // 메타 정제 후 남은 문두 중앙점(·) 및 공백 찌꺼기 제거
-  cleaned = cleaned.replace(/^[·\s]+/, "");
+  // 짝 없는 닫는 괄호(')') 찌꺼기 완벽 정제
+  while (/\)/.test(cleaned) && !/\(/.test(cleaned)) {
+    cleaned = cleaned.replace(/\)/g, "");
+  }
+
+  // 문두 찌꺼기(중앙점, 공백, 닫는 괄호) 제거
+  cleaned = cleaned.replace(/^[·\s\)]+/, "");
 
   return cleaned
     .replace(/,\s*,+/g, ",")
@@ -39,7 +41,7 @@ export function stripMetainfo(text) {
 }
 
 // ==========================================================
-// 2. 키워드, 필터 및 배제 규칙
+// 2. 키워드 및 노이즈 필터 정의
 // ==========================================================
 
 const CORE_SIGNIFICANCE_KEYWORDS = [
@@ -51,7 +53,7 @@ const CORE_SIGNIFICANCE_KEYWORDS = [
   "대표", "영향", "의의", "기여", "발전", "역사", "중심", "주요", "핵심", "주요한", 
   "지정", "설립", "주도", "구성", "도입", "확립", "공격", "격퇴", "정벌", "함락",
   "독립운동", "의병", "하얼빈", "저격", "사살", "의거", "단지동맹", "동양평화론",
-  "국채보상운동", "구국", "대한의군", "유묵", "도량형", "만리장성", "천하통일", "거중기", "실학"
+  "국채보상운동", "구국", "대한의군", "유묵", "도량형", "만리장성", "천하통일", "거중기", "실학", "상대성이론", "양자역학"
 ];
 
 const UNIVERSAL_NOISE_KEYWORDS = [
@@ -60,9 +62,11 @@ const UNIVERSAL_NOISE_KEYWORDS = [
   "차이를 보이고", "별명", "소문", "야사", "미디어에서", "여담으로", "설이 있다", "추측", "보고 있다", "미디어 분류가 있습니다."
 ];
 
-const DISQUALIFIED_CONNECTORS_REGEX = /^(?:그러나|하지만|그런데|한편|이후|당시|그\s*후|그\s*뒤|그러던\s*중|이에\s*따라|그\s*당시|그\s*이후|그러고\s*나서|그때|이때)/;
+// 문두 시간·전환 접속사
+const DISQUALIFIED_CONNECTORS_REGEX = /^(?:그러나|하지만|그런데|한편|이후|당시|그\s*후|그\s*뒤|그러던\s*중|이에\s*따라|그\s*당시|그\s*이후|그러고\s*나서|그때|이때|이듬해|훗날|마침내)/;
 
-const TMI_NOISE_REGEX = /(?:부친|모친|조부|증조부|고조부|외가|첫\s*부인|둘째\s*부인|가계도|손자|처남|장인|결혼|이혼|혼인|재혼|배우자|남편|아내|딸|아들|처가|시댁|장남|차남|장녀|차녀|외아들|외딸|\d남|\d녀|위인전|출판사|족보|입향시조|후사|종친|문중|호적|예규|성씨|두음법칙)/;
+// 사후 공헌 논쟁, 타인 연구, TMI 완벽 차단
+const TMI_NOISE_REGEX = /(?:부친|모친|조부|증조부|고조부|외가|첫\s*부인|둘째\s*부인|가계도|손자|처남|장인|결혼|이혼|혼인|재혼|배우자|남편|아내|딸|아들|처가|시댁|장남|차남|장녀|차녀|외아들|외딸|\d남|\d녀|위인전|출판사|족보|입향시조|후사|종친|문중|호적|예규|성씨|두음법칙|실질적인\s*기여|동의하지\s*않는다|목격자\s*증언|서한들)/;
 
 const MAJOR_HISTORICAL_EVENT_REGEX = /(?:[가-힣]{2,3}[란난]|해전|대첩|승첩|전투|의거|혁명|박해)/;
 const ACADEMIC_CONCEPT_REGEX = /[가-힣]{2,}(?:설|론|주의|학)\b/;
@@ -70,17 +74,57 @@ const ACHIEVEMENT_VERB_REGEX = /(?:저술|집필|설계|고안|집대성|제시|
 const CORE_SIGNIFICANCE_TEST_REGEX = new RegExp(CORE_SIGNIFICANCE_KEYWORDS.join("|"));
 
 // ==========================================================
-// 3. 필터링 및 점수 계산
+// 3. 지시어 해독(Anaphora Resolution) 및 필터링
 // ==========================================================
 
-function isDisqualifiedSentence(sentence, isFirstIntroSentence = false) {
+function resolveAnaphora(sentence, allSentences, originalIndex) {
+  let resolved = sentence;
+
+  const demoWorkMatch = resolved.match(/(?:^|[,\s])((?:이|그|해당)\s+(?:작품|빌딩|건축물|그림|조각|서적|책|소설|시|음악|곡|연구|이론|문화재|유물|개혁|사건|지술)(?:은|는|을|를|이|가)?)/);
+  if (demoWorkMatch) {
+    const targetPhrase = demoWorkMatch[1];
+    for (let i = originalIndex - 1; i >= Math.max(0, originalIndex - 3); i--) {
+      const prevSentence = allSentences[i]?.cleaned || allSentences[i] || "";
+      const titleMatch = prevSentence.match(/[《「"'][^《》「」"']+[》」"']/);
+      if (titleMatch) {
+        const replaced = targetPhrase.replace(/(?:이|그|해당)\s+(?:작품|빌딩|건축물|그림|조각|서적|책|소설|시|음악|곡|연구|이론|문화재|유물|개혁|사건|지술)/, titleMatch[0]);
+        resolved = resolved.replace(targetPhrase, replaced);
+        break;
+      }
+    }
+  }
+
+  const pronounMatch = resolved.match(/^(이들|그들|그는|그녀는)(?:은|는|이|가)?/);
+  if (pronounMatch) {
+    for (let i = originalIndex - 1; i >= Math.max(0, originalIndex - 3); i--) {
+      const prevSentence = allSentences[i]?.cleaned || allSentences[i] || "";
+      const subjectMatch = prevSentence.match(/^([가-힣]{2,4})(?:은|는|이|가)/);
+      if (subjectMatch) {
+        resolved = resolved.replace(pronounMatch[0], subjectMatch[1] + "은");
+        break;
+      }
+    }
+  }
+
+  return resolved;
+}
+
+function isDisqualifiedSentence(sentence, isFirstIntroSentence = false, deathYear = null) {
   if (!sentence) return true;
   if (DISQUALIFIED_CONNECTORS_REGEX.test(sentence.trim())) return true;
   
-  // 서문 맨 첫 문장은 TMI 키워드가 포함되어도 절대 배제하지 않음
+  // 서문 첫 문장(isFirstIntroSentence=true)은 TMI 필터 무조건 통과
   if (!isFirstIntroSentence && TMI_NOISE_REGEX.test(sentence)) return true;
-  
   if (UNIVERSAL_NOISE_KEYWORDS.some(kw => sentence.includes(kw))) return true;
+
+  // 사망 연도 필터링: 사망 연도 이후에 일어난 타인의 활동 문장 배제
+  if (deathYear) {
+    const yearMatch = sentence.match(/(\d{4})년/);
+    if (yearMatch && parseInt(yearMatch[1], 10) > deathYear) {
+      return true;
+    }
+  }
+
   return false;
 }
 
@@ -104,19 +148,13 @@ function scoreSentence(item) {
 }
 
 // ==========================================================
-// 4. 문단 파싱 및 안출 로직
+// 4. 문단/문장 단위 추출 파서
 // ==========================================================
 
 export function extractAnnotatedParagraphs(rawText) {
   if (!rawText) return [];
 
-  let extractBody = rawText;
-  const cutIndex = extractBody.search(CUT_SECTION_REGEX);
-  if (cutIndex !== -1) {
-    extractBody = extractBody.substring(0, cutIndex);
-  }
-
-  const paragraphs = extractBody.split(/\n+|\n?==+[^=]+==+\n?/).filter(p => p.trim());
+  const paragraphs = rawText.split(/\n\s*\n|\n?==+[^=]+==+\n?/).filter(p => p.trim());
   const structuredParagraphs = [];
 
   for (const p of paragraphs) {
@@ -124,8 +162,8 @@ export function extractAnnotatedParagraphs(rawText) {
     const parsedSentences = [];
 
     for (let raw of rawSentences) {
-      // 콜론 및 문두 파편 정리
-      raw = raw.replace(/^(\d+년\s*\d+월\s*\d+일)\s*:\s*/, "$1 ").replace(/^[·\s]+/, "");
+      // 문두 날짜 콜론 및 불필요한 찌꺼기 전처리
+      raw = raw.replace(/^(\d+년\s*\d+월\s*\d+일)\s*:\s*/, "$1 ").replace(/^[·\s\)]+/, "");
 
       const hasBold = /'''|<b>|<strong>/.test(raw);
       const hasLink = /\[\[/.test(raw);
@@ -147,10 +185,17 @@ export function extractAnnotatedParagraphs(rawText) {
 }
 
 // ==========================================================
-// 5. 메인 요약 생성 함수
+// 5. 메인 요약 생성
 // ==========================================================
 
 export function buildDescription(introText = "", bodyText = "", aliases = [], maxLength = 800) {
+  const cacheKey = `${introText.slice(0, 50)}_${bodyText.slice(0, 50)}_${maxLength}`;
+  if (cache[cacheKey]) return cache[cacheKey];
+
+  // 서문에서 대상자의 사망 연도 추출
+  const deathMatch = introText.match(/~\s*(\d{4})년/);
+  const deathYear = deathMatch ? parseInt(deathMatch[1], 10) : null;
+
   const parsedIntroParagraphs = extractAnnotatedParagraphs(introText);
   const parsedBodyParagraphs = extractAnnotatedParagraphs(bodyText);
 
@@ -162,15 +207,24 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ma
   const selectedSentences = [];
   const seenContents = new Set();
 
-  // 1. 서문 처리 (첫 문장은 isFirstIntroSentence=true 전달하여 TMI 필터 스킵)
+  let introQuota = 4;
+  const introAchievementMatches = introText.match(ACHIEVEMENT_VERB_REGEX);
+  if (introAchievementMatches && introAchievementMatches.length >= 3) {
+    introQuota = 7;
+  }
+
+  // 1. 서문 추출 (첫 문장 보호 및 사후 문장 차단)
   const validIntroSentences = flatIntroSentences.filter((item, idx) => {
     const isFirstIntroSentence = (idx === 0);
-    return !isDisqualifiedSentence(item.cleaned, isFirstIntroSentence);
+    return !isDisqualifiedSentence(item.cleaned, isFirstIntroSentence, deathYear);
   });
 
-  for (let idx = 0; idx < validIntroSentences.length && selectedSentences.length < 4; idx++) {
+  for (let idx = 0; idx < validIntroSentences.length && selectedSentences.length < introQuota; idx++) {
     const item = validIntroSentences[idx];
-    const resolved = item.cleaned;
+    const globalIdx = flatIntroSentences.indexOf(item);
+    
+    // 지시어 해독 (Anaphora Resolution) 연동 복구
+    const resolved = resolveAnaphora(item.cleaned, allFlatSentences, globalIdx);
     const keyFingerprint = resolved.replace(/[^가-힣0-9]/g, "").slice(0, 15);
 
     if (!seenContents.has(keyFingerprint) && currentLength + resolved.length + 1 <= maxLength) {
@@ -183,7 +237,7 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ma
   // 2. 본문 후보 선출
   const candidateBodyItems = [];
   for (const paragraphSentences of parsedBodyParagraphs) {
-    const validParagraphItems = paragraphSentences.filter(item => !isDisqualifiedSentence(item.cleaned));
+    const validParagraphItems = paragraphSentences.filter(item => !isDisqualifiedSentence(item.cleaned, false, deathYear));
     if (validParagraphItems.length === 0) continue;
 
     const scoredItems = validParagraphItems.map((item) => ({
@@ -199,7 +253,7 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ma
 
   const pickedBodyItems = [];
   for (const candidate of candidateBodyItems) {
-    const resolved = candidate.item.cleaned;
+    const resolved = resolveAnaphora(candidate.item.cleaned, allFlatSentences, candidate.globalIdx);
     const keyFingerprint = resolved.replace(/[^가-힣0-9]/g, "").slice(0, 15);
 
     if (!seenContents.has(keyFingerprint) && currentLength + resolved.length + 1 <= maxLength) {
@@ -214,7 +268,8 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ma
     selectedSentences.push(item.resolved);
   }
 
-  return selectedSentences.join(" ");
+  const result = selectedSentences.join(" ");
+  return (cache[cacheKey] = result);
 }
 
 export function summarizeText(text) {
