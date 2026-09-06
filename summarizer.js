@@ -223,7 +223,8 @@ function scoreSentence(item) {
 }
 
 // ==========================================================
-// 5. 메인 요약 생성 함수 (buildDescription)
+// ==========================================================
+// 5. 메인 요약 생성 함수 (buildDescription) - 글자 수 및 랭킹 보정
 // ==========================================================
 export function buildDescription(introText = "", bodyText = "", aliases = [], maxLength = 800) {
   const cacheKey = `${introText}_${bodyText}_${maxLength}`;
@@ -236,52 +237,68 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ma
   const flatBodySentences = parsedBodyParagraphs.flat();
   const allFlatSentences = [...flatIntroSentences, ...flatBodySentences];
 
-  // 1. 서문 요약 처리 (기본 4줄 Target)
+  let currentLength = 0;
+  const selectedSentences = [];
+
+  // 1. 서문 요약 처리 (기본 4줄 / 업적 풍부 시 6줄)
   let introQuota = 4;
   const introAchievementMatches = introText.match(ACHIEVEMENT_VERB_REGEX);
   if (introAchievementMatches && introAchievementMatches.length >= 3) {
-    introQuota = 6; // 서문에 업적 어휘가 풍부하면 서문 요약 비율 대폭 증가
+    introQuota = 6;
   }
 
-  const selectedIntroSentences = [];
   const validIntroSentences = flatIntroSentences.filter(item => !isDisqualifiedSentence(item.cleaned));
 
-  for (let idx = 0; idx < validIntroSentences.length && selectedIntroSentences.length < introQuota; idx++) {
+  for (let idx = 0; idx < validIntroSentences.length && selectedSentences.length < introQuota; idx++) {
     const item = validIntroSentences[idx];
     const globalIdx = flatIntroSentences.indexOf(item);
-    const resolvedSentence = resolveAnaphora(item.cleaned, allFlatSentences, globalIdx);
-    selectedIntroSentences.push(resolvedSentence);
+    const resolved = resolveAnaphora(item.cleaned, allFlatSentences, globalIdx);
+
+    if (currentLength + resolved.length + 1 <= maxLength) {
+      selectedSentences.push(resolved);
+      currentLength += resolved.length + 1;
+    } else {
+      break; // maxLength 초과 시 서문 수집 중단
+    }
   }
 
-  // 2. 문단별(Paragraph) 2줄~3줄 요약 처리 (볼드/링크/업적 키워드 우선)
-  const selectedBodySentences = [];
+  // 2. 본문 문단별 상위 문후보 선출 (문단당 최대 2~3줄)
+  const candidateBodyItems = [];
 
   for (const paragraphSentences of parsedBodyParagraphs) {
     const validParagraphItems = paragraphSentences.filter(item => !isDisqualifiedSentence(item.cleaned));
     if (validParagraphItems.length === 0) continue;
 
-    const scoredItems = validParagraphItems.map((item) => {
-      const globalIdx = allFlatSentences.indexOf(item);
-      return {
-        item,
-        score: scoreSentence(item),
-        globalIdx
-      };
-    }).sort((a, b) => b.score - a.score);
+    const scoredItems = validParagraphItems.map((item) => ({
+      item,
+      score: scoreSentence(item),
+      globalIdx: allFlatSentences.indexOf(item)
+    })).sort((a, b) => b.score - a.score);
 
-    // 문단당 2~3줄 추출
     const countToTake = Math.min(validParagraphItems.length, 3);
-    const topParagraphItems = scoredItems.slice(0, countToTake).sort((a, b) => a.globalIdx - b.globalIdx);
+    candidateBodyItems.push(...scoredItems.slice(0, countToTake));
+  }
 
-    for (const scored of topParagraphItems) {
-      const resolvedSentence = resolveAnaphora(scored.item.cleaned, allFlatSentences, scored.globalIdx);
-      selectedBodySentences.push(resolvedSentence);
+  // 3. 본문 전체 후보 중 점수 높은 순으로 maxLength 한도 내 최종 채택
+  candidateBodyItems.sort((a, b) => b.score - a.score);
+
+  const pickedBodyItems = [];
+  for (const candidate of candidateBodyItems) {
+    const resolved = resolveAnaphora(candidate.item.cleaned, allFlatSentences, candidate.globalIdx);
+
+    if (currentLength + resolved.length + 1 <= maxLength) {
+      pickedBodyItems.push({ ...candidate, resolved });
+      currentLength += resolved.length + 1;
     }
   }
 
-  const finalSentences = [...selectedIntroSentences, ...selectedBodySentences];
-  const result = finalSentences.join(" ");
+  // 원래 문서 순서대로 재정렬하여 결합
+  pickedBodyItems.sort((a, b) => a.globalIdx - b.globalIdx);
+  for (const item of pickedBodyItems) {
+    selectedSentences.push(item.resolved);
+  }
 
+  const result = selectedSentences.join(" ");
   return (cache[cacheKey] = result);
 }
 
