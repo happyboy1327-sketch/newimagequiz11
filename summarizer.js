@@ -500,8 +500,9 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ma
     return !isDisqualifiedSentence(item.cleaned, isFirstIntroSentence, deathYear);
   });
 
-  for (let idx = 0; idx < validIntroSentences.length && selectedSentences.length < introQuota; idx++) {
-    const item = validIntroSentences[idx];
+  let introCutoffIdx = 0;
+  for (; introCutoffIdx < validIntroSentences.length && selectedSentences.length < introQuota; introCutoffIdx++) {
+    const item = validIntroSentences[introCutoffIdx];
     const globalIdx = flatIntroSentences.indexOf(item);
 
     const resolved = resolveAnaphora(item.cleaned, allFlatSentences, globalIdx);
@@ -515,6 +516,21 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ma
   }
 
   const candidateBodyItems = [];
+
+  // [버그 수정] introQuota에 걸려 아직 처리되지 않은 나머지 서론 문장들을 그냥
+  // 버리지 않는다. 문단 구분(\n)이 없는 원문은 전체가 "서론"으로 취급되는데,
+  // 이전 버전은 순서상 quota를 넘는다는 이유만으로 핵심 문장(예: 위인이 직접
+  // 저술한 사상서 관련 문장)까지 잘라버렸다. 이제는 본문 후보와 같은 풀에서
+  // 중요도 점수로 경쟁시켜, 남은 글자 수 예산이 있으면 더 중요한 문장이
+  // 뒤로 밀리지 않고 채택될 수 있게 한다.
+  const leftoverIntroItems = validIntroSentences.slice(introCutoffIdx);
+  for (const item of leftoverIntroItems) {
+    candidateBodyItems.push({
+      item,
+      score: scoreSentence(item),
+      globalIdx: allFlatSentences.indexOf(item),
+    });
+  }
   for (const paragraphSentences of parsedBodyParagraphs) {
     const validParagraphItems = paragraphSentences.filter(
       (item) => !isDisqualifiedSentence(item.cleaned, false, deathYear)
