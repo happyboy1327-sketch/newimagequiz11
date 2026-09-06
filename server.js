@@ -444,53 +444,53 @@ async function fillCache() {
 
                         const fullExtract = pageData.extract || "";
 
+                       if (!fullExtract.trim()) {
+                        console.log(`탈락: 본문 데이터 없음 (${pageData.title})`);
+                       } else {
                         // 1. 첫 번째 목차(==) 기준으로 서론과 본문 분리
                         const firstHeaderIndex = fullExtract.search(/==+/);
+                           let exintro = fullExtract;
+                           let extractBody = "";
 
-                        let exintro = fullExtract;
-                        let extractBody = "";
+                           if (firstHeaderIndex !== -1) {
+                               exintro = fullExtract.substring(0, firstHeaderIndex).trim();
+                               extractBody = fullExtract.substring(firstHeaderIndex).trim();
+                           }
 
-                        if (firstHeaderIndex !== -1) {
-                            exintro = fullExtract.substring(0, firstHeaderIndex).trim();
-                            extractBody = fullExtract.substring(firstHeaderIndex).trim();
-                        }
-
-                        // 2. 불필요한 하단 섹션 제거
-                        const cutIndex = extractBody.search(/\n==\s*(각주|같이 보기|참고 문헌|참고 자료|기타|외부 링크|주석)\s*==/i);
-                        if (cutIndex !== -1) {
-                            extractBody = extractBody.substring(0, cutIndex);
-                        }
-
-                        // 3. 본문 정제
-                        let cleanExtract = extractBody
-                            .replace(/^=+.*?=+$/gm, "")
-                            .replace(/\n{3,}/g, "\n\n")
-                            .trim();
-
-                        // 4. 서론 정제
-                        let cleanIntro = exintro.replace(/\s+/g, " ").trim();
-
-                        // 5. 설명 및 힌트 생성 (수정된 summarizer.js와 안전 연동)
-                       const finalDescription = buildDescription(
-                           cleanIntro, 
-                           cleanExtract || "",
-                           aliases, 
-                           4,   // extraCount (추가 문장 수)
-                           3,   // anchorCount (서문에서 고정할 앵커 문장 수)
-                           630  // maxLength (최대 글자 수)
-                            );
-
-                        if (finalDescription) {
-                            QUIZ_CACHE.push({
-                                name: pageData.title,
-                                image: imageUrl,
-                                hint: createMaskedHint(pageData.title, finalDescription),
-                                description: finalDescription 
-                            });
-                        } else {
-                            console.log(`탈락: description 생성 실패 (${pageData.title})`);
-                        }
-                    }
+    // 2. 불필요한 하단 섹션 및 TMI/타인 정보 섹션 완전 절단
+                           const cutIndex = extractBody.search(/\n==\s*(각주|같이 보기|참고 문헌|참고 자료|기타|외부 링크|주석|여담|갤러리|가계도|계보)\s*==/i);
+   
+                           if (cutIndex !== -1) {
+                               extractBody = extractBody.substring(0, cutIndex);
+                           }
+  
+                           // 3. 서론 및 본문 정제
+    
+                           // (※ summarizer.js가 볼드/링크 기반으로 중요 문장을 가중 추적하므로 위키 마크업은 유치)
+                           const cleanIntro = exintro.replace(/\n{3,}/g, "\n\n").trim();
+                           const cleanExtract = extractBody
+                               .replace(/^=+.*?=+$/gm, "") // Section 헤더 텍스트만 제거
+                               .replace(/\n{3,}/g, "\n\n")
+                               .trim();
+  
+                           // 4. 개작된 summarizer.js 시그니처(introText, bodyText, aliases, maxLength)에 맞춰 연동
+                           const finalDescription = buildDescription(
+                               cleanIntro, 
+                               cleanExtract,
+                               aliases || [], 
+                               630 // maxLength (최대 글자 수)
+                           );
+                           if (finalDescription) {
+                               QUIZ_CACHE.push({
+                                   name: pageData.title,
+                                   image: imageUrl,
+                                   hint: createMaskedHint(pageData.title, finalDescription),
+                                   description: finalDescription 
+                               });
+                           } else {
+                               console.log(`탈락: description 생성 실패 (${pageData.title})`);
+                           }
+                       }
                 }
                 console.log("현재 캐시:", QUIZ_CACHE.length);
                 await new Promise(resolve => setTimeout(resolve, 660));
