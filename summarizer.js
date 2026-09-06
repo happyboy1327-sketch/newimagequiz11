@@ -258,28 +258,19 @@ export function buildDescription(
 
   if (cache[cacheKey]) return cache[cacheKey];
 
-const rawBodySentences = splitSentences(cleanWikiText(bodyText));
+  const rawIntroSentences = splitSentences(cleanWikiText(introText));
+  const rawBodySentences = splitSentences(cleanWikiText(bodyText));
 
-const rawIntroSentences = splitSentences(rawCleanIntro);
+  const introSentences = rawIntroSentences
+    .map((s) => stripMetainfo(s))
+    .filter(Boolean);
 
-// 첫 소개 문장은 원문 그대로 보존
-const firstIntroSentence = rawIntroSentences[0] || "";
+  const bodySentences = rawBodySentences
+    .map((s) => stripMetainfo(s))
+    .filter(Boolean);
 
-const remainingIntroText = rawIntroSentences.slice(1).join(" ");
-
-const introSentences = firstIntroSentence
-  ? [
-      firstIntroSentence,
-      ...splitSentences(stripMetainfo(remainingIntroText))
-    ]
-  : [];
-
-const bodySentences = rawBodySentences
-  .map((s) => stripMetainfo(s))
-  .filter(Boolean);
-
-let anchorSentences = [];
-let candidateSentences = [];
+  let anchorSentences = [];
+  let candidateSentences = [];
 
   // --- 서문 앵커 문장 ---
   if (introSentences.length > 0) {
