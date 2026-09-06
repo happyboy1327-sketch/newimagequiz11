@@ -257,7 +257,7 @@ async function findAlternativeHumanImage(title, aliases) {
             info = await axios.get("https://commons.wikimedia.org/w/api.php", {
                 ...WIKI_AXIOS_CONFIG,
                 params: {action: "query", titles: batch.join("|"), prop: "imageinfo", iiprop: "url|extmetadata", iiextmetadatafilter: "ImageDescription",
-                   iiurlwidth: 800, format: "json", origin: "*"});
+                   iiurlwidth: 800, format: "json", origin: "*"}});
         } catch (e) { continue; }
 
         const commonsPages = Object.values(info.data?.query?.pages || {});
