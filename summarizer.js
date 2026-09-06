@@ -37,11 +37,22 @@ const RE_TAIL_VERB = /(?:으로|로|이며|이고|이자)\s*\.$/;
 const RE_HEAD_VERB = /^(?:으로|로|이고|이며|이자)\s*,?\s*/;
 const RE_VALID_CHAR = /[가-힣A-Za-z0-9]/;
 const RE_VALID_WORDS = /[가-힣A-Za-z0-9]{2,}/g;
+const RE_CUSTOM_HEADER = /={3,}\s*([^=]+?)\s*={3,}\s*([^\n]+)/g;
 
 export function stripMetainfo(text) {
   if (!text || typeof text !== "string") return "";
 
   try {
+    // 헤더(##제목##)를 받침 유무에 따라 '은/는' 조사를 붙여 본문 첫 문장과 완벽하게 병신
+    text = text.replace(RE_CUSTOM_HEADER, (match, title, body) => {
+      const lastCharCode = title.charCodeAt(title.length - 1);
+      let particle = "는";
+      if (lastCharCode >= 0xAC00 && lastCharCode <= 0xD7A3) {
+        particle = (lastCharCode - 0xAC00) % 28 > 0 ? "은" : "는";
+      }
+      return `${title}${particle} ${body}`;
+    });
+      
     const quotes = [];
     let masked = text.replace(RE_QUOTE, (match) => {
       quotes.push(match);
