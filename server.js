@@ -491,6 +491,7 @@ async function fillCache() {
                                console.log(`탈락: description 생성 실패 (${pageData.title})`);
                            }
                        }
+                    }
                 }
                 console.log("현재 캐시:", QUIZ_CACHE.length);
                 await new Promise(resolve => setTimeout(resolve, 660));
