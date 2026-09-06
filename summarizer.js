@@ -210,7 +210,7 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ma
   let introQuota = 4;
   const introAchievementMatches = introText.match(ACHIEVEMENT_VERB_REGEX);
   if (introAchievementMatches && introAchievementMatches.length >= 3) {
-    introQuota = 6;
+    introQuota = 7;
   }
 
   const validIntroSentences = flatIntroSentences.filter(item => !isDisqualifiedSentence(item.cleaned));
