@@ -15,7 +15,7 @@ export function cleanWikiText(text) {
 }
 
 // 문장 단위 정밀 분리 정규식 (숫자.숫자, 날짜, 영문 약어 분리 완전 방지)
-const RE_SENTENCE_SPLIT = /(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<!\d\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i;
+const RE_SENTENCE_SPLIT = /(?<!\d\.)(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i;
 
 // 부차적 목차 절단 정규식
 export const CUT_SECTION_REGEX = /(?:^|\n)\s*={2,}\s*(각주|가족|같이 보기|참고 문헌|참고 자료|기타|외부 링크|주석|여담|갤러리|가계도|계보|[가-힣\s]*작품(?:\s*목록)?|[가-힣\s]*저서|출연작|음반|디스코그래피)\s*={2,}/i;
