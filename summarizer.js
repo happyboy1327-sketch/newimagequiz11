@@ -115,8 +115,8 @@ export function splitSentences(text) {
   return text
     .replace(/\s+/g, " ")
     .trim()
-    // 수치/날짜 소수점(?<!\d\.\d) 및 일반 마침표 구분 처리
-    .split(/(?<=[.!?])(?<!\d\.\d?)\s+(?=[가-힣A-Za-z0-9"'(])/)
+    // 숫자 소수점(1.5 등) 및 주요 영문 약어(Op., No., Dr. 등) 뒤의 마침표 분할 방지
+    .split(/(?<!\d\.)(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i)
     .map((s) => s.trim())
     .filter((s) => s.length > 8);
 }
