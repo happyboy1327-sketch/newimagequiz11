@@ -49,7 +49,7 @@ export function stripMetainfo(text) {
   if (!text) return "";
   let result = text;
 
-  // 1) 괄호 내부 정리 (생몰년/연도 보존, 메타 정보 괄호 삭제)
+  // 1) 괄호 및 내부 메타 정보 제거 (생몰년/연도 보존)
   result = result.replace(/\(([^()]+)\)/g, (match, inner) => {
     if (/(?:\d{3,4}년|~|음력)/.test(inner)) {
       const cleaned = inner.replace(/^\s*,\s*/, "").trim();
@@ -61,33 +61,55 @@ export function stripMetainfo(text) {
     return match;
   });
 
-  // 1-2) 빈 괄호 및 찌꺼기 정돈
+  // 잔여 공백 및 빈 괄호 정돈
   result = result
     .replace(/,\s*\(\s*\)/g, "")
     .replace(/\(\s*\)/g, "")
     .replace(/\(\s*,\s*/g, "(");
 
-  // 2) 메타 문장 및 절(Clause) 정밀 제거 (자/호/본관 등)
+  // 2) 범용 메타 서술절 제거
   result = result
     .replace(/(?<![가-힣])(?:자|호|본관|시호|아호|별호|태명|아명)\b.*?(?:있다|있었다|전해진다)\.?/g, "")
-    .replace(/,\s*(?<![가-힣])(?:자|호|본관|시호|아호|별호)\s*[:=는은이]?\s*[^.!?]*(?:본관|시호|아호|별호|호|자|이다|였다)\.?/g, "")
     .replace(/(?<![가-힣])(?:본관|시호|아호|별호|아명|법명|묘호|호|자)\s*[:=는은이]\s*[^,;.\n]+/g, "");
 
-  // 3) 오염 어미 복구, 구두점 찌꺼기 정리 및 문장 완결성 보정
+  // 3) 1차 어미 및 단절 조사 치환 (~했으나 -> ~했다, ~이며 -> ~이다 등)
   result = result
-    .replace(/([가-힣]+)으로\s*이다\./g, "$1이다.")
+    .replace(/([가-힣]+)(?:했으며|하였으며|했으나|하였으나|했고|하였고|했지만)\s*\.?\s*$/g, "$1했다.")
+    .replace(/([가-힣]+)(?:되었으며|되었으나|되었고|되었지만)\s*\.?\s*$/g, "$1되었다.")
+    .replace(/([가-힣]+)(?:이었으며|이었으나|이었고|이었지만)\s*\.?\s*$/g, "$1이었다.")
+    .replace(/([가-힣]+)(?:이라는|라는|인|이고|이며|이자|이라|이나|인데|이지만)\s*\.?\s*$/g, "$1이다.")
+    .replace(/([가-힣]+)(?:하며|하고|하나|하지만)\s*\.?\s*$/g, "$1한다.")
+    .replace(/([가-힣]+)(?:의|과|와|및|에서|에게|으로|로|을|를|은|는|이|가)\s*\.?\s*$/g, "$1이다.");
+
+  // 4) 구두점 및 공백 정돈
+  result = result
     .replace(/(?:,\s*)+,/g, ",")
     .replace(/,\s*\./g, ".")
     .replace(/^\s*,\s*/, "")
     .replace(/\s*\.+\s*(?:\.+\s*)+/g, ".")
-    .replace(/([가-힣]+)(?:으로|며|이고|이자|이며)\s*\./g, "$1이다.")
-    .replace(/([가-힣]+)으로(?!이다)\s*\./g, "$1이다.")
     .replace(/\s+/g, " ")
     .trim();
 
-  // 4) 불완전 문장 검증 (유효 단어 2개 이하 무효화)
-  const words = result.match(/[가-힣a-zA-Z0-9]{2,}/g) || [];
-  if (words.length <= 2) return "";
+  // 5) 기초 구조 검증 (길이, 괄호 짝, 노이즈 규칙)
+  if (result.length < 20) return "";
+
+  const openParen = (result.match(/\(/g) || []).length;
+  const closeParen = (result.match(/\)/g) || []).length;
+  if (openParen !== closeParen) return "";
+
+  if (typeof UNIVERSAL_NOISE_RULES !== "undefined" && UNIVERSAL_NOISE_RULES.some((rule) => rule.test(result))) {
+    return "";
+  }
+
+  // 6) 종결어미 검증 및 '이다.' 강제 치환
+  const VALID_DECLARATIVE_ENDING = /(?:다|함|임|됨|음|였음|했음|있음|없음)\.?$/;
+
+  if (!VALID_DECLARATIVE_ENDING.test(result)) {
+    // 정상 종결어미가 아닌 경우, 문장 끝 부호/조사/연결어미를 떼어내고 '이다.'로 치환
+    result = result.replace(/[^가-힣a-zA-Z0-9]+$/g, "") + "이다.";
+  } else if (!/[.!?]$/.test(result)) {
+    result += ".";
+  }
 
   return result;
 }
