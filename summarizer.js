@@ -3,18 +3,17 @@ const cache = {};
 // ==========================================================
 // 1. 위키 텍스트 정제 함수
 // ==========================================================
+// 1. 위키 문법 및 괄호 안 메타 정보(한자, 생몰년도 등) 제거
 export function cleanWikiText(text) {
   if (!text) return "";
   let cleaned = text;
-
-  cleaned = cleaned.replace(/<[^>]+>/g, "");
-  cleaned = cleaned.replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1");
-  cleaned = cleaned.replace(/\[\d+\]/g, "");
-  cleaned = cleaned.replace(/\[(?:각주|출처\s*필요|편집|주석)\]/g, "");
-  cleaned = cleaned.replace(/\(\s*재위\s*:[^)]+\)/g, "");
-  cleaned = cleaned.replace(/(?<=\s|^)\d+\)\s*/g, "");
-
-  return cleaned.replace(/\s+/g, " ").trim();
+  return text
+    .replace(/<[^>]+>/g, "")
+    .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1")
+    .replace(/\[\d+\]/g, "")
+    .replace(/\[(?:각주|출처\s*필요|편집|주석)\]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 const RE_QUOTE = /(['"])(.*?)\1/g;
@@ -35,55 +34,25 @@ const RE_HEAD_VERB = /^(?:으로|로|이고|이며|이자)\s*,?\s*/;
 const RE_VALID_CHAR = /[가-힣\u4E00-\u9FFF A-Za-z0-9]/;
 const RE_VALID_WORDS = /[가-힣\u4E00-\u9FFF A-Za-z0-9]{2,}/g;
 
+
+// 2. 본관, 아명, 호, 부친/모친 등 메타 문장 및 메타 절만 핀셋 제거
 export function stripMetainfo(text) {
-  if (!text || typeof text !== "string") return "";
+  if (!text) return "";
+  let cleaned = cleanWikiText(text);
 
-  try {
-    const quotes = [];
-    let masked = text.replace(RE_QUOTE, (match) => {
-      quotes.push(match);
-      return `__Q_${quotes.length - 1}__`;
-    });
+  // 단독 메타 문장 제거 (예: "본관은 파평이다.")
+  cleaned = cleaned.replace(/(?:^|\s*)(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|자|호|휘)\s*(?:은|는|:)\s*[^.]+\./g, "");
 
-    masked = masked.replace(RE_PAREN_META, "").replace(RE_SPACE, " ").trim();
-    const sentences = masked.split(RE_SENTENCE_SPLIT);
-    const result = [];
+  // 문장 내부 메타 절 제거 (예: "아명은 윤우의, 호는 매헌이고,")
+  cleaned = cleaned.replace(/(?:^|,\s*)(?:본관|아명|호|자|시호|법명|부친|모친|조부|장인|배우자)(?:은|는|이|가|:)?\s*[^,.]+(?:이고|이며|이자|임|이다)(?:,\s*)?/g, "");
 
-    for (let i = 0; i < sentences.length; i++) {
-      let s = sentences[i].trim();
-      if (!s) continue;
-      if (RE_PURE_META.test(s)) continue;
-
-      s = s.replace(RE_META_CLAUSE, "").replace(RE_FAMILY_CLAUSE, "");
-      s = s
-        .replace(RE_PUNCT_CLEAN, ",")
-        .replace(RE_DOT_CLEAN, ".")
-        .replace(RE_LEADING_COMMA, "")
-        .replace(RE_EMPTY_PAREN, "")
-        .replace(RE_SPACE, " ")
-        .trim();
-
-      s = s.replace(RE_TAIL_VERB, "이다.").replace(RE_HEAD_VERB, "");
-
-      if (s.length >= 3 && RE_VALID_CHAR.test(s)) {
-        if (!/[.!?]$/.test(s)) s += ".";
-        result.push(s);
-      }
-    }
-
-    let finalContent = result.join(" ");
-    if (quotes.length > 0) {
-      for (let i = 0; i < quotes.length; i++) {
-        finalContent = finalContent.replace(`__Q_${i}__`, quotes[i]);
-      }
-    }
-
-    finalContent = finalContent.replace(RE_SPACE, " ").trim();
-    const words = finalContent.match(RE_VALID_WORDS) || [];
-    return words.length >= 1 ? finalContent : text;
-  } catch (err) {
-    return text.replace(RE_SPACE, " ").trim();
-  }
+  // 잔여 쉼표 및 찌꺼기 공백 정돈
+  return cleaned
+    .replace(/,\s*,+/g, ",")
+    .replace(/^\s*,\s*/, "")
+    .replace(/\(\s*\)/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 // ==========================================================
