@@ -385,7 +385,7 @@ if (allSentences.length === 0) {
     
     const keywordMatches = sentence.match(CORE_SIGNIFICANCE_REGEX);
     if (keywordMatches) {
-      score += keywordMatches.length * 0.3;
+      score += keywordMatches.length * 0.75;
     }
 
     // 업적/활동 관련 문장 가산점
