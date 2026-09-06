@@ -19,20 +19,81 @@ export function cleanWikiText(text) {
 const RE_SENTENCE_SPLIT = /(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<!\d\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i;
 
 export function stripMetainfo(text) {
-  if (!text) return "";
-  let cleaned = cleanWikiText(text);
+const RE_QUOTE = /(['"])(.*?)\1/g;
+const RE_SPACE = /\s+/g;
+const RE_PAREN_META = /\([^)]*(?:부친|모친|조부|증조부|고조부|외가|장인|처남|자|호|본관|시호|아명|태명|법명)\s*:[^)]*\)/g;
 
-  cleaned = cleaned.replace(/(?:^|\s*)(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호)\s*(?:은|는|:)\s*[^.,\n]{1,15}(?:[.,]|\s*)/g, "");
-  cleaned = cleaned.replace(/(?:^|\s*)(?:자|호|휘)\s*:\s*[^.,\n]{1,15}(?:[.,]|\s*)/g, "");
+// 마침표 뒤에 괄호가 붙어있거나 한자가 오는 경우 문장 분할 방지
+const RE_SENTENCE_SPLIT = /(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/;
 
-  cleaned = cleaned.replace(/^[·\s]+/, "");
+const RE_PURE_META = /^(?:그의|그녀의|본)?\s*(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|자|호|휘)\s*(?:은|는|:)\s+.+$/;
+const RE_META_CLAUSE = /(?:^|(?<=[,;]\s*))(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|자|호|휘)\s*(?:은|는|:)\s+[가-힣\u4E00-\u9FFF\s(·)]+?(?:등이다|등이었다|이며|이고|이자|이었다|였다|이다|임)(?:,\s*)?/g;
+const RE_FAMILY_CLAUSE = /(?:^|(?<=[,;]\s*))(?:(?:그의|그녀의)?\s*(?:부친|모친|조부|증조부|고조부|외조부|외조모|장인|처남|장남|차남|장녀|차녀|막내)|(?:(?<![가-힣]의\s*)(?:아버지|어머니)))\s*(?:은|는|이|가)\s+[가-힣\u4E00-\u9FFF]{2,5}(?:이고|이며|이자|이었다|였다|이다|임)(?:,\s*)?/g;
 
-  return cleaned
-    .replace(/,\s*,+/g, ",")
-    .replace(/^\s*,\s*/, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+const RE_PUNCT_CLEAN = /,\s*,+/g;
+const RE_DOT_CLEAN = /,\s*\./g;
+const RE_LEADING_COMMA = /^\s*,\s*/;
+const RE_EMPTY_PAREN = /\(\s*\)/g;
+const RE_TAIL_VERB = /(?:으로|로|이며|이고|이자)\s*\.$/;
+const RE_HEAD_VERB = /^(?:으로|로|이고|이며|이자)\s*,?\s*/;
+const RE_VALID_CHAR = /[가-힣A-Za-z0-9]/;
+const RE_VALID_WORDS = /[가-힣A-Za-z0-9]{2,}/g;
+
+export function stripMetainfo(text) {
+  if (!text || typeof text !== "string") return "";
+
+  try {
+    const quotes = [];
+    let masked = text.replace(RE_QUOTE, (match) => {
+      quotes.push(match);
+      return `__Q_${quotes.length - 1}__`;
+    });
+
+    masked = masked.replace(RE_PAREN_META, "").replace(RE_SPACE, " ").trim();
+
+    const sentences = masked.split(RE_SENTENCE_SPLIT);
+    const result = [];
+
+    for (let i = 0; i < sentences.length; i++) {
+      let s = sentences[i].trim();
+      if (!s) continue;
+
+      if (RE_PURE_META.test(s)) continue;
+
+      s = s.replace(RE_META_CLAUSE, "").replace(RE_FAMILY_CLAUSE, "");
+
+      s = s
+        .replace(RE_PUNCT_CLEAN, ",")
+        .replace(RE_DOT_CLEAN, ".")
+        .replace(RE_LEADING_COMMA, "")
+        .replace(RE_EMPTY_PAREN, "")
+        .replace(RE_SPACE, " ")
+        .trim();
+
+      s = s.replace(RE_TAIL_VERB, "이다.").replace(RE_HEAD_VERB, "");
+
+      if (s.length >= 3 && RE_VALID_CHAR.test(s)) {
+        if (!/[.!?]$/.test(s)) s += ".";
+        result.push(s);
+      }
+    }
+
+    let finalContent = result.join(" ");
+    if (quotes.length > 0) {
+      for (let i = 0; i < quotes.length; i++) {
+        finalContent = finalContent.replace(`__Q_${i}__`, quotes[i]);
+      }
+    }
+
+    finalContent = finalContent.replace(RE_SPACE, " ").trim();
+    const words = finalContent.match(RE_VALID_WORDS) || [];
+
+    // 잘림 방지: 문장 전체가 날아가지 않도록 검증 완화
+    return words.length >= 1 ? finalContent : text;
+  } catch (err) {
+    return text.replace(RE_SPACE, " ").trim();
+  }
+}  
 
 const CORE_SIGNIFICANCE_KEYWORDS = [
   "원리", "구조", "기능", "작용", "현상", "이론", "연구", "발견", "발전", "규명", "증명", "설명", "기록", "저서", 
