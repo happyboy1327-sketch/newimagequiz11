@@ -15,21 +15,16 @@ export function cleanWikiText(text) {
     .trim();
 }
 
-const RE_SENTENCE_SPLIT = /(?<!\d\.)(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i;
-
-export const CUT_SECTION_REGEX = /(?:^|\n)\s*={2,}\s*(각주|가족|같이 보기|참고 문헌|참고 자료|기타|외부 링크|주석|여담|갤러리|가계도|계보|[가-힣\s]*작품(?:\s*목록)?|[가-힣\s]*저서|출연작|음반|디스코그래피)\s*={2,}/i;
+const RE_SENTENCE_SPLIT = /(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<!\d\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i;
 
 export function stripMetainfo(text) {
   if (!text) return "";
   let cleaned = cleanWikiText(text);
 
-  cleaned = cleaned.replace(/(?:^|\s*)(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|자|호|휘)\s*(?:은|는|:)\s*[^.,\n]{1,15}(?:[.,]|\s*)/g, "");
+  cleaned = cleaned.replace(/(?:^|\s*)(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호)\s*(?:은|는|:)\s*[^.,\n]{1,15}(?:[.,]|\s*)/g, "");
+  cleaned = cleaned.replace(/(?:^|\s*)(?:자|호|휘)\s*:\s*[^.,\n]{1,15}(?:[.,]|\s*)/g, "");
 
-  while (/\)/.test(cleaned) && !/\(/.test(cleaned)) {
-    cleaned = cleaned.replace(/\)/g, "");
-  }
-
-  cleaned = cleaned.replace(/^[·\s\)]+/, "");
+  cleaned = cleaned.replace(/^[·\s]+/, "");
 
   return cleaned
     .replace(/,\s*,+/g, ",")
@@ -48,7 +43,7 @@ const CORE_SIGNIFICANCE_KEYWORDS = [
   "지정", "설립", "주도", "구성", "도입", "확립", "공격", "격퇴", "정벌", "함락",
   "독립운동", "의병", "하얼빈", "저격", "사살", "의거", "단지동맹", "동양평화론",
   "국채보상운동", "구국", "대한의군", "유묵", "도량형", "만리장성", "천하통일", "거중기", "실학", "상대성이론", "양자역학",
-  "시인", "작가", "문단", "등단", "체포", "구금", "사상범"
+  "시인", "작가", "문단", "등단", "체포", "구금", "사상범", "유학자", "왕도정치", "성선설"
 ];
 
 const UNIVERSAL_NOISE_KEYWORDS = [
@@ -57,13 +52,13 @@ const UNIVERSAL_NOISE_KEYWORDS = [
   "차이를 보이고", "별명", "소문", "야사", "미디어에서", "여담으로", "설이 있다", "추측", "보고 있다", "미디어 분류가 있습니다."
 ];
 
-const DISQUALIFIED_CONNECTORS_REGEX = /^(?:그러나|하지만|그런데|한편|이후|당시|그\s*후|그\s*뒤|그러던\s*중|이에\s*따라|그\s*당시|그\s*이후|그러고\s*나서|그때|이때|이듬해|훗날|마침내|이와\s*달리|그러다가|이로써|따라서|결과적으로)/;
+const DISQUALIFIED_CONNECTORS_REGEX = /^(?:그러나|하지만|그런데|한편|이후|당시|그\s*후|그\s*뒤|그러던\s*중|이에\s*따라|그\s*당시|그\s*이후|그러고\s*나서|그때|이때|이듬해|훗날|마침내|이와\s*달리|그러다가|이로써|따라서|결과적으로|이와\s*같이)/;
 
 const TMI_NOISE_REGEX = /(?:부친|모친|조부|조모|증조부|고조부|외가|첫\s*부인|둘째\s*부인|가계도|손자|처남|장인|결혼|이혼|혼인|재혼|배우자|남편|아내|딸|아들|처가|시댁|장남|차남|장녀|차녀|외아들|외딸|\d남|\d녀|위인전|출판사|족보|입향시조|후사|종친|문중|호적|예규|성씨|두음법칙|실질적인\s*기여|동의하지\s*않는다|목격자\s*증언|서한들|할아버지|할머니|아버지|어머니|부모|형제|자매|친척|번지)/;
 
 const MAJOR_HISTORICAL_EVENT_REGEX = /(?:[가-힣]{2,3}[란난]|해전|대첩|승첩|전투|의거|혁명|박해)/;
 const ACADEMIC_CONCEPT_REGEX = /[가-힣]{2,}(?:설|론|주의|학)\b/;
-const ACHIEVEMENT_VERB_REGEX = /(?:저술|집필|설계|고안|집대성|제시|편찬|주창|발명|창안|개혁|건축|축조|간행|통찰|창작|창시|정리|도입|확립|반영|기여|주도|설립|격퇴|정벌|연구|지휘|승리|격파|격침|건조|수호|통제|구원|평정|혁신|창설|발견|노벨상|통일|단행|졸업|등단|발표|체포)/g;
+const ACHIEVEMENT_VERB_REGEX = /(?:저술|집필|설계|고안|집대성|제시|편찬|주창|발명|창안|개혁|건축|축조|간행|통찰|창작|창시|정리|도입|확립|반영|기여|주도|설립|격퇴|정벌|연구|지휘|승리|격파|격침|건조|수호|통제|구원|평정|혁신|창설|발견|노벨상|통일|단행|졸업|등단|발표|체포|주창|확립)/g;
 const CORE_SIGNIFICANCE_TEST_REGEX = new RegExp(CORE_SIGNIFICANCE_KEYWORDS.join("|"));
 
 function resolveAnaphora(sentence, allSentences, originalIndex) {
@@ -145,7 +140,7 @@ export function extractAnnotatedParagraphs(rawText) {
     const parsedSentences = [];
 
     for (let raw of rawSentences) {
-      raw = raw.replace(/^(\d+년\s*\d+월\s*\d+일)\s*:\s*/, "$1 ").replace(/^[·\s\)]+/, "");
+      raw = raw.replace(/^(\d+년\s*\d+월\s*\d+일)\s*:\s*/, "$1 ").replace(/^[·\s]+/, "");
 
       const hasBold = /'''|<b>|<strong>/.test(raw);
       const hasLink = /\[\[/.test(raw);
