@@ -255,7 +255,6 @@ async function findAlternativeHumanImage(title, aliases) {
     } catch (e) { 
         continue;  // ✅ 이제 try-catch 블록 안에 있음
     }
-
     const commonsPages = Object.values(info.data?.query?.pages || {});
         for (const file of commonsPages) {
             const url = file.imageinfo?.[0]?.url;
