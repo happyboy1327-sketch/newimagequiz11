@@ -135,6 +135,12 @@ function isCulturalSiteImage(url) {
     );
 }
 
+function hasForbiddenDescription(file) {
+    const desc = file.imageinfo?.[0]?.extmetadata?.ImageDescription?.value;
+    return desc?.includes("陵");
+}
+
+
 function isValidImageUrl(url) {
     if (!url || typeof url !== "string") return false;
 
@@ -250,14 +256,14 @@ async function findAlternativeHumanImage(title, aliases) {
         try {
             info = await axios.get("https://commons.wikimedia.org/w/api.php", {
                 ...WIKI_AXIOS_CONFIG,
-                params: { action: "query", titles: batch.join("|"), prop: "imageinfo", iiprop: "url", iiurlwidth: 800, format: "json", origin: "*" }
-            });
+                params: {action: "query", titles: batch.join("|"), prop: "imageinfo", iiprop: "url|extmetadata", iiextmetadatafilter: "ImageDescription",
+                   iiurlwidth: 800, format: "json", origin: "*"});
         } catch (e) { continue; }
 
         const commonsPages = Object.values(info.data?.query?.pages || {});
         for (const file of commonsPages) {
             const url = file.imageinfo?.[0]?.url;
-            if (url && isValidImageUrl(url) && !isCulturalSiteImage(url)) {
+            if (url && !hasForbiddenDescription(file) && isValidImageUrl(url) && !isCulturalSiteImage(url)) {
                 console.timeEnd(`🖼️ 이미지 탐색 ${title}`);
                 return url;
             }
