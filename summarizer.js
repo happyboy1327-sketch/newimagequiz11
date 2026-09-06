@@ -288,15 +288,15 @@ export function buildDescription(
 
   // --- 서문 앵커 문장 ---
   if (introSentences.length > 0) {
-  anchorSentences = introSentences.slice(0, 1);
+  anchorSentences = introSentences.slice(0, anchorCount);
 
   candidateSentences = [
-    ...introSentences.slice(1),
+    ...introSentences.slice(anchorCount),
     ...bodySentences
   ];
 } else {
-  anchorSentences = bodySentences.slice(0, 1);
-  candidateSentences = bodySentences.slice(1);
+  anchorSentences = bodySentences.slice(0, anchorCount);
+  candidateSentences = bodySentences.slice(anchorCount);
 }
 
 // 후보를 앞쪽 25개 + 가운데 10개 + 뒤쪽 10개로 추적
