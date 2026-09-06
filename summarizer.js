@@ -378,7 +378,8 @@ export function buildDescription(
   extraCount = 3,
   anchorCount = 3,
   maxLength = 720,
-  sectionTitle = "" // 👈 [수정 1] sectionTitle 매개변수 추가 (ReferenceError 방지)
+  sectionTitle = "", 
+  docTitle = ""
 ) {
   const cacheKey = introText + bodyText;
   if (cache[cacheKey]) return cache[cacheKey];
@@ -436,6 +437,30 @@ export function buildDescription(
 
   // 4) 가중치 계산
   const finalCandidates = candidateSentences.map((sentence, index) => {
+    // finalCandidates 가중치 계산 루프 상단에 추가 (docTitle: "정약용", "이순신" 등)
+if (docTitle) {
+  // 한글 인명 형태의 주어(이/가/은/는) 추출 정규식
+  const subjectMatches = [...sentence.matchAll(/([가-힣]{2,4})(?:은|는|이|가)\b/g)];
+
+  for (const match of subjectMatches) {
+    const targetSubject = match[1];
+
+    // 대명사, 가족 관계 명사, 일반 지위 명사 및 본인 이름 예외 리스트
+    const EXCLUDED_PRONOUNS = [
+      "그", "그는", "왕은", "아버지는", "어머니는", "부친은", "모친은", 
+      "조부는", "그의", "이들은", "왕이", "황제는", "스승은"
+    ];
+
+    // 지칭된 주어가 대명사/가족이 아니고, 문서 제목(본인 이름)과 일치하지 않는 타인인 경우 0점 처리
+    if (
+      !EXCLUDED_PRONOUNS.includes(targetSubject) &&
+      !docTitle.includes(targetSubject) &&
+      !targetSubject.includes(docTitle.trim())
+    ) {
+      return { sentence, score: 0, index };
+    }
+  }
+}
     let textRankScore = baseScores[index] / maxBaseScore;
     let tfidfScore = candidateTfidfScores[index] / maxTfidfScore;
 
