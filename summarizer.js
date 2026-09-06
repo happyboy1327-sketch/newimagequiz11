@@ -90,28 +90,24 @@ export function stripMetainfo(text) {
     .replace(/\s+/g, " ")
     .trim();
 
-  if (result && !/[.!?]$/.test(result)) {
-    result += ".";
-  }
-
-  // 5) [통합 구조 검증]
-  // - 길이 검사
+  // 5) 기초 구조 검증
   if (result.length < 20) return "";
 
-  // - 괄호 짝 검사
   const openParen = (result.match(/\(/g) || []).length;
   const closeParen = (result.match(/\)/g) || []).length;
   if (openParen !== closeParen) return "";
 
-  // - 노이즈 패턴 검사
   if (typeof UNIVERSAL_NOISE_RULES !== "undefined" && UNIVERSAL_NOISE_RULES.some((rule) => rule.test(result))) {
     return "";
   }
 
-  // - 치환 후 최종 정상 종결어미 검증
+  // 6) 종결어미 검증 및 '이다.' 강제 치환
   const VALID_DECLARATIVE_ENDING = /(?:다|함|임|됨|음|였음|했음|있음|없음)\.?$/;
+
   if (!VALID_DECLARATIVE_ENDING.test(result)) {
-    return "";
+    result = result.replace(/[^가-힣a-zA-Z0-9]+$/g, "") + "이다.";
+  } else if (!/[.!?]$/.test(result)) {
+    result += ".";
   }
 
   return result;
@@ -133,13 +129,11 @@ export function splitSentences(text) {
 
 function isValidSentenceStructure(sentence) {
   const trimmed = sentence.trim();
-  if (trimmed.length < 22) return false;
+  if (trimmed.length < 20) return false;
 
   const openParen = (trimmed.match(/\(/g) || []).length;
   const closeParen = (trimmed.match(/\)/g) || []).length;
   if (openParen !== closeParen) return false;
-
-  if (UNIVERSAL_NOISE_RULES.some((rule) => rule.test(trimmed))) return false;
 
   return true;
 }
@@ -246,11 +240,13 @@ export function buildDescription(
   const cacheKey = introText + bodyText + docTitle;
   if (cache[cacheKey]) return cache[cacheKey];
 
-  const cleanIntro = stripMetainfo(cleanWikiText(introText));
-  const cleanBody = stripMetainfo(cleanWikiText(bodyText));
+  // 1) 텍스트 기초 정제 후 문장 단위로 분리
+  const rawIntroSentences = splitSentences(cleanWikiText(introText));
+  const rawBodySentences = splitSentences(cleanWikiText(bodyText));
 
-  const introSentences = splitSentences(cleanIntro);
-  const bodySentences = splitSentences(cleanBody);
+  // 2) 문장 개별 단위로 stripMetainfo 정제 적용 (통파기 방지)
+  const introSentences = rawIntroSentences.map((s) => stripMetainfo(s)).filter(Boolean);
+  const bodySentences = rawBodySentences.map((s) => stripMetainfo(s)).filter(Boolean);
 
   let anchorSentences = [];
   let candidateSentences = [];
@@ -269,28 +265,26 @@ export function buildDescription(
 
   // --- TF-IDF 벡터 연산 준비 ---
   const allSentences = [...anchorSentences, ...candidateSentences];
+  if (allSentences.length === 0) return "";
+
   const sentenceTokensList = allSentences.map((s) => tokenize(s));
   const idfDict = computeIDF(sentenceTokensList);
 
-  // 전체 문서 통합 TF-IDF 벡터 생성
   const docTokens = allSentences.flatMap((s) => tokenize(s));
   const docTF = computeTF(docTokens);
   const docVector = computeTFIDF(docTF, idfDict);
 
   // --- 후보 문장 스코어링 ---
   const finalCandidates = candidateSentences.map((sentence, index) => {
-    // 1. 하드 필터: 문장 구조 결함, TMI, 타인 주어는 원천 차단 (0점)
     if (!isValidSentenceStructure(sentence) || isOtherSubject(sentence, docTitle)) {
       return { sentence, score: 0, index };
     }
 
-    // 2. TF-IDF 코사인 유사도 연산
     const tokens = tokenize(sentence);
     const sentenceTF = computeTF(tokens);
     const sentenceVector = computeTFIDF(sentenceTF, idfDict);
     const similarityScore = cosineSimilarity(sentenceVector, docVector);
 
-    // 3. 위치 보정 및 주요 업적/역사적 사건 가산점
     let score = similarityScore * (1.0 / (1 + index * 0.05));
     if (ACHIEVEMENT_VERB_REGEX.test(sentence)) {
       score *= 1.5;
@@ -305,7 +299,6 @@ export function buildDescription(
     return { sentence, score, index };
   });
 
-  // 상위 문장 추출 및 원문 순서 복원
   const ranked = finalCandidates
     .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score)
