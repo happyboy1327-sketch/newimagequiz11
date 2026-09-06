@@ -105,7 +105,8 @@ const UNIVERSAL_NOISE_KEYWORDS = [
   "차이를 보이고", "별명", "소문", "야사", "미디어에서", "여담으로", "설이 있다", "추측"
 ];
 
-const ACADEMIC_CONCEPT_REGEX = /[가-힣]{2,}(?:설|론|주의)\b/;
+const ACADEMIC_CONCEPT_REGEX = /[가-힣]{2,}(?:설|론|주의|학|법)\b/;
+const MAJOR_HISTORICAL_EVENT_REGEX = /(?:[가-힣]{2,3}[란난]|해전|대첩|승첩|전투|의거|혁명|박해)/;
 
 // 분야별 업적 동사 가산 정규식
 const ACHIEVEMENT_VERB_REGEX = /(?:저술|집필|설계|고안|집대성|제시|편찬|주창|통일|발명|창안|개혁|건축|축조|간행|통찰|창작|창시|정리|도입|확립|반영|기여|주도|설립|격퇴|정벌|연구|지휘|승리|격파|격침|건조|수호|통제|구원|평정|혁신|창설|발견|노벨상)/;
@@ -487,6 +488,8 @@ if (docTitle) {
       score *= 1.8;
     }
 
+    if (MAJOR_HISTORICAL_EVENT_REGEX.test(sentence)) score += 1.2;
+
     // 👈 [수정 3] filter 전수조사를 정규식 매칭으로 변경하여 연산량 절감
     const keywordMatches = sentence.match(CORE_SIGNIFICANCE_REGEX);
     if (keywordMatches) {
@@ -494,7 +497,7 @@ if (docTitle) {
     }
 
     if (ACADEMIC_CONCEPT_REGEX.test(sentence)) {
-      score += 0.3;
+      score += 0.4;
     }
 
     if (PASSIVE_BG_REGEX.test(sentence)) {
