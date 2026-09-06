@@ -464,7 +464,7 @@ async function fillCache() {
                            }
 
     // 2. 불필요한 하단 섹션 및 TMI/타인 정보 섹션 완전 절단
-                           const cutIndex = extractBody.search(/(?:^|\n)\s*={2,}\s*(각주|가족|같이 보기|참고 문헌|참고 자료|기타|외부 링크|[가-힣\s]*작품(?:\s*목록)?|[가-힣\s]*저서|주석|여담|갤러리|가계도|계보)\s*={2,}/i);
+                           const cutIndex = extractBody.search(/(?:^|\n)\s*={2,}\s*(각주|가족|같이 보기|참고 문헌|참고 자료|경력|기타|외부 링크|[가-힣\s]*작품(?:\s*목록)?|[가-힣\s]*저서|주석|여담|갤러리|가계도|계보)\s*={2,}/i);
    
                            if (cutIndex !== -1) {
                                extractBody = extractBody.substring(0, cutIndex);
