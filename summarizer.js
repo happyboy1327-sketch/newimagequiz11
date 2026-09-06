@@ -13,9 +13,21 @@ const UNIVERSAL_NOISE_RULES = [
   /(?:추측해 본다|추측된다|명확히 기술되지|알 수 없다|여담으로|설이 있다)/
 ];
 
+const CORE_SIGNIFICANCE_KEYWORDS = [
+  "원리", "구조", "기능", "작용", "현상", "이론", "연구", "발견", "발명", "규명", "증명", 
+  "분석", "기반", "시스템", "메커니즘", "특징", "성질", "분류", "상태", "상호작용", "개척",
+  "제도", "정책", "사회", "경제", "체계", "관계", "변화", "전개", "성장", "효과", 
+  "원인", "결과", "분포", "개혁", "조약", "협정", "시장", "구조적", "통일", "통합", "정합", 
+  "양식", "사상", "문화", "작품", "기법", "전통", "유형", "형성", "창작", "유산", "완화", 
+  "대표", "영향", "의의", "기여", "발전", "역사", "중심", "주요", "핵심", "주요한",
+  "지정", "설립", "주도", "구성", "기록", "도입", "확립", "공격", "격퇴", "정벌", "함락"
+];
+
 const ACHIEVEMENT_VERB_REGEX = /(?:저술|집필|설계|고안|집대성|제시|편찬|주창|발명|창안|개혁|건축|축조|간행|통찰|창작|창시|정리|도입|확립|반영|기여|주도|설립|격퇴|정벌|연구|지휘|승리|격파|격침|건조|수호|통제|구원|평정|혁신|창설|발견)/;
 const MAJOR_HISTORICAL_EVENT_REGEX = /(?:[가-힣]{2,3}[란난]|해전|대첩|승첩|전투|의거|혁명|박해|정변|운동)/;
 const ACADEMIC_CONCEPT_REGEX = /[가-힣]{2,}(?:설|론|주의|학|법)\b/;
+
+const CORE_SIGNIFICANCE_REGEX = new RegExp(CORE_SIGNIFICANCE_KEYWORDS.join("|"), "g");
 
 // ==========================================================
 // 2. 위키 원문 정제 & 문장 보정
@@ -347,6 +359,11 @@ export function buildDescription(
     let score =
       similarityScore *
       (1.0 / (1 + index * 0.05));
+    
+    const keywordMatches = sentence.match(CORE_SIGNIFICANCE_REGEX);
+    if (keywordMatches) {
+      score += keywordMatches.length * 0.3;
+    }
 
     // 업적/활동 관련 문장 가산점
     if (ACHIEVEMENT_VERB_REGEX.test(sentence)) {
