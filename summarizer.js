@@ -106,14 +106,11 @@ export function extractAnnotatedParagraphs(rawText) {
       const hasLink = /\[\[/.test(raw);
 
       const cleaned = stripMetainfo(cleanWikiText(raw));
-      if (cleaned && cleaned.length > 8) {
-        parsedSentences.push({
-          raw,
-          cleaned,
-          hasBold,
-          hasLink
-        });
-      }
+      const validWordCount = (cleaned.match(/[가-힣A-Za-z0-9]{2,}/g) || []).length;
+
+  if (cleaned && validWordCount >= 2) {
+  parsedSentences.push({ raw, cleaned, hasBold, hasLink });
+  }
     }
     if (parsedSentences.length > 0) {
       structuredParagraphs.push(parsedSentences);
