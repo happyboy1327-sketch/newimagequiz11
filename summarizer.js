@@ -122,36 +122,118 @@ const ACHIEVEMENT_VERB_REGEX = /(?:저술|집필|설계|고안|집대성|제시|
 const CORE_SIGNIFICANCE_TEST_REGEX = new RegExp(CORE_SIGNIFICANCE_KEYWORDS.join("|"));
 
 function resolveAnaphora(sentence, allSentences, originalIndex) {
-  let resolved = sentence;
+  const m = sentence.match(
+    /^(이들|그들|그는|그녀는|이는|이것은|그것은|이|그|해당)\s*(작품|빌딩|건축물|그림|조각|서적|책|소설|시|음악|곡|연구|이론|문화재|유물|개혁|사건|기술)?/
+  );
+  if (!m) return sentence;
 
-  const demoWorkMatch = resolved.match(/(?:^|[,\s])((?:이|그|해당)\s+(?:작품|빌딩|건축물|그림|조각|서적|책|소설|시|음악|곡|연구|이론|문화재|유물|개혁|사건|지술)(?:은|는|을|를|이|가)?)/);
-  if (demoWorkMatch) {
-    const targetPhrase = demoWorkMatch[1];
-    for (let i = originalIndex - 1; i >= Math.max(0, originalIndex - 3); i--) {
-      const prevSentence = allSentences[i]?.cleaned || allSentences[i] || "";
-      const titleMatch = prevSentence.match(/[《「"'][^《》「」"']+[》」"']/);
-      if (titleMatch) {
-        const replaced = targetPhrase.replace(/(?:이|그|해당)\s+(?:작품|빌딩|건축물|그림|조각|서적|책|소설|시|음악|곡|연구|이론|문화재|유물|개혁|사건|지술)/, titleMatch[0]);
-        resolved = resolved.replace(targetPhrase, replaced);
-        break;
-      }
+  const type = m[2] || "";
+  const query = vectorize(sentence.replace(m[0], ""));
+  const candidates = [];
+
+  for (let i = Math.max(0, originalIndex - 8); i < originalIndex; i++) {
+    const s = allSentences[i]?.cleaned || allSentences[i] || "";
+    if (!s) continue;
+
+    const names = [
+      ...(s.match(/[《「"'][^《》「」"']+[》」"']/g) || []),
+      ...(s.match(/[가-힣A-Za-z0-9·-]{2,20}(?=(?:은|는|이|가|을|를|의|에서))/g) || [])
+    ];
+
+    for (const name of [...new Set(names)]) {
+      const entity = name.replace(/^《|》$|^「|」$|^"|"$/g, "").trim();
+      if (!entity || /^(이것|그것|해당|작품|사람|경우|내용|문제|연구)$/.test(entity))
+        continue;
+
+      const sentenceScore = cosine(query, vectorize(s));
+      const entityScore = cosine(query, vectorize(entity));
+
+      // 가까운 문장일수록 높은 점수
+      const distanceScore = 1 / (1 + (originalIndex - i) * 0.25);
+
+      // "작품/건축물/연구..."와 후보의 의미적 타입 일치
+      const typeScore = typeMatch(type, entity, s);
+
+      const score =
+        sentenceScore * 0.35 +
+        entityScore * 0.30 +
+        distanceScore * 0.20 +
+        typeScore * 0.15;
+
+      candidates.push({ entity, score });
     }
   }
 
-  const pronounMatch = resolved.match(/^(이들|그들|그는|그녀는)(?:은|는|이|가)?/);
-  if (pronounMatch) {
-    for (let i = originalIndex - 1; i >= Math.max(0, originalIndex - 3); i--) {
-      const prevSentence = allSentences[i]?.cleaned || allSentences[i] || "";
-      const subjectMatch = prevSentence.match(/^([가-힣]{2,4})(?:은|는|이|가)/);
-      if (subjectMatch) {
-        resolved = resolved.replace(pronounMatch[0], subjectMatch[1] + "은");
-        break;
-      }
-    }
-  }
+  candidates.sort((a, b) => b.score - a.score);
 
-  return resolved;
+  const best = candidates[0];
+  if (!best || best.score < 0.18) return sentence;
+
+  // 조사 보존
+  const particle = sentence.match(
+    /^(?:이들|그들|그는|그녀는|이는|이것은|그것은|이|그|해당)\s*(?:작품|빌딩|건축물|그림|조각|서적|책|소설|시|음악|곡|연구|이론|문화재|유물|개혁|사건|기술)?(은|는|이|가|을|를)?/
+  )?.[1] || "";
+
+  return sentence.replace(m[0], best.entity + particle);
 }
+
+function vectorize(text) {
+  const v = {};
+  const s = text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, "")
+    .replace(/\s+/g, "");
+
+  for (let n = 2; n <= 4; n++) {
+    for (let i = 0; i <= s.length - n; i++) {
+      const g = s.slice(i, i + n);
+      v[g] = (v[g] || 0) + 1;
+    }
+  }
+
+  return v;
+}
+
+function cosine(a, b) {
+  let dot = 0, aa = 0, bb = 0;
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+
+  for (const k of keys) {
+    const x = a[k] || 0;
+    const y = b[k] || 0;
+    dot += x * y;
+    aa += x * x;
+    bb += y * y;
+  }
+
+  return aa && bb ? dot / Math.sqrt(aa * bb) : 0;
+}
+
+function typeMatch(type, entity, sentence) {
+  if (!type) return 0;
+
+  const groups = {
+    "작품": ["작품", "그림", "소설", "조각", "시", "곡"],
+    "빌딩": ["건물", "빌딩", "관", "궁", "전"],
+    "건축물": ["건물", "건축", "관", "궁", "전"],
+    "그림": ["그림", "회화", "작품"],
+    "조각": ["조각", "작품"],
+    "책": ["책", "서적", "소설"],
+    "소설": ["소설", "책", "서적"],
+    "음악": ["음악", "곡", "앨범"],
+    "곡": ["곡", "음악"],
+    "연구": ["연구", "논문", "분석"],
+    "이론": ["이론", "학설", "모델"],
+    "문화재": ["문화재", "유물", "궁", "탑", "사"],
+    "유물": ["유물", "문화재"]
+  };
+
+  const words = groups[type] || [];
+  return words.some(w =>
+    entity.includes(w) || sentence.includes(w)
+  ) ? 1 : 0;
+}
+
 
 function isDisqualifiedSentence(sentence, isFirstIntroSentence = false, deathYear = null) {
   if (!sentence) return true;
@@ -224,7 +306,7 @@ export function extractAnnotatedParagraphs(rawText) {
 
 
 export function buildDescription(introText = "", bodyText = "", aliases = [], maxLength = 800) {
-  const cacheKey = `${introText.slice(0, 50)}_${bodyText.slice(0, 50)}_${maxLength}`;
+  const cacheKey = `${introText.slice(0, 60)}_${bodyText.slice(0, 60)}_${maxLength}`;
   if (cache[cacheKey]) return cache[cacheKey];
 
   const deathMatch = introText.match(/~\s*(\d{4})년/);
