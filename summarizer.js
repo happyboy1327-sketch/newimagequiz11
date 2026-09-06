@@ -24,35 +24,21 @@ const RE_SENTENCE_SPLIT = /(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd
 //]\s*))(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|자|호|휘)\s*(?:은|는|:)\s+[가-힣\u4E00-\u9FFF\s(·)]+?(?:등이다|등이었다|이며|이고|이자|이었다|였다|이다|임)(?:,\s*)?/g;
 //const RE_FAMILY_CLAUSE = /(?:^|(?<=[,;]\s*))(?:(?:그의|그녀의)?\s*(?:부친|모친|조부|증조부|고조부|외조부|외조모|장인|처남|장남|차남|장녀|차녀|막내)|(?:(?<![가-힣\u4E00-\u9FFF]의\s*)(?:아버지|어머니)))\s*(?:은|는|이|가)\s+[가-힣\u4E00-\u9FFF]{2,5}(?:이고|이며|이자|이었다|였다|이다|임)(?:,\s*)?/g;
 
-const RE_PUNCT_CLEAN = /,\s*,+/g;
-const RE_DOT_CLEAN = /,\s*\./g;
-const RE_LEADING_COMMA = /^\s*,\s*/;
-const RE_EMPTY_PAREN = /\(\s*\)/g;
-const RE_TAIL_VERB = /(?:으로|로|이며|이고|이자)\s*\.$/;
-const RE_HEAD_VERB = /^(?:으로|로|이고|이며|이자)\s*,?\s*/;
-const RE_VALID_CHAR = /[가-힣\u4E00-\u9FFF A-Za-z0-9]/;
-const RE_VALID_WORDS = /[가-힣\u4E00-\u9FFF A-Za-z0-9]{2,}/g;
-
-
-// 2. 본관, 아명, 호, 부친/모친 등 메타 문장 및 메타 절만 핀셋 제거
 export function stripMetainfo(text) {
   if (!text) return "";
   let cleaned = cleanWikiText(text);
 
-  // 단독 메타 문장 제거 (예: "본관은 파평이다.")
-  cleaned = cleaned.replace(/(?:^|\s*)(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|자\(字\)|호|휘)\s*(?:은|는|:)\s*[^.]+\./g, "");
+  // '묘호는 세종이며 조선의 국왕이다'처럼 본문이 포함된 문장을 전체 삭제하지 않도록
+  // 쉼표/마침표 앞의 메타 정보 구문(20자 이내)만 정밀 제거
+  cleaned = cleaned.replace(/(?:^|\s*)(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|자|호|휘)\s*(?:은|는|:)\s*[^.,\n]{1,20}(?:[.,]|\s*)/g, "");
 
-  // 문장 내부 메타 절 제거 (예: "아명은 윤우의, 호는 매헌이고,")
-  cleaned = cleaned.replace(/(?:^|,\s*)(?:본관|아명|호|자\(字\)|시호|법명|부친|모친|조부|장인|배우자)(?:은|는|이|가|:)?\s*[^,.]+(?:이고|이며|이자|임|이다)(?:,\s*)?/g, "");
-
-  // 잔여 쉼표 및 찌꺼기 공백 정돈
   return cleaned
     .replace(/,\s*,+/g, ",")
     .replace(/^\s*,\s*/, "")
-    .replace(/\(\s*\)/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
+
 
 // ==========================================================
 // 2. 키워드, 배제 필터 및 정규식 정의
@@ -89,28 +75,36 @@ const CORE_SIGNIFICANCE_TEST_REGEX = new RegExp(CORE_SIGNIFICANCE_KEYWORDS.join(
 // ==========================================================
 // 3. 파싱, 지시어 해독 및 맥락 추적
 // ==========================================================
+
 export function extractAnnotatedParagraphs(rawText) {
   if (!rawText) return [];
 
-  const paragraphs = rawText.split(/\n\s*\n|\n?==+[^=]+==+\n?/).filter(p => p.trim());
+  let extractBody = rawText;
+  const cutIndex = extractBody.search(CUT_SECTION_REGEX);
+  if (cutIndex !== -1) {
+    extractBody = extractBody.substring(0, cutIndex);
+  }
+
+  const paragraphs = extractBody.split(/\n\s*\n|\n?==+[^=]+==+\n?/).filter(p => p.trim());
   const structuredParagraphs = [];
 
   for (const p of paragraphs) {
-    const rawSentences = p.split(RE_SENTENCE_SPLIT).map(s => s.trim()).filter(s => s.length > 8);
+    // s.length > 8 필터 제거 -> 첫 문장이 짧아도 정제 후 유효 단어 검사로 처리
+    const rawSentences = p.split(RE_SENTENCE_SPLIT).map(s => s.trim()).filter(Boolean);
     const parsedSentences = [];
 
     for (const raw of rawSentences) {
-      // 위키 문법 전처리 이전의 볼드/링크 태그 존재 유무 저장
       const hasBold = /'''|<b>|<strong>/.test(raw);
       const hasLink = /\[\[/.test(raw);
 
-      const cleaned = stripMetainfo(cleanWikiText(raw));
+      const cleaned = stripMetainfo(raw);
       const validWordCount = (cleaned.match(/[가-힣A-Za-z0-9]{2,}/g) || []).length;
 
-  if (cleaned && validWordCount >= 2) {
-  parsedSentences.push({ raw, cleaned, hasBold, hasLink });
-  }
+      if (cleaned && validWordCount >= 2) {
+        parsedSentences.push({ raw, cleaned, hasBold, hasLink });
+      }
     }
+
     if (parsedSentences.length > 0) {
       structuredParagraphs.push(parsedSentences);
     }
@@ -118,7 +112,6 @@ export function extractAnnotatedParagraphs(rawText) {
 
   return structuredParagraphs;
 }
-
 
 function resolveAnaphora(sentence, allSentences, originalIndex) {
   let resolved = sentence;
