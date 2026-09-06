@@ -245,17 +245,16 @@ async function findAlternativeHumanImage(title, aliases) {
     }
     
     for (let i = 0; i < targets.length; i += COMMONS_BATCH_SIZE) {
-    const batch = targets.slice(i, i + COMMONS_BATCH_SIZE);
-    let info;
-    try {
-        info = await axios.get("https://commons.wikimedia.org/w/api.php", {
-            ...WIKI_AXIOS_CONFIG,
-            params: { action: "query", titles: batch.join("|"), prop: "imageinfo", iiprop: "url", iiurlwidth: 800, format: "json", origin: "*" }
-        });
-    } catch (e) { 
-        continue;  // ✅ 이제 try-catch 블록 안에 있음
-    }
-    const commonsPages = Object.values(info.data?.query?.pages || {});
+        const batch = targets.slice(i, i + COMMONS_BATCH_SIZE);
+        let info;
+        try {
+            info = await axios.get("https://commons.wikimedia.org/w/api.php", {
+                ...WIKI_AXIOS_CONFIG,
+                params: { action: "query", titles: batch.join("|"), prop: "imageinfo", iiprop: "url", iiurlwidth: 800, format: "json", origin: "*" }
+            });
+        } catch (e) { continue; }
+
+        const commonsPages = Object.values(info.data?.query?.pages || {});
         for (const file of commonsPages) {
             const url = file.imageinfo?.[0]?.url;
             if (url && isValidImageUrl(url) && !isCulturalSiteImage(url)) {
