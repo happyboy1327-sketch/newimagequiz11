@@ -26,6 +26,8 @@ const ACADEMIC_CONCEPT_REGEX = /[가-힣]{2,}(?:설|론|주의|학|법)\b/;
 export function cleanWikiText(text) {
   if (!text) return "";
   return text
+    .replace(/<rt[^>]*>[\s\S]*?<\/rt>/gi, "")
+    .replace(/<rp[^>]*>[\s\S]*?<\/rp>/gi, "")
     .replace(/<[^>]+>/g, "")
     .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1")
     .replace(/\[\d+\]|\[(?:각주|출처\s*필요|편집|주석)\]/g, "")
