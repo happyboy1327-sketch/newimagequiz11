@@ -268,16 +268,28 @@ export function buildDescription(
   const docTF = computeTF(docTokens);
   const docVector = computeTFIDF(docTF, idfDict);
 
+  // --- 후보 문장 스코어링 ---
   const finalCandidates = candidateSentences.map((sentence, index) => {
-    if (!isValidSentenceStructure(sentence) || isOtherSubject(sentence, docTitle)) {
+    // 1. 앵커 바로 뒤 첫 후보 문장이거나(index === 0), 구조적 결함이 있는 경우만 1차 체크
+    // 문서의 핵심인 첫 부분 문장들은 주어 검사(isOtherSubject)를 Bypass
+    const isFirstPart = index === 0 && anchorSentences.length < 2;
+
+    if (!isValidSentenceStructure(sentence)) {
       return { sentence, score: 0, index };
     }
 
+    // 첫 문장 영역이 아니고, 확실히 다른 주어일 때만 타인 주어로 판정하여 차단
+    if (!isFirstPart && isOtherSubject(sentence, docTitle)) {
+      return { sentence, score: 0, index };
+    }
+
+    // 2. TF-IDF 코사인 유사도 연산
     const tokens = tokenize(sentence);
     const sentenceTF = computeTF(tokens);
     const sentenceVector = computeTFIDF(sentenceTF, idfDict);
     const similarityScore = cosineSimilarity(sentenceVector, docVector);
 
+    // 3. 가산점 부여
     let score = similarityScore * (1.0 / (1 + index * 0.05));
     if (ACHIEVEMENT_VERB_REGEX.test(sentence)) score *= 1.5;
     if (ACADEMIC_CONCEPT_REGEX.test(sentence)) score *= 1.4;
