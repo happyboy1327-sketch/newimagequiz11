@@ -163,6 +163,7 @@ export function extractAnnotatedParagraphs(rawText) {
   return structuredParagraphs;
 }
 
+
 export function buildDescription(introText = "", bodyText = "", aliases = [], maxLength = 800) {
   const cacheKey = `${introText.slice(0, 50)}_${bodyText.slice(0, 50)}_${maxLength}`;
   if (cache[cacheKey]) return cache[cacheKey];
@@ -242,7 +243,7 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ma
   const result = selectedSentences.join(" ");
   return (cache[cacheKey] = result);
 }
-
+  
 export function summarizeText(text) {
   if (!text) return { summary: "", sentenceCount: 0, usedSentences: 0 };
 
