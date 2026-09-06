@@ -5,12 +5,12 @@ const cache = {};
 // ==========================================================
 // 1. 위키 문법 및 괄호 안 메타 정보(한자, 생몰년도 등) 제거
 export function cleanWikiText(text) {
+export function cleanWikiText(text) {
   if (!text) return "";
-  let cleaned = text;
   return text
-    .replace(/<[^>]+>/g, "")
-    .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1")
-    .replace(/\[\d+\]/g, "")
+    .replace(/<[^>]+>/g, "")                         // HTML 태그 제거
+    .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1") // 위키 링크 [[A|B]] -> B
+    .replace(/\[\d+\]/g, "")                         // 각주 [1] 제거
     .replace(/\[(?:각주|출처\s*필요|편집|주석)\]/g, "")
     .replace(/\s+/g, " ")
     .trim();
