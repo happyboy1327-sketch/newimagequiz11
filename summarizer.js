@@ -227,6 +227,7 @@ function cosineSimilarity(vecA, vecB) {
 // 5. 메인 요약 생성 엔진
 // ==========================================================
 
+
 export function buildDescription(
   introText = "",
   bodyText = "",
@@ -237,33 +238,65 @@ export function buildDescription(
   sectionTitle = "",
   docTitle = ""
 ) {
-  const cacheKey = introText + bodyText + docTitle;
+  // aliases는 배열이 아닐 경우에도 안전하게 처리
+  const safeAliases = Array.isArray(aliases) ? aliases : [];
+
+  // 캐시 키에 모든 입력값 반영
+  const cacheKey = [
+    introText,
+    bodyText,
+    safeAliases.join("|"),
+    extraCount,
+    anchorCount,
+    maxLength,
+    sectionTitle,
+    docTitle
+  ].join("||");
+
   if (cache[cacheKey]) return cache[cacheKey];
 
   const rawIntroSentences = splitSentences(cleanWikiText(introText));
   const rawBodySentences = splitSentences(cleanWikiText(bodyText));
 
-  const introSentences = rawIntroSentences.map((s) => stripMetainfo(s)).filter(Boolean);
-  const bodySentences = rawBodySentences.map((s) => stripMetainfo(s)).filter(Boolean);
+  const introSentences = rawIntroSentences
+    .map((s) => stripMetainfo(s))
+    .filter(Boolean);
+
+  const bodySentences = rawBodySentences
+    .map((s) => stripMetainfo(s))
+    .filter(Boolean);
 
   let anchorSentences = [];
   let candidateSentences = [];
 
+  // --- 서문 앵커 문장 ---
   if (introSentences.length > 0) {
     anchorSentences = introSentences.slice(0, anchorCount);
-    candidateSentences = [...introSentences.slice(anchorCount), ...bodySentences];
+
+    candidateSentences = [
+      ...introSentences.slice(anchorCount),
+      ...bodySentences
+    ];
   } else {
     anchorSentences = bodySentences.slice(0, anchorCount);
     candidateSentences = bodySentences.slice(anchorCount);
   }
 
+  // 후보 문장 최대 25개까지만 분석
   if (candidateSentences.length > 25) {
     candidateSentences = candidateSentences.slice(0, 25);
   }
 
-  const allSentences = [...anchorSentences, ...candidateSentences];
-  if (allSentences.length === 0) return "";
+  const allSentences = [
+    ...anchorSentences,
+    ...candidateSentences
+  ];
 
+  if (allSentences.length === 0) {
+    return "";
+  }
+
+  // --- TF-IDF 계산 ---
   const sentenceTokensList = allSentences.map((s) => tokenize(s));
   const idfDict = computeIDF(sentenceTokensList);
 
@@ -273,50 +306,141 @@ export function buildDescription(
 
   // --- 후보 문장 스코어링 ---
   const finalCandidates = candidateSentences.map((sentence, index) => {
-    // 1. 앵커 바로 뒤 첫 후보 문장이거나(index === 0), 구조적 결함이 있는 경우만 1차 체크
-    // 문서의 핵심인 첫 부분 문장들은 주어 검사(isOtherSubject)를 Bypass
-    const isFirstPart = index === 0 && anchorSentences.length < 2;
+    // 구조적으로 문제가 있는 문장은 제외
+    const isFirstPart =
+      index === 0 && anchorSentences.length < 2;
 
     if (!isValidSentenceStructure(sentence)) {
-      return { sentence, score: 0, index };
+      return {
+        sentence,
+        score: 0,
+        index
+      };
     }
 
-    // 첫 문장 영역이 아니고, 확실히 다른 주어일 때만 타인 주어로 판정하여 차단
-    if (!isFirstPart && isOtherSubject(sentence, docTitle)) {
-      return { sentence, score: 0, index };
+    // 첫 부분이 아니면서 다른 인물/주어를 명확히 가리키는 문장 제외
+    if (
+      !isFirstPart &&
+      isOtherSubject(sentence, docTitle)
+    ) {
+      return {
+        sentence,
+        score: 0,
+        index
+      };
     }
 
-    // 2. TF-IDF 코사인 유사도 연산
+    // TF-IDF 코사인 유사도
     const tokens = tokenize(sentence);
     const sentenceTF = computeTF(tokens);
-    const sentenceVector = computeTFIDF(sentenceTF, idfDict);
-    const similarityScore = cosineSimilarity(sentenceVector, docVector);
+    const sentenceVector = computeTFIDF(
+      sentenceTF,
+      idfDict
+    );
 
-    // 3. 가산점 부여
-    let score = similarityScore * (1.0 / (1 + index * 0.05));
-    if (ACHIEVEMENT_VERB_REGEX.test(sentence)) score *= 1.5;
-    if (ACADEMIC_CONCEPT_REGEX.test(sentence)) score *= 1.4;
-    if (MAJOR_HISTORICAL_EVENT_REGEX.test(sentence)) score *= 1.4;
+    const similarityScore = cosineSimilarity(
+      sentenceVector,
+      docVector
+    );
 
-    return { sentence, score, index };
+    // 기본 점수 + 위치 감점
+    let score =
+      similarityScore *
+      (1.0 / (1 + index * 0.05));
+
+    // 업적/활동 관련 문장 가산점
+    if (ACHIEVEMENT_VERB_REGEX.test(sentence)) {
+      score *= 1.5;
+    }
+
+    // 학술/개념 관련 문장 가산점
+    if (ACADEMIC_CONCEPT_REGEX.test(sentence)) {
+      score *= 1.4;
+    }
+
+    // 주요 역사적 사건 관련 문장 가산점
+    if (MAJOR_HISTORICAL_EVENT_REGEX.test(sentence)) {
+      score *= 1.4;
+    }
+
+    // aliases에 포함된 인물이 등장하면 약간의 가산점
+    if (
+      safeAliases.length > 0 &&
+      safeAliases.some((alias) => {
+        if (!alias) return false;
+
+        const normalizedAlias = String(alias)
+          .trim()
+          .toLowerCase();
+
+        return (
+          normalizedAlias &&
+          sentence.toLowerCase().includes(normalizedAlias)
+        );
+      })
+    ) {
+      score *= 1.15;
+    }
+
+    return {
+      sentence,
+      score,
+      index
+    };
   });
 
+  // --- 상위 후보 추출 ---
   const ranked = finalCandidates
     .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, extraCount)
     .sort((a, b) => a.index - b.index);
 
+  // --- 앵커 + 추가 문장 ---
   let resultParts = [...anchorSentences];
+
   for (const item of ranked) {
     if (!resultParts.includes(item.sentence)) {
       resultParts.push(item.sentence);
     }
   }
 
-  const result = resultParts.join(" ");
-  return (cache[cacheKey] = result);
+  // --- sectionTitle은 내용 자체에 중복 삽입하지 않고
+  // 문장 선택 단계에서 사용할 수 있도록 입력값으로만 유지 ---
+  // docTitle 역시 isOtherSubject() 판정에 사용됨.
+
+  // --- 최대 글자 수 제한 ---
+  let result = resultParts.join(" ").trim();
+
+  if (result.length > maxLength) {
+    let limitedParts = [];
+
+    for (const part of resultParts) {
+      const candidate = [...limitedParts, part]
+        .join(" ")
+        .trim();
+
+      if (candidate.length <= maxLength) {
+        limitedParts.push(part);
+      } else {
+        break;
+      }
+    }
+
+    result = limitedParts.join(" ").trim();
+
+    // 첫 문장 하나 자체가 maxLength를 초과하는 경우
+    if (!result && resultParts.length > 0) {
+      result = resultParts[0]
+        .slice(0, maxLength)
+        .trim();
+    }
+  }
+
+  cache[cacheKey] = result;
+  return result;
 }
+
 
 export function summarizeText(text, topN = 3, docTitle = "") {
   return {
