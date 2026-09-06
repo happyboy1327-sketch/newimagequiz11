@@ -481,11 +481,13 @@ async function fillCache() {
   
                            // 4. 개작된 summarizer.js 시그니처(introText, bodyText, aliases, maxLength)에 맞춰 연동
                            const finalDescription = buildDescription(
-                               cleanIntro, 
-                               cleanExtract,
-                               aliases || [], 
-                               800 // maxLength (최대 글자 수)
-                           );
+                            cleanIntro, 
+                            cleanExtract, 
+                            aliases, 
+                            3,   
+                            150, 
+                            630  
+                        );
                            if (finalDescription) {
                                QUIZ_CACHE.push({
                                    name: pageData.title,
