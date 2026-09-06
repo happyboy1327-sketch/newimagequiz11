@@ -3,6 +3,9 @@ const cache = {};
 export function cleanWikiText(text) {
   if (!text) return "";
   return text
+    .replace(/<ref\b[^>]*>[\s\S]*?<\/ref>/gi, "")
+    .replace(/<ref\b[^>]*\/>/gi, "")
+    .replace(/<blockquote\b[^>]*>[\s\S]*?<\/blockquote>/gi, "")
     .replace(/<[^>]+>/g, "")
     .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1")
     .replace(/\[\d+\]/g, "")
