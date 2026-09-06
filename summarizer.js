@@ -259,8 +259,8 @@ export function buildDescription(
   const rawBodySentences = splitSentences(cleanWikiText(bodyText));
 
   const introSentences = rawIntroSentences
-    .map((s) => stripMetainfo(s))
-    .filter(Boolean);
+  .map((s, i) => i === 0 ? s : stripMetainfo(s))
+  .filter(Boolean);
 
   const bodySentences = rawBodySentences
     .map((s) => stripMetainfo(s))
