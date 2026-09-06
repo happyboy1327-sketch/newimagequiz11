@@ -1,52 +1,116 @@
 const cache = {};
-// 중첩된 태그도 안전하게 통째로 제거하는 헬퍼
+
+// =========================================================================
+// 위키텍스트 정리
+// =========================================================================
+
+/**
+ * 중첩된 HTML 스타일 태그(<ref><ref>...</ref></ref> 등)를 깊이(depth)를
+ * 세어가며 안전하게 통째로 제거한다. 정규식 하나로는 중첩을 처리할 수 없어서
+ * (non-greedy 매칭이 가장 먼저 만나는 닫는 태그에서 멈춰버림) 발생했던
+ * "blockquote 안 내용이 그대로 노출되는" 버그를 여기서 근본적으로 해결한다.
+ * 태그 짝이 깨져 있으면(닫히지 않음) 내용을 유실하지 않도록 원본을 그대로 반환한다.
+ */
 function stripBalancedTag(str, tagName) {
   const tagPattern = new RegExp(`<(/?)${tagName}\\b[^>]*>`, "gi");
+  const matches = [...str.matchAll(tagPattern)];
+  if (matches.length === 0) return str;
+
   let depth = 0;
   let result = "";
   let lastIndex = 0;
-  let match;
 
-  while ((match = tagPattern.exec(str)) !== null) {
+  for (const match of matches) {
     const isClosing = match[1] === "/";
-
     if (!isClosing) {
-      if (depth === 0) {
-        // 블록 시작 직전까지의 텍스트는 보존
-        result += str.slice(lastIndex, match.index);
-      }
+      if (depth === 0) result += str.slice(lastIndex, match.index);
       depth++;
-    } else if (depth > 0) {
+    } else {
+      if (depth === 0) return str; // 닫는 태그가 먼저 나옴: 마크업이 깨짐 -> 원본 유지
       depth--;
-      if (depth === 0) {
-        // 블록이 완전히 닫힌 지점부터 다시 텍스트 수집 시작
-        lastIndex = match.index + match[0].length;
-      }
+      if (depth === 0) lastIndex = match.index + match[0].length;
     }
   }
 
-  // 짝이 맞아 depth가 0으로 끝났을 때만 나머지 텍스트를 붙임
-  if (depth === 0) {
-    result += str.slice(lastIndex);
+  if (depth !== 0) return str; // 끝까지 안 닫힘: 마크업이 깨짐 -> 원본 유지
+  return result + str.slice(lastIndex);
+}
+
+/**
+ * {{인용문|...}} 같은 위키 템플릿을 중괄호 깊이를 세어가며 제거한다.
+ * 템플릿 안에 다른 템플릿이 중첩된 경우(예: 인용문 안에 다른 링크 템플릿)도
+ * 안전하게 처리한다.
+ */
+function stripBalancedTemplate(str, nameAlternation) {
+  const openPattern = new RegExp(`\\{\\{\\s*(?:${nameAlternation})\\b`, "gi");
+  let result = "";
+  let cursor = 0;
+
+  while (true) {
+    openPattern.lastIndex = cursor;
+    const m = openPattern.exec(str);
+    if (!m) break;
+
+    result += str.slice(cursor, m.index);
+
+    let depth = 0;
+    let i = m.index;
+    while (i < str.length) {
+      if (str.startsWith("{{", i)) {
+        depth++;
+        i += 2;
+      } else if (str.startsWith("}}", i)) {
+        depth--;
+        i += 2;
+        if (depth === 0) break;
+      } else {
+        i++;
+      }
+    }
+
+    if (depth !== 0) {
+      // 템플릿이 안 닫힘: 나머지를 원본 그대로 붙이고 종료 (내용 유실 방지)
+      result += str.slice(m.index);
+      return result;
+    }
+    cursor = i;
   }
+
+  result += str.slice(cursor);
   return result;
 }
 
 export function cleanWikiText(text) {
-  if (!text) return "";
+  if (!text || typeof text !== "string") return "";
 
-  let t = text.replace(/\{\{인용문\d?\s*\|[\s\S]*?\}\}/g, ""); // 인용문, 인용문2, 인용문3 등 모두 대응
-  t = t.replace(/(?:^|\s*)(?:본관|자|호|휘|시호|아명|태명)\s*(?:은|는|:)\s*[^.,\n]{1,15}(?:[.,]|\s*)/g, "");
+  let t = text;
 
-  t = stripBalancedTag(t, "ref");
-  t = stripBalancedTag(t, "blockquote");
-  t = stripBalancedTag(t, "poem");
+  // 인용 관련 템플릿 (중첩 중괄호 대응, 인용문/인용문2/인용문3/Quote/cquote 등)
+  t = stripBalancedTemplate(t, "인용문\\d*|[Qq]uote|[Cc]quote");
+
+  // 파일/이미지/분류 링크는 내용 전체가 필요 없으므로 통째로 제거
+  t = t.replace(/\[\[(?:파일|File|Image|분류|Category)\s*:[^\]]*\]\]/gi, "");
+
+  // 인물 메타정보 한 줄 패턴 (본관/자/호 등)
+  t = t.replace(
+    /(?:^|\s*)(?:본관|자|호|휘|시호|아명|태명)\s*(?:은|는|:)\s*[^.,\n]{1,15}(?:[.,]|\s*)/g,
+    ""
+  );
+
+  // 중첩 가능한 블록 태그는 내용째로 제거 (기존 blockquote 버그 수정 포함)
+  for (const tag of ["ref", "blockquote", "poem", "gallery", "table", "score"]) {
+    t = stripBalancedTag(t, tag);
+  }
 
   t = t
-    .replace(/<ref\b[^>]*\/>/gi, "")
-    .replace(/<[^>]+>/g, "")
-    .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1")
-    .replace(/\[\d+\]/g, "")
+    .replace(/<ref\b[^>]*\/>/gi, "") // 자기 종결 <ref/>
+    .replace(/<[^>]+>/g, "") // 남은 모든 HTML 태그
+    .replace(/'''''([^']+?)'''''/g, "$1") // 굵고 기울임: '''''텍스트'''''
+    .replace(/'''([^']+?)'''/g, "$1") // 굵게: '''텍스트''' (이전에는 제거 안 되던 마크업)
+    .replace(/''([^']+?)''/g, "$1") // 기울임: ''텍스트''
+    .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1") // 일반 위키링크
+    .replace(/\[https?:\/\/[^\s\]]+\s*([^\]]*)\]/g, "$1") // 외부링크 [url 설명]
+    .replace(/\[\d+\]/g, "") // 각주 번호 [1]
     .replace(/\[(?:각주|출처\s*필요|편집|주석)\]/g, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -54,18 +118,28 @@ export function cleanWikiText(text) {
   return t;
 }
 
-const RE_SENTENCE_SPLIT = /(?<!\d\.)(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i;
+// =========================================================================
+// 문장 분리 / 메타정보 제거
+// =========================================================================
 
-//export function stripMetainfo(text) {
-const RE_QUOTE = /(['"])(.*?)\1/g;
+// 마침표 뒤에 공백이 없는 경우(위키 원문에서 매우 흔함, 예: "처형되었다.명은")도
+// 정상적으로 분리하도록 \s+ 대신 \s*를 사용. 한자(\u4E00-\u9FFF)로 시작하는
+// 문장도 분리 대상에 포함시켰다 (이전 버전은 한글/영문/숫자만 허용해서
+// 한자로 시작하는 문장 앞에서 분리가 안 되는 문제가 있었다).
+const RE_SENTENCE_SPLIT =
+  /(?<!\d\.)(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<=[.!?])\s*(?=[가-힣A-Za-z0-9"'“”‘’(《「\u4E00-\u9FFF])/i;
+
+const RE_QUOTE = /(['"“”‘’])(.*?)\1/g;
 const RE_SPACE = /\s+/g;
-const RE_PAREN_META = /\([^)]*(?:부친|모친|조부|증조부|고조부|외가|장인|처남|자|호|본관|시호|아명|태명|법명)\s*:[^)]*\)/g;
+const RE_PAREN_META =
+  /\([^)]*(?:부친|모친|조부|증조부|고조부|외가|장인|처남|자|호|본관|시호|아명|태명|법명)\s*:[^)]*\)/g;
 
-
-const RE_PURE_META = /^(?:그의|그녀의|본)?\s*(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|자|호|휘)\s*(?:은|는|:)\s+.+$/;
-//const RE_META_CLAUSE = /(?:^|[,;\s]+)(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|자|호|휘)\s*(?:은|는|:)\s*[^,.\n]+(?:,\s*|이며|이고|이자|그리고|등이다|등이었다|이며|이고|이자|이었다|였다|이다|\s+|$)/g;
-const RE_META_CLAUSE = /(?:^|[,;\s]+)(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|자|호|휘)\s*(?:은|는|:)\s*[가-힣]{1,10}(?:\([^)]+\))?\s*(?:이며|이고|이자|그리고|이었다|였다|이다|등이다|등이었다|,\s*)?/g;
-const RE_FAMILY_CLAUSE = /(?:^|(?<=[,;]\s*))(?:(?:그의|그녀의)?\s*(?:부친|모친|조부|증조부|고조부|외조부|외조모|장인|처남|장남|차남|장녀|차녀|막내)|(?:(?<![가-힣]의\s*)(?:아버지|어머니)))\s*(?:은|는|이|가)\s+[가-힣\u4E00-\u9FFF]{2,5}(?:이고|이며|이자|이었다|였다|이다|임)(?:,\s*)?/g;
+const RE_PURE_META =
+  /^(?:그의|그녀의|본)?\s*(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|자|호|휘)\s*(?:은|는|:)\s+.+$/;
+const RE_META_CLAUSE =
+  /(?:^|[,;\s]+)(?:본관|본적|시호|아호|별호|아명|태명|세례명|법명|묘호|당호|자|호|휘)\s*(?:은|는|:)\s*[^,.\n]+(?:,\s*|이며|이고|이자|그리고|등이다|등이었다|이었다|였다|이다|\s+|$)/g;
+const RE_FAMILY_CLAUSE =
+  /(?:^|(?<=[,;]\s*))(?:(?:그의|그녀의)?\s*(?:부친|모친|조부|증조부|고조부|외조부|외조모|장인|처남|장남|차남|장녀|차녀|막내)|(?:(?<![가-힣]의\s*)(?:아버지|어머니)))\s*(?:은|는|이|가)\s+[가-힣\u4E00-\u9FFF]{2,5}(?:이고|이며|이자|이었다|였다|이다|임)(?:,\s*)?/g;
 
 const RE_PUNCT_CLEAN = /,\s*,+/g;
 const RE_DOT_CLEAN = /,\s*\./g;
@@ -81,16 +155,16 @@ export function stripMetainfo(text) {
   if (!text || typeof text !== "string") return "";
 
   try {
-    // 헤더(##제목##)를 받침 유무에 따라 '은/는' 조사를 붙여 본문 첫 문장과 완벽하게 병신
+    // 헤더(==제목==)를 받침 유무에 따라 '은/는' 조사를 붙여 본문 첫 문장과 자연스럽게 결합
     text = text.replace(RE_CUSTOM_HEADER, (match, title, body) => {
       const lastCharCode = title.charCodeAt(title.length - 1);
       let particle = "는";
-      if (lastCharCode >= 0xAC00 && lastCharCode <= 0xD7A3) {
-        particle = (lastCharCode - 0xAC00) % 28 > 0 ? "은" : "는";
+      if (lastCharCode >= 0xac00 && lastCharCode <= 0xd7a3) {
+        particle = (lastCharCode - 0xac00) % 28 > 0 ? "은" : "는";
       }
       return `${title}${particle} ${body}`;
     });
-      
+
     const quotes = [];
     let masked = text.replace(RE_QUOTE, (match) => {
       quotes.push(match);
@@ -141,40 +215,71 @@ export function stripMetainfo(text) {
   } catch (err) {
     return text.replace(RE_SPACE, " ").trim();
   }
-}  
+}
+
+// =========================================================================
+// 스코어링용 키워드 / 정규식
+// =========================================================================
 
 const CORE_SIGNIFICANCE_KEYWORDS = [
-  "원리", "구조", "기능", "작용", "현상", "이론", "연구", "발견", "발전", "규명", "증명", "설명", "기록", "저서", 
-  "분석", "기반", "시스템", "메커니즘", "특징", "성질", "분류", "상태", "상호작용", "개척", "출판", "저술", "제작", 
-  "제도", "정책", "사회", "경제", "체계", "관계", "변화", "전개", "성장", "효과", "수립", "조직", "창단",  
-  "원인", "결과", "분포", "개혁", "조약", "협정", "시장", "구조적", "통일", "통합", "정합", "정립", "창립", 
-  "양식", "사상", "문화", "작품", "기법", "전통", "유형", "형성", "창작", "유산", "완화", "강화", "개선", 
-  "대표", "영향", "의의", "기여", "발전", "역사", "중심", "주요", "핵심", "주요한", 
+  "원리", "구조", "기능", "작용", "현상", "이론", "연구", "발견", "발전", "규명", "증명", "설명", "기록", "저서",
+  "분석", "기반", "시스템", "메커니즘", "특징", "성질", "분류", "상태", "상호작용", "개척", "출판", "저술", "제작",
+  "제도", "정책", "사회", "경제", "체계", "관계", "변화", "전개", "성장", "효과", "수립", "조직", "창단",
+  "원인", "결과", "분포", "개혁", "조약", "협정", "시장", "구조적", "통일", "통합", "정합", "정립", "창립",
+  "양식", "사상", "문화", "작품", "기법", "전통", "유형", "형성", "창작", "유산", "완화", "강화", "개선",
+  "대표", "영향", "의의", "기여", "발전", "역사", "중심", "주요", "핵심", "주요한",
   "지정", "설립", "주도", "구성", "도입", "확립", "공격", "격퇴", "정벌", "함락",
   "독립운동", "의병", "하얼빈", "저격", "사살", "의거", "단지동맹", "동양평화론",
   "국채보상운동", "구국", "대한의군", "유묵", "도량형", "만리장성", "천하통일", "거중기", "실학", "상대성이론", "양자역학",
-  "시인", "작가", "문단", "등단", "체포", "구금", "사상범", "유학자", "왕도정치", "성선설"
+  "시인", "작가", "문단", "등단", "체포", "구금", "사상범", "유학자", "왕도정치", "성선설",
 ];
 
 const UNIVERSAL_NOISE_KEYWORDS = [
-  "자세한 내용은", "참조하십시오", "출처 필요", "각주", "외부 링크", "참고 문헌", "경력", "위키미디어 공용에", "전문지", "실렸다", 
-  "여담", "기타", "대중 문화", "서브컬처", "패러디", "밈", "스포일러", "오류", "순위", "차지했다", 
-  "차이를 보이고", "별명", "소문", "야사", "미디어에서", "여담으로", "설이 있다", "추측", "보고 있다", "미디어 분류가 있습니다."
+  "자세한 내용은", "참조하십시오", "출처 필요", "각주", "외부 링크", "참고 문헌", "경력", "위키미디어 공용에", "전문지", "실렸다",
+  "여담", "기타", "대중 문화", "서브컬처", "패러디", "밈", "스포일러", "오류", "순위", "차지했다",
+  "차이를 보이고", "별명", "소문", "야사", "미디어에서", "여담으로", "설이 있다", "추측", "보고 있다", "미디어 분류가 있습니다.",
 ];
 
-const DISQUALIFIED_CONNECTORS_REGEX = /^(?:그러나|하지만|그런데|한편|이후|당시|그\s*후|그\s*뒤|그러던\s*중|이에\s*따라|그\s*당시|그\s*이후|그러고\s*나서|그때|이때|이듬해|훗날|마침내|이와\s*달리|그러다가|이로써|따라서|결과적으로|이와\s*같이)/;
+const DISQUALIFIED_CONNECTORS_REGEX =
+  /^(?:그러나|하지만|그런데|한편|이후|당시|그\s*후|그\s*뒤|그러던\s*중|이에\s*따라|그\s*당시|그\s*이후|그러고\s*나서|그때|이때|이듬해|훗날|마침내|이와\s*달리|그러다가|이로써|따라서|결과적으로|이와\s*같이)/;
 
-const TMI_NOISE_REGEX = /(?:부친|모친|조부|조모|증조부|고조부|외가|첫\s*부인|둘째\s*부인|가계도|손자|처남|장인|결혼|이혼|혼인|재혼|배우자|남편|아내|딸|아들|처가|시댁|장남|차남|장녀|차녀|외아들|외딸|\d남|\d녀|위인전|출판사|족보|입향시조|후사|종친|문중|호적|예규|성씨|두음법칙|실질적인\s*기여|동의하지\s*않는다|목격자\s*증언|서한들|할아버지|할머니|아버지|어머니|부모|형제|자매|친척|번지)/;
+const TMI_NOISE_REGEX =
+  /(?:부친|모친|조부|조모|증조부|고조부|외가|첫\s*부인|둘째\s*부인|가계도|손자|처남|장인|결혼|이혼|혼인|재혼|배우자|남편|아내|딸|아들|처가|시댁|장남|차남|장녀|차녀|외아들|외딸|\d남|\d녀|위인전|출판사|족보|입향시조|후사|종친|문중|호적|예규|성씨|두음법칙|실질적인\s*기여|동의하지\s*않는다|목격자\s*증언|서한들|할아버지|할머니|아버지|어머니|부모|형제|자매|친척|번지)/;
 
 const MAJOR_HISTORICAL_EVENT_REGEX = /(?:[가-힣]{2,3}[란난]|해전|대첩|승첩|전투|의거|혁명|박해)/;
 const ACADEMIC_CONCEPT_REGEX = /[가-힣]{2,}(?:설|론|주의|학|법|식)\b/;
-const ACHIEVEMENT_VERB_REGEX = /(?:저술|집필|설계|고안|집대성|제시|편찬|주창|발명|창안|개혁|건축|축조|간행|통찰|창작|창시|정리|도입|확립|반영|기여|주도|설립|격퇴|정벌|연구|지휘|승리|격파|격침|건조|수호|통제|구원|평정|혁신|창설|발견|노벨상|통일|단행|졸업|등단|발표|체포|주창|확립)/g;
-const CORE_SIGNIFICANCE_TEST_REGEX = new RegExp(CORE_SIGNIFICANCE_KEYWORDS.join("|"));
+const ACHIEVEMENT_VERB_REGEX =
+  /(?:저술|집필|설계|고안|집대성|제시|편찬|주창|발명|창안|개혁|건축|축조|간행|통찰|창작|창시|정리|도입|확립|반영|기여|주도|설립|격퇴|정벌|연구|지휘|승리|격파|격침|건조|수호|통제|구원|평정|혁신|창설|발견|노벨상|통일|단행|졸업|등단|발표|체포|확립)/g;
+
+// [버그 수정] 이전 버전엔 'g' 플래그가 없어서 sentence.match()가 항상 매치를
+// 1개만 반환했다. 그래서 핵심 키워드가 문장에 여러 번 나와도 가중치는 늘 1개분만
+// 적용되는 스코어링 버그가 있었다. 'g' 플래그를 추가해 실제 등장 횟수를 반영한다.
+const CORE_SIGNIFICANCE_TEST_REGEX = new RegExp(CORE_SIGNIFICANCE_KEYWORDS.join("|"), "g");
+
+// =========================================================================
+// 대명사(anaphora) 해소
+// =========================================================================
+
+// [버그 수정] 이전 버전은 "이", "그" 단 한 글자도 대명사로 인식했다.
+// 그 결과 "이사한 곳에서...", "그림을 그렸다..." 처럼 그냥 "이/그"로 시작하는
+// 평범한 한글 단어의 첫 글자를 대명사로 착각해, 문장 맨 앞부분이 엉뚱한
+// 단어로 치환되는 심각한 버그가 있었다 ("이사한 곳에서" -> "못했다사한 곳에서").
+// 이제는 완전한 대명사 단어만 매칭 대상으로 삼는다.
+const PRONOUN_REGEX =
+  /^(이들|그들|그는|그녀는|이는|이것은|그것은|해당)\s*(작품|빌딩|건축물|그림|조각|서적|책|소설|시|음악|곡|연구|이론|문화재|유물|개혁|사건|기술)?/;
+
+// [버그 수정] 대명사가 가리킬 후보 개체명을 뽑는 정규식이 너무 헐거워서
+// "체포하지 못했다는"에서 "못했다" 같은 동사 활용형까지 개체명으로 오인했다.
+// 아래 목록/정규식으로 그런 후보를 걸러낸다.
+const ENTITY_STOPWORDS = new Set([
+  "이것", "그것", "해당", "작품", "사람", "경우", "내용", "문제", "연구",
+  "이후", "당시", "한편", "그러나", "하지만", "그런데", "이때", "그때", "그리고",
+]);
+const VERB_ENDING_REGEX =
+  /(?:습니다|였다|했다|았다|었다|한다|된다|없다|있다|이다|하며|되며|이며|하고|이고|해서|되어|이어서)$/;
 
 function resolveAnaphora(sentence, allSentences, originalIndex) {
-  const m = sentence.match(
-    /^(이들|그들|그는|그녀는|이는|이것은|그것은|이|그|해당)\s*(작품|빌딩|건축물|그림|조각|서적|책|소설|시|음악|곡|연구|이론|문화재|유물|개혁|사건|기술)?/
-  );
+  const m = sentence.match(PRONOUN_REGEX);
   if (!m) return sentence;
 
   const type = m[2] || "";
@@ -187,13 +292,14 @@ function resolveAnaphora(sentence, allSentences, originalIndex) {
 
     const names = [
       ...(s.match(/[《「"'][^《》「」"']+[》」"']/g) || []),
-      ...(s.match(/[가-힣A-Za-z0-9·-]{2,20}(?=(?:은|는|이|가|을|를|의|에서))/g) || [])
+      ...(s.match(/[가-힣A-Za-z0-9·-]{2,20}(?=(?:은|는|이|가|을|를|의|에서))/g) || []),
     ];
 
     for (const name of [...new Set(names)]) {
       const entity = name.replace(/^《|》$|^「|」$|^"|"$/g, "").trim();
-      if (!entity || /^(이것|그것|해당|작품|사람|경우|내용|문제|연구)$/.test(entity))
-        continue;
+      if (!entity) continue;
+      if (ENTITY_STOPWORDS.has(entity)) continue;
+      if (VERB_ENDING_REGEX.test(entity)) continue;
 
       const sentenceScore = cosine(query, vectorize(s));
       const entityScore = cosine(query, vectorize(entity));
@@ -206,8 +312,8 @@ function resolveAnaphora(sentence, allSentences, originalIndex) {
 
       const score =
         sentenceScore * 0.35 +
-        entityScore * 0.30 +
-        distanceScore * 0.20 +
+        entityScore * 0.3 +
+        distanceScore * 0.2 +
         typeScore * 0.15;
 
       candidates.push({ entity, score });
@@ -220,9 +326,10 @@ function resolveAnaphora(sentence, allSentences, originalIndex) {
   if (!best || best.score < 0.18) return sentence;
 
   // 조사 보존
-  const particle = sentence.match(
-    /^(?:이들|그들|그는|그녀는|이는|이것은|그것은|이|그|해당)\s*(?:작품|빌딩|건축물|그림|조각|서적|책|소설|시|음악|곡|연구|이론|문화재|유물|개혁|사건|기술)?(은|는|이|가|을|를)?/
-  )?.[1] || "";
+  const particle =
+    sentence.match(
+      /^(?:이들|그들|그는|그녀는|이는|이것은|그것은|해당)\s*(?:작품|빌딩|건축물|그림|조각|서적|책|소설|시|음악|곡|연구|이론|문화재|유물|개혁|사건|기술)?(은|는|이|가|을|를)?/
+    )?.[1] || "";
 
   return sentence.replace(m[0], best.entity + particle);
 }
@@ -245,7 +352,9 @@ function vectorize(text) {
 }
 
 function cosine(a, b) {
-  let dot = 0, aa = 0, bb = 0;
+  let dot = 0,
+    aa = 0,
+    bb = 0;
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
 
   for (const k of keys) {
@@ -263,34 +372,35 @@ function typeMatch(type, entity, sentence) {
   if (!type) return 0;
 
   const groups = {
-    "작품": ["작품", "그림", "소설", "조각", "시", "곡"],
-    "빌딩": ["건물", "빌딩", "관", "궁", "전"],
-    "건축물": ["건물", "건축", "관", "궁", "전"],
-    "그림": ["그림", "회화", "작품"],
-    "조각": ["조각", "작품"],
-    "책": ["책", "서적", "소설"],
-    "소설": ["소설", "책", "서적"],
-    "음악": ["음악", "곡", "앨범"],
-    "곡": ["곡", "음악"],
-    "연구": ["연구", "논문", "분석"],
-    "이론": ["이론", "학설", "모델"],
-    "문화재": ["문화재", "유물", "궁", "탑", "사"],
-    "유물": ["유물", "문화재"]
+    작품: ["작품", "그림", "소설", "조각", "시", "곡"],
+    빌딩: ["건물", "빌딩", "관", "궁", "전"],
+    건축물: ["건물", "건축", "관", "궁", "전"],
+    그림: ["그림", "회화", "작품"],
+    조각: ["조각", "작품"],
+    책: ["책", "서적", "소설"],
+    소설: ["소설", "책", "서적"],
+    음악: ["음악", "곡", "앨범"],
+    곡: ["곡", "음악"],
+    연구: ["연구", "논문", "분석"],
+    이론: ["이론", "학설", "모델"],
+    문화재: ["문화재", "유물", "궁", "탑", "사"],
+    유물: ["유물", "문화재"],
   };
 
   const words = groups[type] || [];
-  return words.some(w =>
-    entity.includes(w) || sentence.includes(w)
-  ) ? 1 : 0;
+  return words.some((w) => entity.includes(w) || sentence.includes(w)) ? 1 : 0;
 }
 
+// =========================================================================
+// 문장 필터링 / 스코어링
+// =========================================================================
 
 function isDisqualifiedSentence(sentence, isFirstIntroSentence = false, deathYear = null) {
   if (!sentence) return true;
   if (DISQUALIFIED_CONNECTORS_REGEX.test(sentence.trim())) return true;
-  
+
   if (!isFirstIntroSentence && TMI_NOISE_REGEX.test(sentence)) return true;
-  if (UNIVERSAL_NOISE_KEYWORDS.some(kw => sentence.includes(kw))) return true;
+  if (UNIVERSAL_NOISE_KEYWORDS.some((kw) => sentence.includes(kw))) return true;
 
   if (deathYear) {
     const yearMatch = sentence.match(/(\d{4})년/);
@@ -321,15 +431,22 @@ function scoreSentence(item) {
   return score;
 }
 
+// =========================================================================
+// 공개 API
+// =========================================================================
+
 export function extractAnnotatedParagraphs(rawText) {
   if (!rawText) return [];
 
   const cleanedGlobalText = cleanWikiText(rawText);
-  const paragraphs = cleanedGlobalText.split(/\n+|\n?==+[^=]+==+\n?/).filter(p => p.trim());
+  const paragraphs = cleanedGlobalText.split(/\n+|\n?==+[^=]+==+\n?/).filter((p) => p.trim());
   const structuredParagraphs = [];
 
   for (const p of paragraphs) {
-    const rawSentences = p.split(RE_SENTENCE_SPLIT).map(s => s.trim()).filter(Boolean);
+    const rawSentences = p
+      .split(RE_SENTENCE_SPLIT)
+      .map((s) => s.trim())
+      .filter(Boolean);
     const parsedSentences = [];
 
     for (let raw of rawSentences) {
@@ -353,7 +470,6 @@ export function extractAnnotatedParagraphs(rawText) {
 
   return structuredParagraphs;
 }
-
 
 export function buildDescription(introText = "", bodyText = "", aliases = [], maxLength = 800) {
   const cacheKey = `${introText.slice(0, 60)}_${bodyText.slice(0, 60)}_${maxLength}`;
@@ -380,14 +496,14 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ma
   }
 
   const validIntroSentences = flatIntroSentences.filter((item, idx) => {
-    const isFirstIntroSentence = (idx === 0);
+    const isFirstIntroSentence = idx === 0;
     return !isDisqualifiedSentence(item.cleaned, isFirstIntroSentence, deathYear);
   });
 
   for (let idx = 0; idx < validIntroSentences.length && selectedSentences.length < introQuota; idx++) {
     const item = validIntroSentences[idx];
     const globalIdx = flatIntroSentences.indexOf(item);
-    
+
     const resolved = resolveAnaphora(item.cleaned, allFlatSentences, globalIdx);
     const keyFingerprint = resolved.replace(/[^가-힣0-9]/g, "").slice(0, 15);
 
@@ -400,14 +516,18 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ma
 
   const candidateBodyItems = [];
   for (const paragraphSentences of parsedBodyParagraphs) {
-    const validParagraphItems = paragraphSentences.filter(item => !isDisqualifiedSentence(item.cleaned, false, deathYear));
+    const validParagraphItems = paragraphSentences.filter(
+      (item) => !isDisqualifiedSentence(item.cleaned, false, deathYear)
+    );
     if (validParagraphItems.length === 0) continue;
 
-    const scoredItems = validParagraphItems.map((item) => ({
-      item,
-      score: scoreSentence(item),
-      globalIdx: allFlatSentences.indexOf(item)
-    })).sort((a, b) => b.score - a.score);
+    const scoredItems = validParagraphItems
+      .map((item) => ({
+        item,
+        score: scoreSentence(item),
+        globalIdx: allFlatSentences.indexOf(item),
+      }))
+      .sort((a, b) => b.score - a.score);
 
     candidateBodyItems.push(...scoredItems.slice(0, 3));
   }
@@ -434,18 +554,18 @@ export function buildDescription(introText = "", bodyText = "", aliases = [], ma
   const result = selectedSentences.join(" ");
   return (cache[cacheKey] = result);
 }
-  
+
 export function summarizeText(text) {
   if (!text) return { summary: "", sentenceCount: 0, usedSentences: 0 };
 
   const cleanedFullText = cleanWikiText(text);
-  const paragraphs = cleanedFullText.split(/\n+|\n?==+[^=]+==+\n?/).filter(p => p.trim());
+  const paragraphs = cleanedFullText.split(/\n+|\n?==+[^=]+==+\n?/).filter((p) => p.trim());
   const introText = paragraphs[0] || "";
   const bodyText = paragraphs.slice(1).join("\n\n");
 
   const summary = buildDescription(introText, bodyText);
-  const totalSentences = cleanedFullText.split(/(?<=[.!?])\s+/).length;
-  const usedSentences = summary ? summary.split(/(?<=[.!?])\s+/).length : 0;
+  const totalSentences = cleanedFullText.split(RE_SENTENCE_SPLIT).filter((s) => s.trim()).length;
+  const usedSentences = summary ? summary.split(RE_SENTENCE_SPLIT).filter((s) => s.trim()).length : 0;
 
   return { summary, sentenceCount: totalSentences, usedSentences };
 }
