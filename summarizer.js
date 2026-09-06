@@ -79,13 +79,7 @@ const CORE_SIGNIFICANCE_TEST_REGEX = new RegExp(CORE_SIGNIFICANCE_KEYWORDS.join(
 export function extractAnnotatedParagraphs(rawText) {
   if (!rawText) return [];
 
-  let extractBody = rawText;
-  const cutIndex = extractBody.search(CUT_SECTION_REGEX);
-  if (cutIndex !== -1) {
-    extractBody = extractBody.substring(0, cutIndex);
-  }
-
-  const paragraphs = extractBody.split(/\n\s*\n|\n?==+[^=]+==+\n?/).filter(p => p.trim());
+  const paragraphs = rawText.split(/\n\s*\n|\n?==+[^=]+==+\n?/).filter(p => p.trim());
   const structuredParagraphs = [];
 
   for (const p of paragraphs) {
