@@ -409,7 +409,7 @@ export function buildDescription(
       score *= 1.4;
     }
 
-    if (bookTitles.some(title => original.includes(title))) {
+    if (bookTitles.some(title => sentence.includes(title))) {
             score += 30;
         }
     
