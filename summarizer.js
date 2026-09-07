@@ -169,6 +169,18 @@ export function extractAnnotatedParagraphs(rawText) {
   return structuredParagraphs;
 }
 
+
+function extractBookTitles(text) {
+    const titles = [];
+    const regex = /《([^》]+)》/g;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+        titles.push(match[1]);
+    }
+    return titles;
+}
+
+
 function isValidSentenceStructure(sentence) {
   const trimmed = sentence.trim();
   if (trimmed.length < 15) return false;
@@ -298,6 +310,7 @@ export function buildDescription(
   const parsedIntroParagraphs = extractAnnotatedParagraphs(introText);
   const parsedBodyParagraphs = extractAnnotatedParagraphs(bodyText);
 
+  const bookTitles = extractBookTitles(rawBodySentences)
 
   const introSentences = rawIntroSentences
     .map((s, i) => (i === 0 ? s : stripMetainfo(s)))
@@ -396,6 +409,10 @@ export function buildDescription(
       score *= 1.4;
     }
 
+    if (bookTitles.some(title => original.includes(title))) {
+            score += 30;
+        }
+    
     if (MAJOR_HISTORICAL_EVENT_REGEX.test(sentence)) {
       score *= 1.4;
     }
