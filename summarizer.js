@@ -76,6 +76,9 @@ export function stripMetainfo(text) {
     return match;
   });
 
+  // 추가: 닫히지 않고 남은 괄호 절삭
+  result = result.replace(/\([^)]*$/, "").trim();
+
 
   // 3) 범용 메타 서술절 제거
   result = result
