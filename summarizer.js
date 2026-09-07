@@ -270,89 +270,61 @@ export function buildDescription(
 
   if (cache[cacheKey]) return cache[cacheKey];
 
- const rawIntroSentences = splitSentences(cleanWikiText(introText));
-const rawBodySentences = splitSentences(cleanWikiText(bodyText));
+  const rawIntroSentences = splitSentences(cleanWikiText(introText));
+  const rawBodySentences = splitSentences(cleanWikiText(bodyText));
 
-const introSentences = rawIntroSentences
+  const introSentences = rawIntroSentences
   .map((s, i) => i === 0 ? s : stripMetainfo(s))
   .filter(Boolean)
-  .filter(s => !BAD_WIKI_SENTENCE_REGEX.test(s));
+  .filter((s) => !BAD_WIKI_SENTENCE_REGEX.test(s));
 
-const bodySentences = rawBodySentences
-  .map(s => stripMetainfo(s))
-  .filter(Boolean)
-  .filter(s => !BAD_WIKI_SENTENCE_REGEX.test(s));
+  const bodySentences = rawBodySentences
+    .map((s) => stripMetainfo(s))
+    .filter(Boolean)
+    .filter((s) => !BAD_WIKI_SENTENCE_REGEX.test(s));
 
+  let anchorSentences = [];
+  let candidateSentences = [];
 
-// 첫 문장 확보
-const anchorSentences = [];
+  // --- 서문 앵커 문장 ---
+  if (introSentences.length > 0) {
+  anchorSentences = introSentences.slice(0, anchorCount);
 
-if (introSentences.length > 0) {
-  const cleanedFirst = cleanPersonMetaFromFirstSentence(
-    introSentences[0]
-  );
-
-  if (cleanedFirst) {
-    anchorSentences.push(cleanedFirst);
-  }
+  candidateSentences = [
+    ...introSentences.slice(anchorCount),
+    ...bodySentences
+  ];
+} else {
+  anchorSentences = bodySentences.slice(0, anchorCount);
+  candidateSentences = bodySentences.slice(anchorCount);
 }
 
-
-// 나머지 문장
-const rawCandidates = [
-  ...introSentences.slice(1),
-  ...bodySentences
-];
-
-
-// 인물 메타정보 문장 제거
-let candidateSentences = rawCandidates.filter(
-  sentence => !isPersonMetaSentence(sentence)
-);
-
-
-// 앞쪽 후보
+// 후보를 앞쪽 25개 + 가운데 10개 + 뒤쪽 10개로 추적
 const forwardCandidates = candidateSentences.slice(0, 25);
 
-
-// 중간 후보
 const middleStart = Math.max(
   0,
   Math.floor(candidateSentences.length / 2) - 5
 );
-
 const middleCandidates = candidateSentences.slice(
   middleStart,
   middleStart + 11
 );
 
+const backwardCandidates = candidateSentences.slice(-15, -4);
 
-// 뒤에서 16번째 ~ 5번째
-const backwardCandidates = candidateSentences.slice(-16, -4);
-
-
-// 후보 합치기 + 중복 제거
-const candidates = [
-  ...new Map(
-    [
-      ...forwardCandidates,
-      ...middleCandidates,
-      ...backwardCandidates
-    ].map(sentence => [sentence, sentence])
-  ).values()
-];
-
-
-// 여기서 기존 TF-IDF/점수 계산 로직으로
-// candidates 중 selectedCandidates를 결정
-
+// 중복 제거 후 원래 순서 유지
+const selectedCandidates = new Set([
+  ...forwardCandidates,
+  ...middleCandidates,
+  ...backwardCandidates
+]);
 
 candidateSentences = candidateSentences.filter(
   sentence => selectedCandidates.has(sentence)
 );
 
-
-const allSentences = [
+  const allSentences = [
   ...anchorSentences,
   ...candidateSentences
 ];
