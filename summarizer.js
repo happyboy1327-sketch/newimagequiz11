@@ -49,7 +49,6 @@ export function cleanWikiText(text) {
     .replace(/<ref\b[^>]*\/>/gi, "")
     .replace(/<blockquote\b[^>]*>[\s\S]*?<\/blockquote>/gi, "")
     .replace(/\{\{인용문\s*\|[\s\S]*?\}\}/g, "")
-    .replace(/(?<=\s|^)\d+\)\s*/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -57,10 +56,6 @@ export function cleanWikiText(text) {
 export function stripMetainfo(text) {
   if (!text) return "";
   let result = text;
-
-  // 1) 문두 찌꺼기 부호 및 `.1운동` 표기 자동 복구
-  result = result
-    .replace(/^[\s.,;:\)\>]+/, "")
 
 
   // 2) 괄호 내부 메타 정보 제거 (연도/생몰년 보존)
