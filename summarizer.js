@@ -134,8 +134,8 @@ export function splitSentences(text) {
   return text
     .replace(/\s+/g, " ")
     .trim()
-    // 숫자 소수점(1.5 등) 및 주요 영문 약어(Op., No., Dr. 등) 뒤의 마침표 분할 방지
-    .split(/(?<!\d\.)(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i)
+    // 숫자 바로 뒤 마침표(3.1 등) 및 주요 영문 약어 뒤의 마침표 분할 방지
+    .split(/(?<!\d)(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i)
     .map((s) => s.trim())
     .filter((s) => s.length > 8);
 }
