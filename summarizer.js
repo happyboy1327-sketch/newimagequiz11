@@ -59,7 +59,7 @@ export function stripMetainfo(text) {
   // 1) 문두 찌꺼기 부호 및 `.1운동` 표기 자동 복구
   result = result
     .replace(/^[\s.,;:\)\>]+/, "")
-    .replace(/(?<!\d)\.1운동/g, "3.1운동");
+
 
   // 2) 괄호 내부 메타 정보 제거 (연도/생몰년 보존)
   result = result.replace(/\(([^()]+)\)/g, (match, inner) => {
