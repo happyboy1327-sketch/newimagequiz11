@@ -187,26 +187,24 @@ function isValidSentenceStructure(sentence) {
 function isOtherSubject(sentence, docTitle) {
   if (!docTitle) return false;
 
-  // 문두 첫 주어 추출 (날짜/장소/사건 부사구 제외 후 순수 주어 파악)
-  const trimmed = sentence.replace(/^[\d\s년월일시분초계절소속기관명성명등\.,\-~가-힣]+(?:에|에서|부터|까지|에도)\s+/, "");
-  const firstSubjectMatch = trimmed.match(/^[가-힣]{2,5}(?:은|는|이|(?<!다)가)\b/);
+  // 1. 날짜/장소 부사구 및 문두 접속어(한편, 이후, 당시 등) 제거
+  const cleaned = sentence
+    .replace(/^[\d\s년월일시분초계절.,\-~가-힣]+(?:에|에서|부터|까지|에도)\s+/, "")
+    .replace(/^(?:한편|이후|당시|또한|이때|그후|이어|반면|이에)\s+/, "");
+
+  // 2. 주어 추출 (2~5자 한글 + 조사)
+  const match = cleaned.match(/^([가-힣]{2,5})(?:은|는|이|가)\b/);
+  if (!match) return false;
+
+  const subject = match[1];
   
-  if (!firstSubjectMatch) return false;
+  // 허용할 대명사 및 주체(정부/조정 등 추가)
+  const ALLOWED = ["그", "그는", "그의", "그녀", "이들은", "왕은", "황제는", "정부는", "조정은", "당국은"];
+  if (ALLOWED.includes(subject)) return false;
 
-  const subject = firstSubjectMatch[0].replace(/(?:은|는|이|가)$/, "");
-  const ALLOWED_PRONOUNS = ["그", "그는", "그의", "그녀", "그녀는", "이들은", "왕은", "황제는", "아버지는", "모친은", "조부는", "스승은", "열사는"];
-
-  if (
-    !ALLOWED_PRONOUNS.includes(subject) &&
-    !docTitle.includes(subject) &&
-    !subject.includes(docTitle.trim())
-  ) {
-    return true;
-  }
-
-  return false;
+  // 문서 제목과 불일치하면 타인 주어로 판정 (true 반환하여 제거)
+  return !docTitle.includes(subject) && !subject.includes(docTitle.trim());
 }
-
 // ==========================================================
 // 4. TF-IDF & 코사인 유사도
 // ==========================================================
