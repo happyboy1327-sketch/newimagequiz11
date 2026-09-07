@@ -439,70 +439,57 @@ if (!isFirstPart && (isOther || (!hasSubject && hasAchievement))) {
     };
   });
 
-  // --- 상위 후보 추출 (구역 균등 분산 + 근접 중복 제거) ---
 const scoredCandidates = finalCandidates.filter((item) => item.score > 0);
 const totalCount = finalCandidates.length;
-const count = extraCount;
 
 const boundary1 = Math.floor(totalCount / 3);
 const boundary2 = Math.floor((totalCount * 2) / 3);
-const zones = [[], [], []];
+
+const zones = [{ candidates: [] }, { candidates: [] }, { candidates: [] }];
 scoredCandidates.forEach(item => {
-    if (item.index < boundary1) zones[0].push(item);
-    else if (item.index < boundary2) zones[1].push(item);
-    else zones[2].push(item);
+    if (item.index < boundary1) zones[0].candidates.push(item);
+    else if (item.index < boundary2) zones[1].candidates.push(item);
+    else zones[2].candidates.push(item);
 });
 
-// 구역별 점수 내림차순 정렬 (각 구역에서 순서대로 하나씩 뽑기 위함)
-zones.forEach(zone => zone.sort((a, b) => b.score - a.score));
-
-// 문장 간 유사도(자카드 유사도)로 근접 중복 판정
-function tokenizeForSim(s) {
-    return new Set((s.match(/[가-힣a-zA-Z0-9]+/g) || []).filter(w => w.length >= 2));
-}
-function jaccardSimilarity(a, b) {
-    const setA = tokenizeForSim(a);
-    const setB = tokenizeForSim(b);
-    if (setA.size === 0 || setB.size === 0) return 0;
-    let intersection = 0;
-    for (const tok of setA) if (setB.has(tok)) intersection++;
-    return intersection / (setA.size + setB.size - intersection);
-}
-function isNearDuplicate(sentence, selectedSentences, threshold = 0.25) {
-    return selectedSentences.some(s => jaccardSimilarity(sentence, s) >= threshold);
-}
+// 가장 중요한 문장이 많은 구역 찾기
+let maxZoneIndex = 0;
+let maxCount = -1;
+zones.forEach((zone, idx) => {
+    if (zone.candidates.length > maxCount) {
+        maxCount = zone.candidates.length;
+        maxZoneIndex = idx;
+    }
+});
 
 const selected = [];
-const selectedSentences = [...anchorSentences]; // 앵커 문장도 중복 검사 대상에 포함
-const zonePointers = [0, 0, 0];
+const seen = new Set();
+const zoneLimit = count > 1 ? Math.min(Math.max(1, Math.ceil(count * 0.7)), count - 1) : count;
 
-// 구역을 순환하며 하나씩 뽑는다 (라운드 로빈) -> 자연스럽게 균등 분산
-while (selected.length < count) {
-    let addedThisRound = false;
-
-    for (let z = 0; z < 3; z++) {
-        if (selected.length >= count) break;
-
-        while (zonePointers[z] < zones[z].length) {
-            const candidate = zones[z][zonePointers[z]];
-            zonePointers[z]++;
-
-            if (isNearDuplicate(candidate.sentence, selectedSentences)) {
-                continue; // 근접 중복이면 건너뛰고 같은 구역의 다음 후보로
-            }
-
-            selected.push(candidate);
-            selectedSentences.push(candidate.sentence);
-            addedThisRound = true;
-            break;
-        }
+zones[maxZoneIndex].candidates.sort((a, b) => b.score - a.score);
+for (const item of zones[maxZoneIndex].candidates) {
+    if (!seen.has(item.sentence)) {
+        seen.add(item.sentence);
+        selected.push(item);
+        if (selected.length >= zoneLimit) break;
     }
-
-    if (!addedThisRound) break; // 모든 구역의 후보가 소진됨
 }
-  
-const ranked = selected.sort((a, b) => a.index - b.index);
 
+const remaining = [];
+zones.forEach(zone => remaining.push(...zone.candidates));
+remaining.sort((a, b) => b.score - a.score);
+
+for (const item of remaining) {
+    if (selected.length >= count) break;
+    if (!seen.has(item.sentence)) {
+        seen.add(item.sentence);
+        selected.push(item);
+    }
+}
+
+selected.sort((a, b) => a.index - b.index);
+return selected.map(item => item.sentence).join(" ");
+  
   // --- 앵커 + 추가 문장 ---
   let resultParts = [...anchorSentences];
 
