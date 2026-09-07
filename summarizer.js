@@ -58,11 +58,11 @@ export function stripMetainfo(text) {
   if (!text) return "";
   let result = text;
 
-  // 1) 문두 찌꺼기 부호 및 `.1운동` 표기 자동 복구
+  // 문두 잔여 쉼표 및 연결어 일괄 제거
   result = result
   .replace(/^[\s,;:\)\>]+|^\.(?!\d)/, "")
-  .replace(/^(?:이며|이고|이자)[\s,;:]*/, "")
-  .replace(/^[\s,;:\)\>]+/, "");
+  .replace(/^(?:이며|이고|이자|또한|그리고|한편)[\s,;:]*/, "")
+  .replace(/^[\s,;:\)\>\.\-]+/, "");
 
 
   // 2) 괄호 내부 메타 정보 제거 (연도/생몰년 보존)
