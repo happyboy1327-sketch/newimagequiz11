@@ -330,29 +330,6 @@ export function buildDescription(
   candidateSentences = bodySentences.slice(anchorCount);
 }
 
-// 후보를 앞쪽 25개 + 가운데 10개 + 뒤쪽 10개로 추적
-const forwardCandidates = candidateSentences.slice(0, 32);
-
-const middleStart = Math.max(
-  0,
-  Math.floor(candidateSentences.length / 2) - 4
-);
-const middleCandidates = candidateSentences.slice(
-  middleStart,
-  middleStart + 11
-);
-
-
-// 중복 제거 후 원래 순서 유지
-const selectedCandidates = new Set([
-  ...forwardCandidates,
-  ...middleCandidates
-]);
-
-candidateSentences = candidateSentences.filter(
-  sentence => selectedCandidates.has(sentence)
-);
-
   const allSentences = [
   ...anchorSentences,
   ...candidateSentences
