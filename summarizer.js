@@ -268,8 +268,6 @@ function cosineSimilarity(vecA, vecB) {
 }
 
 // ==========================================================
-// 5. 메인 요약 생성 엔진
-// ==========================================================
 export function buildDescription(
   introText = "",
   bodyText = "",
@@ -280,10 +278,8 @@ export function buildDescription(
   sectionTitle = "",
   docTitle = ""
 ) {
-  // aliases는 배열이 아닐 경우에도 안전하게 처리
   const safeAliases = Array.isArray(aliases) ? aliases : [];
 
-  // 캐시 키에 모든 입력값 반영
   const cacheKey = [
     introText,
     bodyText,
@@ -295,7 +291,7 @@ export function buildDescription(
     docTitle
   ].join("||");
 
-  if (cache[cacheKey]) return cache[cacheKey];
+  if (typeof cache !== "undefined" && cache[cacheKey]) return cache[cacheKey];
 
   const rawIntroSentences = splitSentences(cleanWikiText(introText));
   const rawBodySentences = splitSentences(cleanWikiText(bodyText));
@@ -313,10 +309,8 @@ export function buildDescription(
   let anchorSentences = [];
   let candidateSentences = [];
 
-  // --- 서문 앵커 문장 ---
   if (introSentences.length > 0) {
     anchorSentences = introSentences.slice(0, anchorCount);
-
     candidateSentences = [
       ...introSentences.slice(anchorCount),
       ...bodySentences
@@ -326,9 +320,7 @@ export function buildDescription(
     candidateSentences = bodySentences.slice(anchorCount);
   }
 
-  // --- 슬라이싱 탐색 범위 확대 ---
   const forwardCandidates = candidateSentences.slice(0, 50);
-
   const middleStart = Math.max(
     0,
     Math.floor(candidateSentences.length / 2) - 10
@@ -338,7 +330,6 @@ export function buildDescription(
     middleStart + 25
   );
 
-  // 중복 제거 후 원래 순서 유지
   const selectedCandidates = new Set([
     ...forwardCandidates,
     ...middleCandidates
@@ -350,11 +341,8 @@ export function buildDescription(
 
   const allSentences = [...anchorSentences, ...candidateSentences];
 
-  if (allSentences.length === 0) {
-    return "";
-  }
+  if (allSentences.length === 0) return "";
 
-  // --- TF-IDF 계산 ---
   const sentenceTokensList = allSentences.map((s) => tokenize(s));
   const idfDict = computeIDF(sentenceTokensList);
 
@@ -362,16 +350,11 @@ export function buildDescription(
   const docTF = computeTF(docTokens);
   const docVector = computeTFIDF(docTF, idfDict);
 
-  // --- 후보 문장 스코어링 ---
   const finalCandidates = candidateSentences.map((sentence, index) => {
     const isFirstPart = index === 0 && anchorSentences.length < 2;
 
     if (!isValidSentenceStructure(sentence)) {
-      return {
-        sentence,
-        score: 0,
-        index
-      };
+      return { sentence, score: 0, index };
     }
 
     const isOther = isOtherSubject(sentence, docTitle);
@@ -389,14 +372,12 @@ export function buildDescription(
       return { sentence, score: 0, index };
     }
 
-    // TF-IDF 코사인 유사도
     const tokens = tokenize(sentence);
     const sentenceTF = computeTF(tokens);
     const sentenceVector = computeTFIDF(sentenceTF, idfDict);
 
     const similarityScore = cosineSimilarity(sentenceVector, docVector);
 
-    // 위치 감점 완화 (0.03 -> 0.005)
     let score = similarityScore * (1.0 / (1 + index * 0.005));
 
     const keywordMatches = sentence.match(CORE_SIGNIFICANCE_REGEX);
@@ -420,9 +401,7 @@ export function buildDescription(
       safeAliases.length > 0 &&
       safeAliases.some((alias) => {
         if (!alias) return false;
-
         const normalizedAlias = String(alias).trim().toLowerCase();
-
         return (
           normalizedAlias &&
           sentence.toLowerCase().includes(normalizedAlias)
@@ -432,59 +411,41 @@ export function buildDescription(
       score *= 1.15;
     }
 
-    return {
-      sentence,
-      score,
-      index
-    };
+    return { sentence, score, index };
   });
 
-  // --- 상위 후보 추출 ---
-  const scoredCandidates = finalCandidates.filter((item) => item.score > 0);
-  const totalCount = finalCandidates.length;
-  const count = extraCount; // [에러 해결 1] count 변수 선언
+  // --- 상위 후보 추출 (변수명 및 구역 로직 수정) ---
+  const totalSentences = candidateSentences.length;
+  const b1 = Math.floor(totalSentences / 3);
+  const b2 = Math.floor((totalSentences * 2) / 3);
 
-  const boundary1 = Math.floor(totalCount / 3);
-  const boundary2 = Math.floor((totalCount * 2) / 3);
-
-  const zones = [{ candidates: [] }, { candidates: [] }, { candidates: [] }];
-  scoredCandidates.forEach((item) => {
-    if (item.index < boundary1) zones[0].candidates.push(item);
-    else if (item.index < boundary2) zones[1].candidates.push(item);
-    else zones[2].candidates.push(item);
-  });
-
-  // 가장 중요한 문장이 많은 구역 찾기
-  let maxZoneIndex = 0;
-  let maxCount = -1;
-  zones.forEach((zone, idx) => {
-    if (zone.candidates.length > maxCount) {
-      maxCount = zone.candidates.length;
-      maxZoneIndex = idx;
-    }
+  const zones = [[], [], []];
+  finalCandidates.forEach((item) => {
+    if (item.index < b1) zones[0].push(item);
+    else if (item.index < b2) zones[1].push(item);
+    else zones[2].push(item);
   });
 
   const selected = [];
   const seen = new Set();
-  const zoneLimit =
-    count > 1 ? Math.min(Math.max(1, Math.ceil(count * 0.7)), count - 1) : count;
 
-  zones[maxZoneIndex].candidates.sort((a, b) => b.score - a.score);
-  for (const item of zones[maxZoneIndex].candidates) {
-    if (!seen.has(item.sentence)) {
-      seen.add(item.sentence);
-      selected.push(item);
-      if (selected.length >= zoneLimit) break;
+  zones.forEach((zone) => {
+    if (zone.length === 0) return;
+    zone.sort((a, b) => b.score - a.score);
+    const top = zone[0];
+    if (!seen.has(top.sentence)) {
+      seen.add(top.sentence);
+      selected.push(top);
     }
-  }
+  });
 
-  const remaining = [];
-  zones.forEach((zone) => remaining.push(...zone.candidates));
-  remaining.sort((a, b) => b.score - a.score);
+  if (selected.length < extraCount) {
+    const remaining = finalCandidates
+      .filter((item) => !seen.has(item.sentence))
+      .sort((a, b) => b.score - a.score);
 
-  for (const item of remaining) {
-    if (selected.length >= count) break;
-    if (!seen.has(item.sentence)) {
+    for (const item of remaining) {
+      if (selected.length >= extraCount) break;
       seen.add(item.sentence);
       selected.push(item);
     }
@@ -492,40 +453,23 @@ export function buildDescription(
 
   selected.sort((a, b) => a.index - b.index);
 
-  // --- 앵커 + 추가 문장 병합 --- [에러 해결 2] 조기 return 제거 및 selected 적용
-  let resultParts = [...anchorSentences];
+  const extraText = selected.map((item) => item.sentence).join(" ");
+  const merged = [...anchorSentences, extraText].filter(Boolean).join(" ").trim();
 
-  for (const item of selected) {
-    if (!resultParts.includes(item.sentence)) {
-      resultParts.push(item.sentence);
-    }
+  // 글자 수 제한 적용
+  let finalResult = merged;
+  if (maxLength > 0 && finalResult.length > maxLength) {
+    const sliced = finalResult.slice(0, maxLength);
+    const lastPeriod = sliced.lastIndexOf(".");
+    finalResult = lastPeriod > 0 ? sliced.slice(0, lastPeriod + 1).trim() : sliced.trim();
   }
 
-  // --- 최대 글자 수 제한 ---
-  let result = resultParts.join(" ").trim();
-
-  if (result.length > maxLength) {
-    let limitedParts = [];
-
-    for (const part of resultParts) {
-      const candidate = [...limitedParts, part].join(" ").trim();
-
-      if (candidate.length <= maxLength) {
-        limitedParts.push(part);
-      } else {
-        break;
-      }
-    }
-
-    result = limitedParts.join(" ").trim();
-
-    if (!result && resultParts.length > 0) {
-      result = resultParts[0].slice(0, maxLength).trim();
-    }
+  // 캐시 저장
+  if (typeof cache !== "undefined") {
+    cache[cacheKey] = finalResult;
   }
 
-  cache[cacheKey] = result;
-  return result;
+  return finalResult;
 }
 
 export function summarizeText(text, topN = 3, docTitle = "") {
