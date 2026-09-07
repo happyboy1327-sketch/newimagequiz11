@@ -295,6 +295,9 @@ export function buildDescription(
 
   const rawIntroSentences = splitSentences(cleanWikiText(introText));
   const rawBodySentences = splitSentences(cleanWikiText(bodyText));
+  const parsedIntroParagraphs = extractAnnotatedParagraphs(introText);
+  const parsedBodyParagraphs = extractAnnotatedParagraphs(bodyText);
+
 
   const introSentences = rawIntroSentences
     .map((s, i) => (i === 0 ? s : stripMetainfo(s)))
