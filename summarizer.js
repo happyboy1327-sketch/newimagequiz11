@@ -386,11 +386,11 @@ export function buildDescription(
     }
 
     if (ACHIEVEMENT_VERB_REGEX.test(sentence)) {
-      score *= 1.5;
+      score *= 2.2;
     }
 
     if (ACADEMIC_CONCEPT_REGEX.test(sentence)) {
-      score *= 1.4;
+      score *= 1.6;
     }
 
     if (bookTitles.some(title => sentence.includes(title))) {
