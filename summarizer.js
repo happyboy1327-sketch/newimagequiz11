@@ -338,24 +338,6 @@ export function buildDescription(
     candidateSentences = bodySentences.slice(anchorCount);
   }
 
-  const forwardCandidates = candidateSentences.slice(0, 50);
-  const middleStart = Math.max(
-    0,
-    Math.floor(candidateSentences.length / 2) - 10
-  );
-  const middleCandidates = candidateSentences.slice(
-    middleStart,
-    middleStart + 25
-  );
-
-  const selectedCandidates = new Set([
-    ...forwardCandidates,
-    ...middleCandidates
-  ]);
-
-  candidateSentences = candidateSentences.filter((sentence) =>
-    selectedCandidates.has(sentence)
-  );
 
   const allSentences = [...anchorSentences, ...candidateSentences];
 
