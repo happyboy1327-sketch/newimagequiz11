@@ -337,11 +337,11 @@ export function buildDescription(
 }
 
 // 후보를 앞쪽 25개 + 가운데 10개 + 뒤쪽 10개로 추적
-const forwardCandidates = candidateSentences.slice(0, 25);
+const forwardCandidates = candidateSentences.slice(0, 32);
 
 const middleStart = Math.max(
   0,
-  Math.floor(candidateSentences.length / 2) - 5
+  Math.floor(candidateSentences.length / 2) - 4
 );
 const middleCandidates = candidateSentences.slice(
   middleStart,
