@@ -499,7 +499,7 @@ const selected = [];
 const selectedSentences = [...anchorSentences]; // 앵커 문장도 중복 검사 대상에 포함
 const zonePointers = [0, 0, 0];
 
-const zoneVisitOrder = [0, 0, 1, 2];
+const zoneVisitOrder = [0, 0, 1, 1, 2];
 // 구역을 순환하며 하나씩 뽑는다 (라운드 로빈) -> 자연스럽게 균등 분산
 while (selected.length < count) {
     let addedThisRound = false;
