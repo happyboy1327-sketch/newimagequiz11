@@ -32,6 +32,8 @@ const ACADEMIC_CONCEPT_REGEX = /[가-힣]{2,}(?:설|론|주의|학|법)\b/;
 
 const CORE_SIGNIFICANCE_REGEX = new RegExp(CORE_SIGNIFICANCE_KEYWORDS.join("|"), "g");
 
+const RE_SENTENCE_SPLIT = /(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<!\d\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i;
+
 // ==========================================================
 // 2. 위키 원문 정제 & 문장 보정
 // ==========================================================
@@ -136,6 +138,39 @@ export function splitSentences(text) {
     .split(/(?<!\d\.)(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i)
     .map((s) => s.trim())
     .filter((s) => s.length > 8);
+}
+
+export function extractAnnotatedParagraphs(rawText) {
+  if (!rawText) return [];
+
+  const cleanedGlobalText = cleanWikiText(rawText);
+  const paragraphs = cleanedGlobalText.split(/\n+|\n?==+[^=]+==+\n?/).filter(p => p.trim());
+  const structuredParagraphs = [];
+
+  for (const p of paragraphs) {
+    const rawSentences = p.split(RE_SENTENCE_SPLIT).map(s => s.trim()).filter(Boolean);
+    const parsedSentences = [];
+
+    for (let raw of rawSentences) {
+      raw = raw.replace(/^(\d+년\s*\d+월\s*\d+일)\s*:\s*/, "$1 ").replace(/^[·\s]+/, "");
+
+      const hasBold = /'''|<b>|<strong>/.test(raw);
+      const hasLink = /\[\[/.test(raw);
+
+      const cleaned = stripMetainfo(raw);
+      const validWordCount = (cleaned.match(/[가-힣A-Za-z0-9]{2,}/g) || []).length;
+
+      if (cleaned && validWordCount >= 2) {
+        parsedSentences.push({ raw, cleaned, hasBold, hasLink });
+      }
+    }
+
+    if (parsedSentences.length > 0) {
+      structuredParagraphs.push(parsedSentences);
+    }
+  }
+
+  return structuredParagraphs;
 }
 
 function isValidSentenceStructure(sentence) {
