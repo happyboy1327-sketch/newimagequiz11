@@ -270,8 +270,6 @@ function cosineSimilarity(vecA, vecB) {
 // ==========================================================
 // 5. 메인 요약 생성 엔진
 // ==========================================================
-
-
 export function buildDescription(
   introText = "",
   bodyText = "",
@@ -301,13 +299,11 @@ export function buildDescription(
 
   const rawIntroSentences = splitSentences(cleanWikiText(introText));
   const rawBodySentences = splitSentences(cleanWikiText(bodyText));
-  const parsedIntroParagraphs = extractAnnotatedParagraphs(introText);
-  const parsedBodyParagraphs = extractAnnotatedParagraphs(bodyText);
 
   const introSentences = rawIntroSentences
-  .map((s, i) => i === 0 ? s : stripMetainfo(s))
-  .filter(Boolean)
-  .filter((s) => !BAD_WIKI_SENTENCE_REGEX.test(s));
+    .map((s, i) => (i === 0 ? s : stripMetainfo(s)))
+    .filter(Boolean)
+    .filter((s) => !BAD_WIKI_SENTENCE_REGEX.test(s));
 
   const bodySentences = rawBodySentences
     .map((s) => stripMetainfo(s))
@@ -319,25 +315,44 @@ export function buildDescription(
 
   // --- 서문 앵커 문장 ---
   if (introSentences.length > 0) {
-  anchorSentences = introSentences.slice(0, anchorCount);
+    anchorSentences = introSentences.slice(0, anchorCount);
 
-  candidateSentences = [
-    ...introSentences.slice(anchorCount),
-    ...bodySentences
-  ];
-} else {
-  anchorSentences = bodySentences.slice(0, anchorCount);
-  candidateSentences = bodySentences.slice(anchorCount);
-}
+    candidateSentences = [
+      ...introSentences.slice(anchorCount),
+      ...bodySentences
+    ];
+  } else {
+    anchorSentences = bodySentences.slice(0, anchorCount);
+    candidateSentences = bodySentences.slice(anchorCount);
+  }
 
-  const allSentences = [
-  ...anchorSentences,
-  ...candidateSentences
-];
+  // --- 슬라이싱 탐색 범위 확대 ---
+  const forwardCandidates = candidateSentences.slice(0, 50);
 
-if (allSentences.length === 0) {
-  return "";
-}
+  const middleStart = Math.max(
+    0,
+    Math.floor(candidateSentences.length / 2) - 10
+  );
+  const middleCandidates = candidateSentences.slice(
+    middleStart,
+    middleStart + 25
+  );
+
+  // 중복 제거 후 원래 순서 유지
+  const selectedCandidates = new Set([
+    ...forwardCandidates,
+    ...middleCandidates
+  ]);
+
+  candidateSentences = candidateSentences.filter((sentence) =>
+    selectedCandidates.has(sentence)
+  );
+
+  const allSentences = [...anchorSentences, ...candidateSentences];
+
+  if (allSentences.length === 0) {
+    return "";
+  }
 
   // --- TF-IDF 계산 ---
   const sentenceTokensList = allSentences.map((s) => tokenize(s));
@@ -349,9 +364,7 @@ if (allSentences.length === 0) {
 
   // --- 후보 문장 스코어링 ---
   const finalCandidates = candidateSentences.map((sentence, index) => {
-    // 구조적으로 문제가 있는 문장은 제외
-    const isFirstPart =
-      index === 0 && anchorSentences.length < 2;
+    const isFirstPart = index === 0 && anchorSentences.length < 2;
 
     if (!isValidSentenceStructure(sentence)) {
       return {
@@ -361,67 +374,54 @@ if (allSentences.length === 0) {
       };
     }
 
-    // candidateSentences 스코어링 루프 내부
+    const isOther = isOtherSubject(sentence, docTitle);
+    const hasAchievement =
+      ACHIEVEMENT_VERB_REGEX.test(sentence) ||
+      CORE_SIGNIFICANCE_REGEX.test(sentence);
 
-const isOther = isOtherSubject(sentence, docTitle);
-const hasAchievement = ACHIEVEMENT_VERB_REGEX.test(sentence) || CORE_SIGNIFICANCE_REGEX.test(sentence);
+    const cleaned = sentence.replace(
+      /^(?:\d{1,4}년(?:\s*\d{1,2}월)?(?:\s*\d{1,2}일)?|당시|이후|한편|또한|이에|이때)\s*/,
+      ""
+    );
+    const hasSubject = /^([가-힣]{2,5})(?:은|는|이|가)\b/.test(cleaned);
 
-// 문두 접속어/날짜 제거 후 주어 유무 확인
-const cleaned = sentence.replace(/^(?:\d{1,4}년(?:\s*\d{1,2}월)?(?:\s*\d{1,2}일)?|당시|이후|한편|또한|이에|이때)\s*/, "");
-const hasSubject = /^([가-힣]{2,5})(?:은|는|이|가)\b/.test(cleaned);
-
-// 타인 주어이거나(isOther) OR 주어 없는데 업적만 있는 경우(!hasSubject && hasAchievement) 탈락
-if (!isFirstPart && (isOther || (!hasSubject && hasAchievement))) {
-  return { sentence, score: 0, index };
-}
+    if (!isFirstPart && (isOther || (!hasSubject && hasAchievement))) {
+      return { sentence, score: 0, index };
+    }
 
     // TF-IDF 코사인 유사도
     const tokens = tokenize(sentence);
     const sentenceTF = computeTF(tokens);
-    const sentenceVector = computeTFIDF(
-      sentenceTF,
-      idfDict
-    );
+    const sentenceVector = computeTFIDF(sentenceTF, idfDict);
 
-    const similarityScore = cosineSimilarity(
-      sentenceVector,
-      docVector
-    );
+    const similarityScore = cosineSimilarity(sentenceVector, docVector);
 
-    // 기본 점수 + 위치 감점
-    let score =
-      similarityScore *
-      (1.0 / (1 + index * 0.005));
-    
+    // 위치 감점 완화 (0.03 -> 0.005)
+    let score = similarityScore * (1.0 / (1 + index * 0.005));
+
     const keywordMatches = sentence.match(CORE_SIGNIFICANCE_REGEX);
     if (keywordMatches) {
       score += keywordMatches.length * 0.75;
     }
 
-    // 업적/활동 관련 문장 가산점
     if (ACHIEVEMENT_VERB_REGEX.test(sentence)) {
       score *= 1.5;
     }
 
-    // 학술/개념 관련 문장 가산점
     if (ACADEMIC_CONCEPT_REGEX.test(sentence)) {
       score *= 1.4;
     }
 
-    // 주요 역사적 사건 관련 문장 가산점
     if (MAJOR_HISTORICAL_EVENT_REGEX.test(sentence)) {
       score *= 1.4;
     }
 
-    // aliases에 포함된 인물이 등장하면 약간의 가산점
     if (
       safeAliases.length > 0 &&
       safeAliases.some((alias) => {
         if (!alias) return false;
 
-        const normalizedAlias = String(alias)
-          .trim()
-          .toLowerCase();
+        const normalizedAlias = String(alias).trim().toLowerCase();
 
         return (
           normalizedAlias &&
@@ -439,69 +439,67 @@ if (!isFirstPart && (isOther || (!hasSubject && hasAchievement))) {
     };
   });
 
-const scoredCandidates = finalCandidates.filter((item) => item.score > 0);
-const totalCount = finalCandidates.length;
+  // --- 상위 후보 추출 ---
+  const scoredCandidates = finalCandidates.filter((item) => item.score > 0);
+  const totalCount = finalCandidates.length;
+  const count = extraCount; // [에러 해결 1] count 변수 선언
 
-const boundary1 = Math.floor(totalCount / 3);
-const boundary2 = Math.floor((totalCount * 2) / 3);
+  const boundary1 = Math.floor(totalCount / 3);
+  const boundary2 = Math.floor((totalCount * 2) / 3);
 
-const zones = [{ candidates: [] }, { candidates: [] }, { candidates: [] }];
-scoredCandidates.forEach(item => {
+  const zones = [{ candidates: [] }, { candidates: [] }, { candidates: [] }];
+  scoredCandidates.forEach((item) => {
     if (item.index < boundary1) zones[0].candidates.push(item);
     else if (item.index < boundary2) zones[1].candidates.push(item);
     else zones[2].candidates.push(item);
-});
+  });
 
-// 가장 중요한 문장이 많은 구역 찾기
-let maxZoneIndex = 0;
-let maxCount = -1;
-zones.forEach((zone, idx) => {
+  // 가장 중요한 문장이 많은 구역 찾기
+  let maxZoneIndex = 0;
+  let maxCount = -1;
+  zones.forEach((zone, idx) => {
     if (zone.candidates.length > maxCount) {
-        maxCount = zone.candidates.length;
-        maxZoneIndex = idx;
+      maxCount = zone.candidates.length;
+      maxZoneIndex = idx;
     }
-});
+  });
 
-const selected = [];
-const seen = new Set();
-const zoneLimit = count > 1 ? Math.min(Math.max(1, Math.ceil(count * 0.7)), count - 1) : count;
+  const selected = [];
+  const seen = new Set();
+  const zoneLimit =
+    count > 1 ? Math.min(Math.max(1, Math.ceil(count * 0.7)), count - 1) : count;
 
-zones[maxZoneIndex].candidates.sort((a, b) => b.score - a.score);
-for (const item of zones[maxZoneIndex].candidates) {
+  zones[maxZoneIndex].candidates.sort((a, b) => b.score - a.score);
+  for (const item of zones[maxZoneIndex].candidates) {
     if (!seen.has(item.sentence)) {
-        seen.add(item.sentence);
-        selected.push(item);
-        if (selected.length >= zoneLimit) break;
+      seen.add(item.sentence);
+      selected.push(item);
+      if (selected.length >= zoneLimit) break;
     }
-}
+  }
 
-const remaining = [];
-zones.forEach(zone => remaining.push(...zone.candidates));
-remaining.sort((a, b) => b.score - a.score);
+  const remaining = [];
+  zones.forEach((zone) => remaining.push(...zone.candidates));
+  remaining.sort((a, b) => b.score - a.score);
 
-for (const item of remaining) {
+  for (const item of remaining) {
     if (selected.length >= count) break;
     if (!seen.has(item.sentence)) {
-        seen.add(item.sentence);
-        selected.push(item);
+      seen.add(item.sentence);
+      selected.push(item);
     }
-}
+  }
 
-selected.sort((a, b) => a.index - b.index);
-return selected.map(item => item.sentence).join(" ");
-  
-  // --- 앵커 + 추가 문장 ---
+  selected.sort((a, b) => a.index - b.index);
+
+  // --- 앵커 + 추가 문장 병합 --- [에러 해결 2] 조기 return 제거 및 selected 적용
   let resultParts = [...anchorSentences];
 
-  for (const item of ranked) {
+  for (const item of selected) {
     if (!resultParts.includes(item.sentence)) {
       resultParts.push(item.sentence);
     }
   }
-
-  // --- sectionTitle은 내용 자체에 중복 삽입하지 않고
-  // 문장 선택 단계에서 사용할 수 있도록 입력값으로만 유지 ---
-  // docTitle 역시 isOtherSubject() 판정에 사용됨.
 
   // --- 최대 글자 수 제한 ---
   let result = resultParts.join(" ").trim();
@@ -510,9 +508,7 @@ return selected.map(item => item.sentence).join(" ");
     let limitedParts = [];
 
     for (const part of resultParts) {
-      const candidate = [...limitedParts, part]
-        .join(" ")
-        .trim();
+      const candidate = [...limitedParts, part].join(" ").trim();
 
       if (candidate.length <= maxLength) {
         limitedParts.push(part);
@@ -523,18 +519,14 @@ return selected.map(item => item.sentence).join(" ");
 
     result = limitedParts.join(" ").trim();
 
-    // 첫 문장 하나 자체가 maxLength를 초과하는 경우
     if (!result && resultParts.length > 0) {
-      result = resultParts[0]
-        .slice(0, maxLength)
-        .trim();
+      result = resultParts[0].slice(0, maxLength).trim();
     }
   }
 
   cache[cacheKey] = result;
   return result;
 }
-
 
 export function summarizeText(text, topN = 3, docTitle = "") {
   return {
