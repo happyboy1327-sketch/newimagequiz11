@@ -30,6 +30,8 @@ const ACHIEVEMENT_VERB_REGEX = /(?:저술|집필|설계|고안|집대성|제시|
 const MAJOR_HISTORICAL_EVENT_REGEX = /(?:[가-힣]{2,3}[란난]|해전|대첩|승첩|전투|의거|혁명|박해|정변|운동)/;
 const ACADEMIC_CONCEPT_REGEX = /[가-힣]{2,}(?:설|론|주의|학|법)\b/;
 
+const TMI_NOISE_REGEX = /(?:부친|모친|조부|증조부|고조부|외가|오대손녀|첫\s*부인|둘째\s*부인|가계도|손자|처남|장인|결혼|이혼|혼인|재혼|파혼|배우자|남편|아내|며느리|사위|처가|딸|아들|시댁|장남|차남|장녀|차녀|외아들|외딸|\d남|\d녀|가정교사|야학|위인전|그림위인전기|계몽사|출판사|소설가|에\s*따르면|에\s*의하면|족보|족보소|\d+대조|입향시조|후사|종친|문중|항렬)/;
+
 const CORE_SIGNIFICANCE_REGEX = new RegExp(CORE_SIGNIFICANCE_KEYWORDS.join("|"), "g");
 
 const RE_SENTENCE_SPLIT = /(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<!\d\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i;
@@ -359,7 +361,11 @@ export function buildDescription(
     if (!isValidSentenceStructure(sentence)) {
       return { sentence, score: 0, index };
     }
-
+    
+    if (TMI_NOISE_REGEX.test(sentence)) {
+      return { sentence, score: 0, index };
+    }
+                                                 
     const isOther = isOtherSubject(sentence, docTitle);
     const hasAchievement =
       ACHIEVEMENT_VERB_REGEX.test(sentence) ||
