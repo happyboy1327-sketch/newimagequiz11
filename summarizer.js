@@ -418,7 +418,7 @@ if (!isFirstPart && (isOther || (!hasSubject && hasAchievement))) {
     // 기본 점수 + 위치 감점
     let score =
       similarityScore *
-      (1.0 / (1 + index * 0.05));
+      (1.0 / (1 + index * 0.03));
     
     const keywordMatches = sentence.match(CORE_SIGNIFICANCE_REGEX);
     if (keywordMatches) {
