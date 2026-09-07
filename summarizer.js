@@ -278,7 +278,7 @@ export function buildDescription(
   aliases = [],
   extraCount = 3,
   anchorCount = 3,
-  maxLength = 660,
+  maxLength = 750,
   sectionTitle = "",
   docTitle = ""
 ) {
@@ -552,7 +552,7 @@ const ranked = selected.sort((a, b) => a.index - b.index);
 
 export function summarizeText(text, topN = 3, docTitle = "") {
   return {
-    summary: buildDescription(text, "", [], topN - 1, 2, 660, "", docTitle),
+    summary: buildDescription(text, "", [], topN - 1, 2, 750, "", docTitle),
     sentenceCount: splitSentences(text).length,
     usedSentences: topN,
   };
