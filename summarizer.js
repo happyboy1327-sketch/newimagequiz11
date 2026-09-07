@@ -1,654 +1,247 @@
 // summarizer.js
 
-const cache = Object.create(null);
+const cache = {};
 
 // ==========================================================
-// 1. 범용 노이즈 / 중요도 규칙
+// 1. 범용 노이즈 규칙 Engine (Hard Guardrail)
 // ==========================================================
 
 const UNIVERSAL_NOISE_RULES = [
-  /(?:필명|아호|별호|아명|태명|세례명|법명|묘호)\s*(?:은|는|이|가|으로|로)?\s*[^.!?]{0,80}(?:이다|있다|있었다|전해진다)/,
-  /(?:검열을 피하기|지면을 채우기|지면을 채워|자세한 내용은|참조하십시오|출처 필요|보완 필요)/,
-  /(?:추측해 본다|추측된다|명확히 기술되지|알 수 없다|여담으로|설이 있다|설도 있다)/,
-  /(?:웨이백\s*머신|보관됨|문서의 출처|편집 이력)/,
-  /(?:순위|잡지|월간지|주간지).{0,30}(?:차지했다|게재됐다|실렸다)/
+  /(?:며|는데|으나|하고|(?<!이)고|고|지만|면서|이며|이자)이다\.?$/,
+  /(?:은|는|을|를|에|의|와|과|(?<!으)로|으로|에서)\s*이다\.?$/,
+  /(?:필명|아호|별호|아명|따왔다는|설도 있|설이 있|검열을 피하기|지면을 채워|자세한 내용은|참조하십시오|출처 필요|차지했다|순위|잡지|지면|월간지)/,
+  /(?:추측해 본다|추측된다|명확히 기술되지|알 수 없다|여담으로|설이 있다)/
 ];
 
 const BAD_WIKI_SENTENCE_REGEX =
   /\d{4}-\d{1,2}-\d{1,2}|웨이백\s*머신|보관됨|\d{4}년\s*\d{1,2}월\s*\d{1,2}일자\s*기사/;
 
 const CORE_SIGNIFICANCE_KEYWORDS = [
-  "원리", "구조", "기능", "작용", "현상", "이론",
-  "연구", "발견", "발명", "규명", "증명", "분석",
-  "기반", "시스템", "메커니즘", "특징", "성질",
-  "분류", "상태", "상호작용", "개척",
-  "제도", "정책", "사회", "경제", "체계", "관계",
-  "변화", "전개", "성장", "효과", "원인", "결과",
-  "분포", "개혁", "조약", "협정", "시장",
-  "통일", "통합", "양식", "사상", "문화", "작품",
-  "기법", "전통", "유형", "형성", "창작", "유산",
-  "대표", "영향", "의의", "기여", "발전", "역사",
-  "중심", "주요", "핵심", "지정", "설립", "주도",
-  "구성", "기록", "도입", "확립",
-  "공격", "격퇴", "정벌", "함락"
+  "원리", "구조", "기능", "작용", "현상", "이론", "연구", "발견", "발명", "규명", "증명", 
+  "분석", "기반", "시스템", "메커니즘", "특징", "성질", "분류", "상태", "상호작용", "개척",
+  "제도", "정책", "사회", "경제", "체계", "관계", "변화", "전개", "성장", "효과", 
+  "원인", "결과", "분포", "개혁", "조약", "협정", "시장", "구조적", "통일", "통합", "정합", 
+  "양식", "사상", "문화", "작품", "기법", "전통", "유형", "형성", "창작", "유산", "완화", 
+  "대표", "영향", "의의", "기여", "발전", "역사", "중심", "주요", "핵심", "주요한",
+  "지정", "설립", "주도", "구성", "기록", "도입", "확립", "공격", "격퇴", "정벌", "함락"
 ];
 
-const ACHIEVEMENT_VERB_REGEX =
-  /(?:저술|집필|설계|고안|집대성|제시|편찬|주창|발명|창안|개혁|건축|축조|간행|통찰|창작|창시|정리|도입|확립|반영|기여|주도|설립|격퇴|정벌|연구|지휘|승리|격파|격침|건조|수호|통제|구원|평정|혁신|창설|발견)/;
+const ACHIEVEMENT_VERB_REGEX = /(?:저술|집필|설계|고안|집대성|제시|편찬|주창|발명|창안|개혁|건축|축조|간행|통찰|창작|창시|정리|도입|확립|반영|기여|주도|설립|격퇴|정벌|연구|지휘|승리|격파|격침|건조|수호|통제|구원|평정|혁신|창설|발견)/;
+const MAJOR_HISTORICAL_EVENT_REGEX = /(?:[가-힣]{2,3}[란난]|해전|대첩|승첩|전투|의거|혁명|박해|정변|운동)/;
+const ACADEMIC_CONCEPT_REGEX = /[가-힣]{2,}(?:설|론|주의|학|법)\b/;
 
-const MAJOR_HISTORICAL_EVENT_REGEX =
-  /(?:[가-힣]{2,4}(?:란|난)|해전|대첩|승첩|전투|의거|혁명|박해|정변|운동)/;
-
-const ACADEMIC_CONCEPT_REGEX =
-  /[가-힣]{2,}(?:설|론|주의|학|법)(?![가-힣])/;
-
-const CORE_SIGNIFICANCE_REGEX =
-  new RegExp(CORE_SIGNIFICANCE_KEYWORDS.join("|"), "g");
-
+const CORE_SIGNIFICANCE_REGEX = new RegExp(CORE_SIGNIFICANCE_KEYWORDS.join("|"), "g");
 
 // ==========================================================
-// 2. 위키 원문 정제
+// 2. 위키 원문 정제 & 문장 보정
 // ==========================================================
 
 export function cleanWikiText(text) {
   if (!text) return "";
-
-  let result = String(text);
-
-  // ref / blockquote는 일반 HTML 태그 제거보다 먼저 제거해야
-  // 내부 출처 문장이 살아남지 않는다.
-  result = result
+  return text
+    .replace(/<rt[^>]*>[\s\S]*?<\/rt>/gi, "")
+    .replace(/<rp[^>]*>[\s\S]*?<\/rp>/gi, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\[\d+\]|\[(?:각주|출처\s*필요|편집|주석)\]/g, "")
     .replace(/<ref\b[^>]*>[\s\S]*?<\/ref>/gi, "")
     .replace(/<ref\b[^>]*\/>/gi, "")
     .replace(/<blockquote\b[^>]*>[\s\S]*?<\/blockquote>/gi, "")
-    .replace(/\{\{인용문\s*\|[\s\S]*?\}\}/gi, "");
-
-  // ruby 태그
-  result = result
-    .replace(/<rt[^>]*>[\s\S]*?<\/rt>/gi, "")
-    .replace(/<rp[^>]*>[\s\S]*?<\/rp>/gi, "");
-
-  // 남은 HTML 태그
-  result = result.replace(/<[^>]+>/g, "");
-
-  // 각주
-  result = result
-    .replace(/\[\d+\]/g, "")
-    .replace(/\[(?:각주|출처\s*필요|편집|주석)\]/gi, "");
-
-  // 기본적인 위키 링크 정리
-  // [[문서명|표시명]] -> 표시명
-  // [[문서명]] -> 문서명
-  result = result
-    .replace(/\[\[([^|\]]+)\|([^\]]+)\]\]/g, "$2")
-    .replace(/\[\[([^\]]+)\]\]/g, "$1");
-
-  // 외부 링크
-  result = result.replace(
-    /\[https?:\/\/[^\s\]]+\s+([^\]]+)\]/g,
-    "$1"
-  );
-
-  // 숫자 목록 찌꺼기
-  result = result.replace(/(?<=\s|^)\d+\)\s*/g, "");
-
-  // 공백
-  result = result
+    .replace(/\{\{인용문\s*\|[\s\S]*?\}\}/g, "")
+    .replace(/(?<=\s|^)\d+\)\s*/g, "")
     .replace(/\s+/g, " ")
     .trim();
-
-  return result;
 }
-
-
-// ==========================================================
-// 3. 메타 정보 제거 + 문장 무결성 보정
-// ==========================================================
 
 export function stripMetainfo(text) {
   if (!text) return "";
+  let result = text;
 
-  let result = String(text)
-    .replace(/^[\s.,;:)>]+/, "")
-    .replace(/(?<!\d)\.1운동/g, "3.1운동")
-    .replace(/\s+/g, " ")
-    .trim();
+  // 1) 문두 찌꺼기 부호 및 `.1운동` 표기 자동 복구
+  result = result
+    .replace(/^[\s.,;:\)\>]+/, "")
+    .replace(/(?<!\d)\.1운동/g, "3.1운동");
 
-  // --------------------------------------------------------
-  // 괄호 처리
-  // 생몰년/연도 정보는 보존
-  // 인물 메타정보는 제거
-  // 나머지는 보존
-  // --------------------------------------------------------
-
-  result = result.replace(/\(([^()]*)\)/g, (match, inner) => {
-    const value = inner.trim();
-
-    if (/(?:\d{3,4}년|~|음력)/.test(value)) {
-      return `(${value.replace(/^\s*,\s*/, "")})`;
+  // 2) 괄호 내부 메타 정보 제거 (연도/생몰년 보존)
+  result = result.replace(/\(([^()]+)\)/g, (match, inner) => {
+    if (/(?:\d{3,4}년|~|음력)/.test(inner)) {
+      return `(${inner.replace(/^\s*,\s*/, "").trim()})`;
     }
-
-    if (
-      /(?:본관|시호|아호|별호|아명|태명|세례명|일명|법명|묘호|부친|모친|조부|출처)/.test(
-        value
-      )
-    ) {
+    if (/(?:본관|시호|아호|별호|아명|태명|세례명|일명|법명|묘호|호|자|부친|모친|조부|출처)/.test(inner)) {
       return "";
     }
-
     return match;
   });
 
   result = result
     .replace(/,\s*\(\s*\)/g, "")
     .replace(/\(\s*\)/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+    .replace(/\(\s*,\s*/g, "(");
 
-  // --------------------------------------------------------
-  // 문두 메타정보
-  // 너무 공격적으로 문장 전체를 삭제하지 않도록 제한
-  // --------------------------------------------------------
-
+  // 3) 범용 메타 서술절 제거
   result = result
-    .replace(
-      /^(?:본관|시호|아호|별호|아명|태명|세례명|일명|법명|묘호)\s*[:=]\s*[^.!?]{1,80}[.!?]\s*/g,
-      ""
-    )
-    .trim();
+    .replace(/(?<![가-힣])(?:자|호|본관|시호|아호|별호|태명|세례명|일명|아명)\b.*?(?:있다|있었다|전해진다)\.?/g, "")
+    .replace(/(?<![가-힣])(?:본관|시호|아호|별호|아명|법명|태명|세례명|일명|묘호|호|자)\s*[:=는은이]\s*[^,;.\n]+/g, "");
 
-  // --------------------------------------------------------
-  // 문장 끝이 명백한 연결어미로 끝나는 경우만 안전하게 보정
-  //
-  // 중요:
-  // 일반적인 조사(은/는/을/를/이/가)를 무조건 "이다."로
-  // 바꾸지 않는다.
-  // --------------------------------------------------------
-
+  // 4) 불완전 어미 및 단절 조사 서술어 전환
   result = result
-    .replace(
-      /(?:했으며|하였으며|했으나|하였으나|했고|하였고|했지만)\s*\.?\s*$/g,
-      "했다."
-    )
-    .replace(
-      /(?:되었으며|되었으나|되었고|되었지만)\s*\.?\s*$/g,
-      "되었다."
-    )
-    .replace(
-      /(?:이었으며|이었으나|이었고|이었지만)\s*\.?\s*$/g,
-      "이었다."
-    )
-    .replace(
-      /(?:하며|하나|하지만)\s*\.?\s*$/g,
-      "한다."
-    );
+    .replace(/([가-힣]+)(?:했으며|하였으며|했으나|하였으나|했고|하였고|했지만)\s*\.?\s*$/g, "$1했다.")
+    .replace(/([가-힣]+)(?:되었으며|되었으나|되었고|되었지만)\s*\.?\s*$/g, "$1되었다.")
+    .replace(/([가-힣]+)(?:이었으며|이었으나|이었고|이었지만)\s*\.?\s*$/g, "$1이었다.")
+    .replace(/([가-힣]+)(?:이라는|라는|인|이고|이며|이자|이라|이나|인데|이지만)\s*\.?\s*$/g, "$1이다.")
+    .replace(/([가-힣]+)(?:하며|하고|하나|하지만)\s*\.?\s*$/g, "$1한다.")
+    .replace(/([가-힣]+)(?:의|과|와|및|에서|에게|으로|(?<!으)로|을|를|은|는|이|가)\s*\.?\s*$/g, "$1이다.");
 
-  // "이고", "이며", "이자" 등은 앞 명사가 명확할 때만
-  // 최소한으로 처리한다.
+  // 5) 구두점 정리
   result = result
-    .replace(
-      /([가-힣]{2,})(?:이고|이며|이자)\s*\.?\s*$/g,
-      "$1이다."
-    )
-    .replace(
-      /([가-힣]{2,})(?:이라는|라는)\s*\.?\s*$/g,
-      "$1이라는."
-    );
-
-  result = result
+    .replace(/(?:,\s*)+,/g, ",")
     .replace(/,\s*\./g, ".")
-    .replace(/(?:\.\s*){2,}/g, ".")
+    .replace(/^\s*,\s*/, "")
+    .replace(/\s*\.+\s*(?:\.+\s*)+/g, ".")
     .replace(/\s+/g, " ")
     .trim();
-
-  // --------------------------------------------------------
-  // 기본 무결성 검사
-  // --------------------------------------------------------
 
   if (result.length < 15) return "";
 
   const openParen = (result.match(/\(/g) || []).length;
   const closeParen = (result.match(/\)/g) || []).length;
-
   if (openParen !== closeParen) return "";
-
-  if (BAD_WIKI_SENTENCE_REGEX.test(result)) {
-    return "";
-  }
 
   if (UNIVERSAL_NOISE_RULES.some((rule) => rule.test(result))) {
     return "";
   }
 
-  // 정상적인 종결문만 허용
-  const VALID_ENDING =
-    /(?:다|함|임|됨|음|였음|했음|있음|없음)[.!?]?$/;
-
-  if (!VALID_ENDING.test(result)) {
+  const VALID_DECLARATIVE_ENDING = /(?:다|함|임|됨|음|였음|했음|있음|없음)\.?$/;
+  if (!VALID_DECLARATIVE_ENDING.test(result)) {
+    // 6단계 어미 치환 체인이 커버하지 못한 미지의 축약형/연결 어미(예: 였으며, 였고 등)로
+    // 끝난 경우, 억지로 "이다."를 이어붙이면 "~였으며이다."처럼 오염된 문장이 만들어진다.
+    // 정상적으로 종결시킬 수 없는 문장은 이다를 붙이지 말고 그냥 폐기한다.
     return "";
-  }
-
-  if (!/[.!?]$/.test(result)) {
+  } else if (!/[.!?]$/.test(result)) {
     result += ".";
   }
 
   return result;
 }
 
-
 // ==========================================================
-// 4. 문장 분리
+// 3. 문장 분리 (소수점/날짜 보호) & 타인 주어 필터링
 // ==========================================================
 
 export function splitSentences(text) {
   if (!text) return [];
-
-  const normalized = cleanWikiText(text);
-
-  if (!normalized) return [];
-
-  return normalized
-    .split(
-      /(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/
-    )
+  return text
+    .replace(/\s+/g, " ")
+    .trim()
+    // 숫자 소수점(1.5 등) 및 주요 영문 약어(Op., No., Dr. 등) 뒤의 마침표 분할 방지
+    .split(/(?<!\d\.)(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i)
     .map((s) => s.trim())
     .filter((s) => s.length > 8);
 }
 
-
-// ==========================================================
-// 5. 문장 구조 검사
-// ==========================================================
-
 function isValidSentenceStructure(sentence) {
-  if (!sentence) return false;
-
   const trimmed = sentence.trim();
-
   if (trimmed.length < 15) return false;
 
-  const openParen =
-    (trimmed.match(/\(/g) || []).length;
-
-  const closeParen =
-    (trimmed.match(/\)/g) || []).length;
-
+  const openParen = (trimmed.match(/\(/g) || []).length;
+  const closeParen = (trimmed.match(/\)/g) || []).length;
   if (openParen !== closeParen) return false;
 
-  if (BAD_WIKI_SENTENCE_REGEX.test(trimmed)) {
-    return false;
-  }
-
-  if (UNIVERSAL_NOISE_RULES.some((rule) => rule.test(trimmed))) {
-    return false;
-  }
-
-  return /(?:다|함|임|됨|음|였음|했음|있음|없음)[.!?]?$/.test(
-    trimmed
-  );
-}
-
-
-// ==========================================================
-// 6. 타인 주어 판별
-// ==========================================================
-
-function normalizeName(name) {
-  return String(name || "")
-    .replace(/\s+/g, "")
-    .replace(/[·ㆍ]/g, "")
-    .trim()
-    .toLowerCase();
-}
-
-function extractLeadingSubject(sentence) {
-  if (!sentence) return "";
-
-  let text = sentence.trim();
-
-  // 시간/장소/전후 관계 부사구 제거
-  text = text.replace(
-    /^(?:\d{1,4}년(?:\s*\d{1,2}월(?:\s*\d{1,2}일)?)?|[가-힣]{1,12}(?:에서|에게|으로|로|부터|까지|당시|이후|이전))\s+/,
-    ""
-  );
-
-  // 인물 이름 + 조사
-  const match = text.match(
-    /^([가-힣]{2,6})(?:은|는|이|가)(?:\s|,|$)/
-  );
-
-  return match ? match[1] : "";
-}
-
-function isOtherSubject(sentence, docTitle) {
-  if (!docTitle || !sentence) return false;
-
-  const title = normalizeName(docTitle);
-
-  if (!title) return false;
-
-  const subject = normalizeName(
-    extractLeadingSubject(sentence)
-  );
-
-  if (!subject) return false;
-
-  // 지칭 대명사 / 관계 주어는 허용
-  const ALLOWED_SUBJECTS = new Set([
-    "그",
-    "그녀",
-    "그들",
-    "이들",
-    "왕",
-    "황제",
-    "아버지",
-    "어머니",
-    "부친",
-    "모친",
-    "조부",
-    "스승",
-    "동료",
-    "제자",
-    "정부",
-    "군",
-    "군대",
-    "연합군",
-    "국회",
-    "정부군"
-  ]);
-
-  if (ALLOWED_SUBJECTS.has(subject)) {
-    return false;
-  }
-
-  // 제목과 정확히 일치
-  if (subject === title) {
-    return false;
-  }
-
-  // 제목에 성명이 포함되는 경우
-  if (title.includes(subject) || subject.includes(title)) {
-    return false;
-  }
-
-  // aliases는 이 함수 외부에서 처리하므로
-  // 여기서는 명백한 다른 인물만 제외
   return true;
 }
 
+function isOtherSubject(sentence, docTitle) {
+  if (!docTitle) return false;
 
-// ==========================================================
-// 7. TF-IDF
-// ==========================================================
+  // 문두 첫 주어 추출 (날짜/장소/사건 부사구 제외 후 순수 주어 파악)
+  const trimmed = sentence.replace(/^[\d\s년월일시분초계절소속기관명성명등\.,\-~가-힣]+(?:에|에서|부터|까지|에도)\s+/, "");
+  const firstSubjectMatch = trimmed.match(/^[가-힣]{2,5}(?:은|는|이|(?<!다)가)\b/);
+  
+  if (!firstSubjectMatch) return false;
 
-function tokenize(text) {
-  return (
-    String(text || "")
-      .toLowerCase()
-      .match(/[가-힣a-zA-Z0-9]+/g) || []
-  ).filter((w) => w.length >= 2);
-}
-
-function computeTF(tokens) {
-  const tf = {};
-
-  if (!tokens.length) {
-    return tf;
-  }
-
-  for (const token of tokens) {
-    tf[token] = (tf[token] || 0) + 1;
-  }
-
-  for (const token of Object.keys(tf)) {
-    tf[token] /= tokens.length;
-  }
-
-  return tf;
-}
-
-function computeIDF(sentenceTokensList) {
-  const idf = {};
-
-  const N = sentenceTokensList.length;
-
-  if (!N) {
-    return idf;
-  }
-
-  const documentFrequency = {};
-
-  for (const tokens of sentenceTokensList) {
-    const uniqueTokens = new Set(tokens);
-
-    for (const token of uniqueTokens) {
-      documentFrequency[token] =
-        (documentFrequency[token] || 0) + 1;
-    }
-  }
-
-  for (const token of Object.keys(documentFrequency)) {
-    idf[token] =
-      Math.log(
-        (N + 1) /
-        (documentFrequency[token] + 1)
-      ) + 1;
-  }
-
-  return idf;
-}
-
-function computeTFIDF(tf, idf) {
-  const vector = {};
-
-  for (const token of Object.keys(tf)) {
-    vector[token] =
-      tf[token] * (idf[token] || 0);
-  }
-
-  return vector;
-}
-
-function cosineSimilarity(vecA, vecB) {
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-
-  const keys = new Set([
-    ...Object.keys(vecA),
-    ...Object.keys(vecB)
-  ]);
-
-  for (const key of keys) {
-    const a = vecA[key] || 0;
-    const b = vecB[key] || 0;
-
-    dot += a * b;
-    normA += a * a;
-    normB += b * b;
-  }
-
-  if (normA === 0 || normB === 0) {
-    return 0;
-  }
-
-  return (
-    dot /
-    (Math.sqrt(normA) * Math.sqrt(normB))
-  );
-}
-
-
-// ==========================================================
-// 8. 문장 중요도 보조 점수
-// ==========================================================
-
-function countMatches(sentence, regex) {
-  const matches = sentence.match(regex);
-  return matches ? matches.length : 0;
-}
-
-function aliasMatchScore(sentence, aliases) {
-  if (!Array.isArray(aliases) || !aliases.length) {
-    return 0;
-  }
-
-  const normalizedSentence =
-    normalizeName(sentence);
-
-  for (const alias of aliases) {
-    const normalizedAlias =
-      normalizeName(alias);
-
-    if (
-      normalizedAlias &&
-      normalizedSentence.includes(normalizedAlias)
-    ) {
-      return 1;
-    }
-  }
-
-  return 0;
-}
-
-function getImportanceScore(
-  sentence,
-  similarityScore,
-  index,
-  total,
-  aliases,
-  docTitle
-) {
-  let score = similarityScore * 4.0;
-
-  // --------------------------------------------------------
-  // 핵심 의미 키워드
-  // 너무 강한 가중치가 되지 않도록 제한
-  // --------------------------------------------------------
-
-  const keywordCount = countMatches(
-    sentence,
-    CORE_SIGNIFICANCE_REGEX
-  );
-
-  score += Math.min(keywordCount, 4) * 0.7;
-
-  // --------------------------------------------------------
-  // 업적 / 활동
-  // --------------------------------------------------------
-
-  if (ACHIEVEMENT_VERB_REGEX.test(sentence)) {
-    score += 2.2;
-  }
-
-  // --------------------------------------------------------
-  // 주요 역사적 사건
-  // --------------------------------------------------------
-
-  if (MAJOR_HISTORICAL_EVENT_REGEX.test(sentence)) {
-    score += 1.8;
-  }
-
-  // --------------------------------------------------------
-  // 학술 / 사상 / 개념
-  // --------------------------------------------------------
-
-  if (ACADEMIC_CONCEPT_REGEX.test(sentence)) {
-    score += 1.4;
-  }
-
-  // --------------------------------------------------------
-  // 인물명 / 별칭 등장
-  // --------------------------------------------------------
-
-  if (aliasMatchScore(sentence, aliases)) {
-    score += 0.8;
-  }
-
-  // 제목 자체가 문장에 등장하면 약간의 보너스
-  const normalizedTitle =
-    normalizeName(docTitle);
+  const subject = firstSubjectMatch[0].replace(/(?:은|는|이|가)$/, "");
+  const ALLOWED_PRONOUNS = ["그", "그는", "그의", "그녀", "그녀는", "이들은", "왕은", "황제는", "아버지는", "모친은", "조부는", "스승은", "열사는"];
 
   if (
-    normalizedTitle &&
-    normalizeName(sentence).includes(normalizedTitle)
+    !ALLOWED_PRONOUNS.includes(subject) &&
+    !docTitle.includes(subject) &&
+    !subject.includes(docTitle.trim())
   ) {
-    score += 0.8;
-  }
-
-  // --------------------------------------------------------
-  // 문서 앞부분을 약간 우대
-  // 단, 앵커처럼 강제로 선택하지는 않는다.
-  // --------------------------------------------------------
-
-  if (total > 1) {
-    const positionRatio =
-      index / (total - 1);
-
-    score +=
-      (1 - positionRatio) * 0.8;
-  }
-
-  // 너무 짧은 문장은 의미가 부족할 가능성이 높음
-  if (sentence.length < 30) {
-    score -= 0.5;
-  }
-
-  // 지나치게 긴 문장은 여러 정보를 섞었을 가능성이 있음
-  if (sentence.length > 240) {
-    score -= 0.35;
-  }
-
-  return Math.max(score, 0);
-}
-
-
-// ==========================================================
-// 9. 문장 중복 / 내용 유사도
-// ==========================================================
-
-function lexicalSimilarity(sentenceA, sentenceB) {
-  const a = new Set(tokenize(sentenceA));
-  const b = new Set(tokenize(sentenceB));
-
-  if (!a.size || !b.size) {
-    return 0;
-  }
-
-  let intersection = 0;
-
-  for (const token of a) {
-    if (b.has(token)) {
-      intersection++;
-    }
-  }
-
-  const union = new Set([...a, ...b]).size;
-
-  return union ? intersection / union : 0;
-}
-
-function isRedundantSentence(
-  sentence,
-  selectedSentences,
-  threshold = 0.48
-) {
-  for (const selected of selectedSentences) {
-    if (
-      lexicalSimilarity(sentence, selected) >=
-      threshold
-    ) {
-      return true;
-    }
+    return true;
   }
 
   return false;
 }
 
+// ==========================================================
+// 4. TF-IDF & 코사인 유사도
+// ==========================================================
+
+function tokenize(text) {
+  return (text.match(/[가-힣a-zA-Z0-9]+/g) || []).filter((w) => w.length >= 2);
+}
+
+function computeTF(tokens) {
+  const tf = {};
+  if (tokens.length === 0) return tf;
+  for (const token of tokens) {
+    tf[token] = (tf[token] || 0) + 1;
+  }
+  for (const token in tf) {
+    tf[token] = tf[token] / tokens.length;
+  }
+  return tf;
+}
+
+function computeIDF(sentenceTokensList) {
+  const idf = {};
+  const N = sentenceTokensList.length;
+  if (N === 0) return idf;
+
+  const docCount = {};
+  for (const tokens of sentenceTokensList) {
+    const uniqueTokens = new Set(tokens);
+    for (const token of uniqueTokens) {
+      docCount[token] = (docCount[token] || 0) + 1;
+    }
+  }
+
+  for (const token in docCount) {
+    idf[token] = Math.log((N + 1) / (docCount[token] + 1)) + 1;
+  }
+  return idf;
+}
+
+function computeTFIDF(tf, idf) {
+  const tfidf = {};
+  for (const token in tf) {
+    tfidf[token] = tf[token] * (idf[token] || 0);
+  }
+  return tfidf;
+}
+
+function cosineSimilarity(vecA, vecB) {
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+
+  const allKeys = new Set([...Object.keys(vecA), ...Object.keys(vecB)]);
+
+  for (const key of allKeys) {
+    const valA = vecA[key] || 0;
+    const valB = vecB[key] || 0;
+    dotProduct += valA * valB;
+    normA += valA * valA;
+    normB += valB * valB;
+  }
+
+  if (normA === 0 || normB === 0) return 0;
+  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+}
 
 // ==========================================================
-// 10. 메인 요약 생성 엔진
+// 5. 메인 요약 생성 엔진
 // ==========================================================
+
 
 export function buildDescription(
   introText = "",
@@ -660,533 +253,241 @@ export function buildDescription(
   sectionTitle = "",
   docTitle = ""
 ) {
-  const safeAliases =
-    Array.isArray(aliases)
-      ? aliases.filter(Boolean)
-      : [];
+  // aliases는 배열이 아닐 경우에도 안전하게 처리
+  const safeAliases = Array.isArray(aliases) ? aliases : [];
 
-  const safeExtraCount =
-    Math.max(0, Number(extraCount) || 0);
-
-  const safeAnchorCount =
-    Math.max(0, Number(anchorCount) || 0);
-
-  const safeMaxLength =
-    Math.max(100, Number(maxLength) || 660);
-
+  // 캐시 키에 모든 입력값 반영
   const cacheKey = [
     introText,
     bodyText,
     safeAliases.join("|"),
-    safeExtraCount,
-    safeAnchorCount,
-    safeMaxLength,
+    extraCount,
+    anchorCount,
+    maxLength,
     sectionTitle,
     docTitle
   ].join("||");
 
-  if (cache[cacheKey]) {
-    return cache[cacheKey];
-  }
+  if (cache[cacheKey]) return cache[cacheKey];
 
-  // --------------------------------------------------------
-  // 원문 문장 추출
-  // --------------------------------------------------------
+  const rawIntroSentences = splitSentences(cleanWikiText(introText));
+  const rawBodySentences = splitSentences(cleanWikiText(bodyText));
 
-  const rawIntro =
-    splitSentences(introText);
+  const introSentences = rawIntroSentences
+  .map((s, i) => i === 0 ? s : stripMetainfo(s))
+  .filter(Boolean)
+  .filter((s) => !BAD_WIKI_SENTENCE_REGEX.test(s));
 
-  const rawBody =
-    splitSentences(bodyText);
-
-  // --------------------------------------------------------
-  // 서문
-  //
-  // 첫 문장도 이제 최소한의 무결성 검사를 거친다.
-  // 단, 생몰년/직업/대표 활동이 들어있는 첫 문장을
-  // 지나치게 공격적으로 제거하지 않는다.
-  // --------------------------------------------------------
-
-  const introSentences = rawIntro
-    .map((sentence, index) => {
-      if (index === 0) {
-        const cleaned =
-          cleanWikiText(sentence)
-            .replace(/\s+/g, " ")
-            .trim();
-
-        return cleaned;
-      }
-
-      return stripMetainfo(sentence);
-    })
+  const bodySentences = rawBodySentences
+    .map((s) => stripMetainfo(s))
     .filter(Boolean)
-    .filter(
-      (sentence) =>
-        !BAD_WIKI_SENTENCE_REGEX.test(sentence)
-    )
-    .filter((sentence) => {
-      if (sentence.length < 15) {
-        return false;
-      }
-
-      return !UNIVERSAL_NOISE_RULES.some(
-        (rule) => rule.test(sentence)
-      );
-    });
-
-  // --------------------------------------------------------
-  // 본문
-  // --------------------------------------------------------
-
-  const bodySentences = rawBody
-    .map(stripMetainfo)
-    .filter(Boolean)
-    .filter(
-      (sentence) =>
-        !BAD_WIKI_SENTENCE_REGEX.test(sentence)
-    )
-    .filter(isValidSentenceStructure);
-
-  // --------------------------------------------------------
-  // 후보 구성
-  //
-  // 기존의
-  // 앞 25 + 가운데 11 + 뒤 11
-  // 제한을 제거한다.
-  //
-  // 긴 문서에서도 중요한 문장이 뒤쪽에 있으면
-  // 평가 대상에서 빠지지 않게 한다.
-  // --------------------------------------------------------
+    .filter((s) => !BAD_WIKI_SENTENCE_REGEX.test(s));
 
   let anchorSentences = [];
   let candidateSentences = [];
 
+  // --- 서문 앵커 문장 ---
   if (introSentences.length > 0) {
-    anchorSentences =
-      introSentences.slice(
-        0,
-        safeAnchorCount
-      );
+  anchorSentences = introSentences.slice(0, anchorCount);
 
-    candidateSentences = [
-      ...introSentences.slice(safeAnchorCount),
-      ...bodySentences
-    ];
-  } else {
-    anchorSentences =
-      bodySentences.slice(
-        0,
-        safeAnchorCount
-      );
+  candidateSentences = [
+    ...introSentences.slice(anchorCount),
+    ...bodySentences
+  ];
+} else {
+  anchorSentences = bodySentences.slice(0, anchorCount);
+  candidateSentences = bodySentences.slice(anchorCount);
+}
 
-    candidateSentences =
-      bodySentences.slice(safeAnchorCount);
-  }
+// 후보를 앞쪽 25개 + 가운데 10개 + 뒤쪽 10개로 추적
+const forwardCandidates = candidateSentences.slice(0, 25);
 
-  // 전체 문장 중복 제거
-  const seen = new Set();
+const middleStart = Math.max(
+  0,
+  Math.floor(candidateSentences.length / 2) - 5
+);
+const middleCandidates = candidateSentences.slice(
+  middleStart,
+  middleStart + 11
+);
 
-  candidateSentences =
-    candidateSentences.filter((sentence) => {
-      const key = sentence
-        .replace(/\s+/g, " ")
-        .trim();
+const backwardCandidates = candidateSentences.slice(-15, -4);
 
-      if (seen.has(key)) {
-        return false;
-      }
+// 중복 제거 후 원래 순서 유지
+const selectedCandidates = new Set([
+  ...forwardCandidates,
+  ...middleCandidates,
+  ...backwardCandidates
+]);
 
-      seen.add(key);
-      return true;
-    });
-
-  if (
-    anchorSentences.length === 0 &&
-    candidateSentences.length === 0
-  ) {
-    return "";
-  }
-
-  // --------------------------------------------------------
-  // TF-IDF
-  //
-  // 후보 문장 자체를 포함한 전체 문장 집합으로
-  // 중심 벡터를 만든다.
-  // --------------------------------------------------------
+candidateSentences = candidateSentences.filter(
+  sentence => selectedCandidates.has(sentence)
+);
 
   const allSentences = [
-    ...anchorSentences,
-    ...candidateSentences
-  ];
+  ...anchorSentences,
+  ...candidateSentences
+];
 
-  const tokenLists =
-    allSentences.map(tokenize);
+if (allSentences.length === 0) {
+  return "";
+}
 
-  const idf =
-    computeIDF(tokenLists);
+  // --- TF-IDF 계산 ---
+  const sentenceTokensList = allSentences.map((s) => tokenize(s));
+  const idfDict = computeIDF(sentenceTokensList);
 
-  const documentTokens =
-    allSentences.flatMap(tokenize);
+  const docTokens = allSentences.flatMap((s) => tokenize(s));
+  const docTF = computeTF(docTokens);
+  const docVector = computeTFIDF(docTF, idfDict);
 
-  const documentTF =
-    computeTF(documentTokens);
+  // --- 후보 문장 스코어링 ---
+  const finalCandidates = candidateSentences.map((sentence, index) => {
+    // 구조적으로 문제가 있는 문장은 제외
+    const isFirstPart =
+      index === 0 && anchorSentences.length < 2;
 
-  const documentVector =
-    computeTFIDF(
-      documentTF,
-      idf
-    );
-
-  // --------------------------------------------------------
-  // 후보 점수 계산
-  // --------------------------------------------------------
-
-  const scoredCandidates =
-    candidateSentences.map(
-      (sentence, index) => {
-        // 타인 주어 판별
-        if (
-          docTitle &&
-          isOtherSubject(
-            sentence,
-            docTitle
-          )
-        ) {
-          return {
-            sentence,
-            score: 0,
-            index,
-            rejected: true
-          };
-        }
-
-        const tokens =
-          tokenize(sentence);
-
-        if (!tokens.length) {
-          return {
-            sentence,
-            score: 0,
-            index,
-            rejected: true
-          };
-        }
-
-        const tf =
-          computeTF(tokens);
-
-        const vector =
-          computeTFIDF(
-            tf,
-            idf
-          );
-
-        const similarity =
-          cosineSimilarity(
-            vector,
-            documentVector
-          );
-
-        const score =
-          getImportanceScore(
-            sentence,
-            similarity,
-            index,
-            candidateSentences.length,
-            safeAliases,
-            docTitle
-          );
-
-        return {
-          sentence,
-          score,
-          index,
-          rejected: false
-        };
-      }
-    );
-
-  // --------------------------------------------------------
-  // 기본 점수 순위
-  // --------------------------------------------------------
-
-  const ranked =
-    scoredCandidates
-      .filter(
-        (item) =>
-          !item.rejected &&
-          item.score > 0
-      )
-      .sort(
-        (a, b) =>
-          b.score - a.score
-      );
-
-  // --------------------------------------------------------
-  // 앵커는 유지하되,
-  // 추가 문장은 MMR 방식으로 선택
-  //
-  // 목적:
-  // 높은 점수만 보고 같은 내용을 반복하는 것을 방지.
-  // --------------------------------------------------------
-
-  const selectedAdditional = [];
-  const selectedForSimilarity = [
-    ...anchorSentences
-  ];
-
-  const targetExtra =
-    safeExtraCount;
-
-  while (
-    selectedAdditional.length <
-      targetExtra &&
-    ranked.length > 0
-  ) {
-    let best = null;
-    let bestScore = -Infinity;
-    let bestIndex = -1;
-
-    for (
-      let i = 0;
-      i < ranked.length;
-      i++
-    ) {
-      const candidate =
-        ranked[i];
-
-      // 이미 선택한 문장과 중복되면 제외
-      if (
-        selectedAdditional.some(
-          (item) =>
-            item.sentence ===
-            candidate.sentence
-        )
-      ) {
-        continue;
-      }
-
-      // 내용 중복도
-      let maxSimilarity = 0;
-
-      for (
-        const selected
-        of selectedForSimilarity
-      ) {
-        maxSimilarity =
-          Math.max(
-            maxSimilarity,
-            lexicalSimilarity(
-              candidate.sentence,
-              selected
-            )
-          );
-      }
-
-      // MMR
-      const mmrScore =
-        candidate.score -
-        maxSimilarity * 3.0;
-
-      // 동점이면 원문 앞쪽 우선
-      const tieBreaker =
-        candidate.index * 0.0001;
-
-      const finalScore =
-        mmrScore - tieBreaker;
-
-      if (
-        finalScore >
-        bestScore
-      ) {
-        bestScore = finalScore;
-        best = candidate;
-        bestIndex = i;
-      }
+    if (!isValidSentenceStructure(sentence)) {
+      return {
+        sentence,
+        score: 0,
+        index
+      };
     }
 
-    if (!best) {
-      break;
-    }
-
-    selectedAdditional.push(best);
-    selectedForSimilarity.push(
-      best.sentence
-    );
-
-    ranked.splice(
-      bestIndex,
-      1
-    );
-  }
-
-  // --------------------------------------------------------
-  // 최종 문장 순서는 원문 순서
-  // --------------------------------------------------------
-
-  const selectedExtras =
-    selectedAdditional
-      .sort(
-        (a, b) =>
-          a.index - b.index
-      );
-
-  let resultParts = [
-    ...anchorSentences
-  ];
-
-  for (
-    const item
-    of selectedExtras
-  ) {
+    // 첫 부분이 아니면서 다른 인물/주어를 명확히 가리키는 문장 제외
     if (
-      !resultParts.includes(
-        item.sentence
-      )
+      !isFirstPart &&
+      isOtherSubject(sentence, docTitle)
     ) {
-      resultParts.push(
-        item.sentence
-      );
+      return {
+        sentence,
+        score: 0,
+        index
+      };
+    }
+
+    // TF-IDF 코사인 유사도
+    const tokens = tokenize(sentence);
+    const sentenceTF = computeTF(tokens);
+    const sentenceVector = computeTFIDF(
+      sentenceTF,
+      idfDict
+    );
+
+    const similarityScore = cosineSimilarity(
+      sentenceVector,
+      docVector
+    );
+
+    // 기본 점수 + 위치 감점
+    let score =
+      similarityScore *
+      (1.0 / (1 + index * 0.05));
+    
+    const keywordMatches = sentence.match(CORE_SIGNIFICANCE_REGEX);
+    if (keywordMatches) {
+      score += keywordMatches.length * 0.75;
+    }
+
+    // 업적/활동 관련 문장 가산점
+    if (ACHIEVEMENT_VERB_REGEX.test(sentence)) {
+      score *= 1.5;
+    }
+
+    // 학술/개념 관련 문장 가산점
+    if (ACADEMIC_CONCEPT_REGEX.test(sentence)) {
+      score *= 1.4;
+    }
+
+    // 주요 역사적 사건 관련 문장 가산점
+    if (MAJOR_HISTORICAL_EVENT_REGEX.test(sentence)) {
+      score *= 1.4;
+    }
+
+    // aliases에 포함된 인물이 등장하면 약간의 가산점
+    if (
+      safeAliases.length > 0 &&
+      safeAliases.some((alias) => {
+        if (!alias) return false;
+
+        const normalizedAlias = String(alias)
+          .trim()
+          .toLowerCase();
+
+        return (
+          normalizedAlias &&
+          sentence.toLowerCase().includes(normalizedAlias)
+        );
+      })
+    ) {
+      score *= 1.15;
+    }
+
+    return {
+      sentence,
+      score,
+      index
+    };
+  });
+
+  // --- 상위 후보 추출 ---
+  const ranked = finalCandidates
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, extraCount)
+    .sort((a, b) => a.index - b.index);
+
+  // --- 앵커 + 추가 문장 ---
+  let resultParts = [...anchorSentences];
+
+  for (const item of ranked) {
+    if (!resultParts.includes(item.sentence)) {
+      resultParts.push(item.sentence);
     }
   }
 
-  // --------------------------------------------------------
-  // maxLength에 맞춰 문장 선택
-  //
-  // 기존 방식은 앞 문장이 길면 이후의 좋은 문장을
-  // 전부 버렸다.
-  //
-  // 여기서는 앵커를 우선 유지하고,
-  // 추가 문장은 실제 길이에 맞춰 선택한다.
-  // --------------------------------------------------------
+  // --- sectionTitle은 내용 자체에 중복 삽입하지 않고
+  // 문장 선택 단계에서 사용할 수 있도록 입력값으로만 유지 ---
+  // docTitle 역시 isOtherSubject() 판정에 사용됨.
 
-  let finalParts = [];
+  // --- 최대 글자 수 제한 ---
+  let result = resultParts.join(" ").trim();
 
-  // 앵커 먼저
-  for (
-    const anchor
-    of anchorSentences
-  ) {
-    const candidate =
-      [...finalParts, anchor]
+  if (result.length > maxLength) {
+    let limitedParts = [];
+
+    for (const part of resultParts) {
+      const candidate = [...limitedParts, part]
         .join(" ")
         .trim();
 
-    if (
-      candidate.length <=
-      safeMaxLength
-    ) {
-      finalParts.push(anchor);
-    }
-  }
-
-  // 추가 문장
-  for (
-    const item
-    of selectedExtras
-  ) {
-    if (
-      finalParts.includes(
-        item.sentence
-      )
-    ) {
-      continue;
+      if (candidate.length <= maxLength) {
+        limitedParts.push(part);
+      } else {
+        break;
+      }
     }
 
-    const candidate =
-      [...finalParts, item.sentence]
-        .join(" ")
+    result = limitedParts.join(" ").trim();
+
+    // 첫 문장 하나 자체가 maxLength를 초과하는 경우
+    if (!result && resultParts.length > 0) {
+      result = resultParts[0]
+        .slice(0, maxLength)
         .trim();
-
-    if (
-      candidate.length <=
-      safeMaxLength
-    ) {
-      finalParts.push(
-        item.sentence
-      );
     }
   }
-
-  // --------------------------------------------------------
-  // 앵커 하나 자체가 너무 긴 경우에만 최후의 수단으로
-  // 자른다.
-  // --------------------------------------------------------
-
-  if (
-    finalParts.length === 0 &&
-    anchorSentences.length > 0
-  ) {
-    finalParts = [
-      anchorSentences[0]
-        .slice(0, safeMaxLength)
-        .trim()
-    ];
-  }
-
-  const result =
-    finalParts
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
 
   cache[cacheKey] = result;
-
   return result;
 }
 
 
-// ==========================================================
-// 11. 간단한 summarizeText API
-// ==========================================================
-
-export function summarizeText(
-  text,
-  topN = 3,
-  docTitle = ""
-) {
-  const safeTopN =
-    Math.max(
-      1,
-      Number(topN) || 3
-    );
-
-  // topN이 실제 최대 문장 수가 되도록 계산
-  const anchorCount =
-    Math.min(
-      2,
-      safeTopN
-    );
-
-  const extraCount =
-    Math.max(
-      0,
-      safeTopN -
-        anchorCount
-    );
-
-  const summary =
-    buildDescription(
-      text,
-      "",
-      [],
-      extraCount,
-      anchorCount,
-      660,
-      "",
-      docTitle
-    );
-
-  const actualSentenceCount =
-    splitSentences(summary).length;
-
+export function summarizeText(text, topN = 3, docTitle = "") {
   return {
-    summary,
-    sentenceCount:
-      splitSentences(text).length,
-    usedSentences:
-      actualSentenceCount
+    summary: buildDescription(text, "", [], topN - 1, 2, 660, "", docTitle),
+    sentenceCount: splitSentences(text).length,
+    usedSentences: topN,
   };
 }
-```
