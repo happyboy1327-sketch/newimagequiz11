@@ -388,17 +388,19 @@ if (allSentences.length === 0) {
       };
     }
 
-    // 첫 부분이 아니면서 다른 인물/주어를 명확히 가리키는 문장 제외
-    if (
-      !isFirstPart &&
-      isOtherSubject(sentence, docTitle)
-    ) {
-      return {
-        sentence,
-        score: 0,
-        index
-      };
-    }
+    // candidateSentences 스코어링 루프 내부
+
+const isOther = isOtherSubject(sentence, docTitle);
+const hasAchievement = ACHIEVEMENT_VERB_REGEX.test(sentence) || CORE_SIGNIFICANCE_REGEX.test(sentence);
+
+// 문두 접속어/날짜 제거 후 주어 유무 확인
+const cleaned = sentence.replace(/^(?:\d{1,4}년(?:\s*\d{1,2}월)?(?:\s*\d{1,2}일)?|당시|이후|한편|또한|이에|이때)\s*/, "");
+const hasSubject = /^([가-힣]{2,5})(?:은|는|이|가)\b/.test(cleaned);
+
+// 타인 주어이거나(isOther) OR 주어 없는데 업적만 있는 경우(!hasSubject && hasAchievement) 탈락
+if (!isFirstPart && (isOther || (!hasSubject && hasAchievement))) {
+  return { sentence, score: 0, index };
+}
 
     // TF-IDF 코사인 유사도
     const tokens = tokenize(sentence);
