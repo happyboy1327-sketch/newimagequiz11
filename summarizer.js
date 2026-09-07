@@ -394,6 +394,9 @@ export function buildDescription(
       score += keywordMatches.length * 0.75;
     }
 
+    if (sentence.hasBold) score += 1.8;
+    if (sentence.hasLink) score += 1.0;
+
     if (ACHIEVEMENT_VERB_REGEX.test(sentence)) {
       score *= 2.2;
     }
