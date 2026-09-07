@@ -348,13 +348,11 @@ const middleCandidates = candidateSentences.slice(
   middleStart + 11
 );
 
-const backwardCandidates = candidateSentences.slice(-15, -4);
 
 // 중복 제거 후 원래 순서 유지
 const selectedCandidates = new Set([
   ...forwardCandidates,
-  ...middleCandidates,
-  ...backwardCandidates
+  ...middleCandidates
 ]);
 
 candidateSentences = candidateSentences.filter(
