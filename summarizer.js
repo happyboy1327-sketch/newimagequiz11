@@ -385,9 +385,6 @@ export function buildDescription(
       score += keywordMatches.length * 0.75;
     }
 
-    if (item.hasBold) score += 1.8; // 볼드 표시 가중치 강화
-    if (item.hasLink) score += 1.0; // 링크 표시 가중치 강화
-
     if (ACHIEVEMENT_VERB_REGEX.test(sentence)) {
       score *= 1.5;
     }
