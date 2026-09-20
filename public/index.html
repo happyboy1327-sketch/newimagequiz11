@@ -13,7 +13,7 @@
   img {width:100%; height:100%; object-fit:contain; display:block; opacity:1; transition:opacity .15s ease; transform:translateZ(0);}
   img.is-loading {opacity:0;}
 
-  #hint {margin:12px 0; font-size:0.95rem; color:#495057; background:#e9ecef; padding:12px; border-radius:8px; line-height:1.5; word-break:keep-all;}
+  #hint {margin:12px 0; font-size:0.95rem; color:#495057; background:#e9ecef; padding:12px; border-radius:8px; line-height:1.5; box-sizing:border-box; width:100%; max-width:100%; white-space:normal; overflow-wrap:anywhere; word-break:break-word;}
 
   input {width:100%; padding:14px; margin-bottom:12px; border-radius:8px; border:1px solid #ced4da; font-size:1rem; box-sizing:border-box; outline:none;}
   input:focus {border-color:#4c6ef5; box-shadow:0 0 0 3px rgba(76,110,245,0.2);}
