@@ -70,11 +70,28 @@ export function stripMetainfo(text) {
   result = result.replace(/(\([^)]*?\d{3,4}년[^)]*?)\s*([은는이가]\b)/g, "$1)$2");
 
   // [보정] 중첩 괄호(예: (음력 ...)) 내부 괄호 평탄화
-  let prev;
-  do {
-    prev = result;
-    result = result.replace(/\(([^()]*)\(([^()]+)\)([^()]*)\)/g, "($1 $2 $3)");
-  } while (result !== prev);
+  result = (() => {
+  let depth = 0, out = '';
+  for (let i = 0; i < result.length; i++) {
+    const c = result[i];
+    if (c === '(') {
+      if (++depth === 1) out += '(';
+      else if (out.slice(-1) !== ' ') out += ' ';
+    } else if (c === ')') {
+      if (depth > 1) {
+        if (out.slice(-1) !== ' ') out += ' ';
+      } else if (depth === 1) {
+        if (out.slice(-1) === ' ') out = out.trimEnd();
+        out += ')';
+      }
+      depth = Math.max(0, depth - 1);
+    } else {
+      if (c === ' ' && depth > 0 && out.slice(-1) === ' ') continue;
+      out += c;
+    }
+  }
+  return out;
+})();
 
 
   // 2) 괄호 내부 메타 정보 제거 (연도/생몰년 보존)
