@@ -322,7 +322,7 @@ export function buildDescription(
   const bookTitles = extractBookTitles(rawBodySentences)
 
   const introSentences = rawIntroSentences
-    .map((s, i) => (i === 0 ? s : stripMetainfo(s)))
+    .map((s) => stripMetainfo(s))
     .filter(Boolean)
     .filter((s) => !BAD_WIKI_SENTENCE_REGEX.test(s));
 
