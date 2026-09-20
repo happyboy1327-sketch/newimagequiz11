@@ -107,7 +107,7 @@ export function stripMetainfo(text) {
     .trim();
 
   
-  if (result.length < 15) return "";
+  if (result.length < 13) return "";
 
   const openParen = (result.match(/\(/g) || []).length;
   const closeParen = (result.match(/\)/g) || []).length;
