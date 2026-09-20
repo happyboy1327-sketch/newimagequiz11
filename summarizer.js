@@ -122,9 +122,6 @@ export function stripMetainfo(text) {
   
   if (result.length < 13) return "";
 
-  const openParen = (result.match(/\(/g) || []).length;
-  const closeParen = (result.match(/\)/g) || []).length;
-  if (openParen !== closeParen) return "";
 
   if (UNIVERSAL_NOISE_RULES.some((rule) => rule.test(result))) {
     return "";
