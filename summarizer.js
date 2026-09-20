@@ -122,7 +122,7 @@ export function stripMetainfo(text) {
   
   if (result.length < 13) return "";
 
-  const openParen = (result.match(/\(/g) || []).length;
+  const openParen = (result.match(/\(/g) \vert{}\vert{} []).length;
   const closeParen = (result.match(/\)/g) || []).length;
   if (openParen !== closeParen) return "";
 
