@@ -66,6 +66,16 @@ export function stripMetainfo(text) {
   .replace(/^(?:이며|이고|이자|또한|그리고|한편)[\s,;:]*/, "")
   .replace(/^[\s,;:\)\>\.\-]+/, "");
 
+  // 2) [보정] 생몰년 괄호 뒤 조사(은/는/이/가) 전 누락된 바깥 닫는 괄호 복원
+  result = result.replace(/(\([^)]*?\d{3,4}년[^)]*?)\s*([은는이가]\b)/g, "$1)$2");
+
+  // [보정] 중첩 괄호(예: (음력 ...)) 내부 괄호 평탄화
+  let prev;
+  do {
+    prev = result;
+    result = result.replace(/\(([^()]*)\(([^()]+)\)([^()]*)\)/g, "($1 $2 $3)");
+  } while (result !== prev);
+
 
   // 2) 괄호 내부 메타 정보 제거 (연도/생몰년 보존)
   result = result.replace(/\(([^()]+)\)/g, (match, inner) => {
@@ -89,6 +99,9 @@ export function stripMetainfo(text) {
     .replace(/^(?:이며|이고|이자)\s*/, "")
     .replace(/,?\s*(?<![가-힣])(?:자|호|본관|시호|아호|별호|태명|세례명|일명|아명|법명|묘호)\s*는\s*.*$/g, "")
     .replace(/^(?:이며|이고|이자)\s*/, "");
+
+  result = result.replace(/\([^)]*$/, "").trim();
+  
   // 4) 불완전 어미 및 단절 조사 서술어 전환
   result = result
     .replace(/([가-힣]+)(?:했으며|하였으며|했으나|하였으나|했고|하였고|했지만)\s*\.?\s*$/g, "$1했다.")
