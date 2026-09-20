@@ -123,10 +123,6 @@ export function stripMetainfo(text) {
   if (result.length < 13) return "";
 
 
-  if (UNIVERSAL_NOISE_RULES.some((rule) => rule.test(result))) {
-    return "";
-  }
-
   const VALID_DECLARATIVE_ENDING = /(?:다|함|임|됨|음|였음|했음|있음|없음)\.?$/;
   if (!VALID_DECLARATIVE_ENDING.test(result)) {
     // 6단계 어미 치환 체인이 커버하지 못한 미지의 축약형/연결 어미(예: 였으며, 였고 등)로
