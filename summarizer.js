@@ -402,14 +402,14 @@ export function buildDescription(
 
     const keywordMatches = sentence.match(CORE_SIGNIFICANCE_REGEX);
     if (keywordMatches) {
-      score += keywordMatches.length * 0.75;
+      score += keywordMatches.length * 1.2;
     }
 
     if (sentence.hasBold) score += 1.8;
-    if (sentence.hasLink) score += 1.0;
+    if (sentence.hasLink) score += 1.4;
 
     if (ACHIEVEMENT_VERB_REGEX.test(sentence)) {
-      score *= 2.2;
+      score *= 3.2;
     }
 
     if (ACADEMIC_CONCEPT_REGEX.test(sentence)) {
