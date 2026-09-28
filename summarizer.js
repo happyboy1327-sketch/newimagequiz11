@@ -216,7 +216,7 @@ function isOtherSubject(sentence, docTitle) {
 
   const cleaned = sentence
     .replace(/^[\d\s년월일시분초계절.,\-~가-힣]+(?:에|에서|부터|까지|에도)\s+/, "")
-    .replace(/^(?:한편|이후|당시|또한|이때|그후|이어|반면|이에)\s+/, "");
+    .replace(/^(?:한편|이후|당시|또한|이때|그후|이어|반면|이에|뒤이어|이때부터)\s+/, "");
 
   const match = cleaned.match(/^([가-힣]{2,5})(?:은|는|이|가)\b/);
   if (!match) return false;
@@ -389,7 +389,7 @@ export function buildDescription(
       CORE_SIGNIFICANCE_REGEX.test(sentence);
 
     const cleaned = sentence.replace(
-      /^(?:\d{1,4}년(?:\s*\d{1,2}월)?(?:\s*\d{1,2}일)?|당시|이후|한편|또한|이에|이때)\s*/,
+      /^(?:\d{1,4}년(?:\s*\d{1,2}월)?(?:\s*\d{1,2}일)?|당시|이후|한편|또한|이에|이때|그\s*\뒤에|이때부터|뒤이어)\s*/,
       ""
     );
     const hasSubject = /^([가-힣]{2,5})(?:은|는|이|가)\b/.test(cleaned);
