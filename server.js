@@ -19,7 +19,7 @@ app.use((req, res, next) => {
     if (req.path === '/api/quiz') { 
         res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     } else {
-        res.setHeader('Cache-Control', 'public, max-age=3600, immutable');
+        res.setHeader('Cache-Control', 'public, s-maxage=3600, max-age=3600, immutable');
     }
     next();
 });
