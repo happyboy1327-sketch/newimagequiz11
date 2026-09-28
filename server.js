@@ -136,10 +136,28 @@ function isCulturalSiteImage(url) {
 }
 
 function hasForbiddenDescription(file) {
-    const desc = file.imageinfo?.[0]?.extmetadata?.ImageDescription?.value;
-    return desc?.includes("陵");
-}
+    const desc =
+        file.imageinfo?.[0]?.extmetadata?.ImageDescription?.value
+            ?.toLowerCase() || "";
 
+    const forbidden = [
+        "기념비", "비석", "동상", "흉상", "석상",
+        "묘", "묘소", "능", "무덤", "사당", "서원",
+        "사찰", "절", "암자", "탑", "불탑",
+        "유적", "유물", "문화재", "건물", "건축물",
+        "영정", "초상화", "동전", "우표",
+        "陵", "墓", "廟", "祠",
+        "碑", "塔", "像", "銅像",
+        "遺跡", "文化財",
+        "monument", "memorial", "landscape", 
+        "bust", "tomb", "grave", "mausoleum", "cemetery", "shrine",
+        "temple", "pagoda", "building", "architecture", "heritage",
+        "relic", "artifact", "scenery", "calligraphy", "coin",
+        "stamp"
+    ];
+
+    return forbidden.some(word => desc.includes(word.toLowerCase()));
+}
 
 function isValidImageUrl(url) {
     if (!url || typeof url !== "string") return false;
