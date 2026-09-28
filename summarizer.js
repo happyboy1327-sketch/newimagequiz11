@@ -447,6 +447,7 @@ export function buildDescription(
   const selected = [];
   for (const item of validCandidates) {
     if (selected.length >= extraCount) break;
+    selected.push(item);
   }
 
   selected.sort((a, b) => a.index - b.index);
