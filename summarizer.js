@@ -47,7 +47,7 @@ export function cleanWikiText(text) {
     .replace(/<rt[^>]*>[\s\S]*?<\/rt>/gi, "")
     .replace(/<rp[^>]*>[\s\S]*?<\/rp>/gi, "")
     .replace(/<[^>]+>/g, "")
-    .replace(/\[\d+\]|\[(?:각주\vert{}출처\s*필요\vert{}편집\vert{}주석)\]/g, "")
+    .replace(/\[\d+\]|\[(?:각주|출처\s*필요|편집|주석)\]/g, "")
     .replace(/<ref\b[^>]*>[\s\S]*?<\/ref>/gi, "")
     .replace(/<ref\b[^>]*\/>/gi, "")
     .replace(/<blockquote\b[^>]*>[\s\S]*?<\/blockquote>/gi, "")
