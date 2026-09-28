@@ -432,7 +432,7 @@ export function buildDescription(
       safeAliases.some((alias) => {
         if (!alias) return false;
         const normalizedAlias = String(alias).trim().toLowerCase();
-        return normalizedAlias && sentence.toLowerCase().includes(normalizedAlias);
+        return (normalizedAlias && sentence.toLowerCase().includes(normalizedAlias));
       })
     ) {
       score *= 1.15;
