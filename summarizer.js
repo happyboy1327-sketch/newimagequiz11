@@ -1,5 +1,3 @@
-// summarizer.js
-
 const cache = {};
 
 // ==========================================================
@@ -30,7 +28,6 @@ const ACHIEVEMENT_VERB_REGEX = /(?:저술|집필|설계|고안|집대성|제시|
 const MAJOR_HISTORICAL_EVENT_REGEX = /(?:[가-힣]{2,3}[란난]|해전|대첩|승첩|전투|의거|혁명|박해|정변|운동)/;
 const ACADEMIC_CONCEPT_REGEX = /[가-힣]{2,}(?:설|론|주의|학|법)\b/;
 
-// 가계, 유아기, 상세 지명 등 TMI 필터링 강화
 const TMI_NOISE_REGEX = /(?:부친|모친|아버지|어머니|조부|증조부|고조부|외가|오대손녀|첫\s*부인|둘째\s*부인|가계도|손자|처남|장인|결혼|이혼|혼인|재혼|파혼|배우자|남편|아내|며느리|사위|처가|딸|아들|시댁|장남|차남|장녀|차녀|외아들|외딸|\d남|\d녀|가정교사|야학|위인전|그림위인전기|계몽사|출판사|소설가|에\s*따르면|에\s*의하면|족보|족보소|\d+대조|\d+대손|입향시조|후사|종친|문중|항렬|후손|유아기|마을|출생했|출생하였|잠시\s*유아기)/;
 
 const CORE_SIGNIFICANCE_REGEX = new RegExp(CORE_SIGNIFICANCE_KEYWORDS.join("|"), "g");
@@ -44,10 +41,11 @@ const RE_SENTENCE_SPLIT = /(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd
 export function cleanWikiText(text) {
   if (!text) return "";
   return text
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "") // 수직 탭(\v) 포함 비표준 제어문자 제거
     .replace(/<rt[^>]*>[\s\S]*?<\/rt>/gi, "")
     .replace(/<rp[^>]*>[\s\S]*?<\/rp>/gi, "")
     .replace(/<[^>]+>/g, "")
-    .replace(/\[\d+\]|\[(?:각주|출처\s*필요|편집|주석)\]/g, "")
+    .replace(/\[\d+\]|\[(?:각주|문헌|출처\s*필요|편집|주석)\]/g, "")
     .replace(/<ref\b[^>]*>[\s\S]*?<\/ref>/gi, "")
     .replace(/<ref\b[^>]*\/>/gi, "")
     .replace(/<blockquote\b[^>]*>[\s\S]*?<\/blockquote>/gi, "")
@@ -60,7 +58,6 @@ export function stripMetainfo(text) {
   if (!text) return "";
   let result = text;
 
-  // 1) 괄호 내부 메타 정보 및 한자 제거 (생몰년 정보 등 유지)
   result = result.replace(/\(([^()]+)\)/g, (match, inner) => {
     if (/(?:\d{3,4}년|~|음력)/.test(inner)) {
       return `(${inner.replace(/^\s*,\s*/, "").trim()})`;
@@ -68,14 +65,12 @@ export function stripMetainfo(text) {
     return "";
   });
 
-  // 2) 잔여 아명/호/본관 구문 및 어색한 연결 부사 정리
   result = result
     .replace(/(?:아명|아호|본관|시호|별호|태명|세례명|일명|법명|묘호|호|자)\s*(?:은|는|이|가)?\s*[^,;.\n]+(?:이고|이며|이자|;|,)?\s*/g, "")
-    .replace(/^[\s,;:\)\>]+|^\.(?!\d)/, "")
+    .replace(/^[\s,;:\)>]+|^\.(?!\d)/, "")
     .replace(/^(?:이며|이고|이자|또한|그리고|한편)[\s,;:]*/, "")
-    .replace(/^[\s,;:\)\>\.\-]+/, "");
+    .replace(/^[\s,;:\)>\.\-]+/, "");
 
-  // 3) 중첩 괄호 평탄화
   let prev;
   do {
     prev = result;
@@ -84,7 +79,6 @@ export function stripMetainfo(text) {
 
   result = result.replace(/\([^)]*$/, "").trim();
 
-  // 4) 불완전 어미 및 단절 조사 서술어 전환
   result = result
     .replace(/([가-힣]+)(?:했으며|하였으며|했으나|하였으나|했고|하였고|했지만)\s*\.?\s*$/g, "$1했다.")
     .replace(/([가-힣]+)(?:되었으며|되었으나|되었고|되었지만)\s*\.?\s*$/g, "$1되었다.")
@@ -93,7 +87,6 @@ export function stripMetainfo(text) {
     .replace(/([가-힣]+)(?:하며|하고|하나|하지만)\s*\.?\s*$/g, "$1한다.")
     .replace(/([가-힣]+)(?:의|과|와|및|에서|에게|으로|(?<!으)로|을|를|은|는|이|가)\s*\.?\s*$/g, "$1이다.");
 
-  // 5) 구두점 및 공백 정리
   result = result
     .replace(/\s*,/g, ",")
     .replace(/(?:,\s*)+,/g, ",")
@@ -132,11 +125,11 @@ export function extractAnnotatedParagraphs(rawText) {
   if (!rawText) return [];
 
   const cleanedGlobalText = cleanWikiText(rawText);
-  const paragraphs = cleanedGlobalText.split(/\n+|\n?==+[^=]+==+\n?/).filter(p => p.trim());
+  const paragraphs = cleanedGlobalText.split(/\n+|\n?==+[^=]+==+\n?/).filter((p) => p.trim());
   const structuredParagraphs = [];
 
   for (const p of paragraphs) {
-    const rawSentences = p.split(RE_SENTENCE_SPLIT).map(s => s.trim()).filter(Boolean);
+    const rawSentences = p.split(RE_SENTENCE_SPLIT).map((s) => s.trim()).filter(Boolean);
     const parsedSentences = [];
 
     for (let raw of rawSentences) {
@@ -264,7 +257,6 @@ function cosineSimilarity(vecA, vecB) {
   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-// 문장 정규화 함수 (중복 비교용)
 function normalizeSentence(sentence) {
   return sentence.replace(/[^가-힣a-zA-Z0-9]/g, "");
 }
@@ -327,7 +319,6 @@ export function buildDescription(
     candidateSentences = bodySentences.slice(anchorCount);
   }
 
-  // Anchor 문장 정규화 세트 생성 (중복 제거)
   const seenNormalized = new Set(anchorSentences.map(normalizeSentence));
 
   const allSentences = [...anchorSentences, ...candidateSentences];
@@ -343,7 +334,6 @@ export function buildDescription(
   const finalCandidates = candidateSentences.map((sentence, index) => {
     const normalized = normalizeSentence(sentence);
 
-    // Anchor 문장과 중복되거나 이미 선택된 문장은 제외
     if (seenNormalized.has(normalized)) {
       return { sentence, score: 0, index };
     }
