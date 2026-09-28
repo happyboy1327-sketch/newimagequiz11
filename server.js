@@ -17,7 +17,7 @@ app.use((req, res, next) => {
     res.setHeader('X-XSS-Protection', '1; mode=block'); 
     
     if (req.path === '/api/quiz') { 
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     } else {
         res.setHeader('Cache-Control', 'public, max-age=3600, immutable');
     }
