@@ -122,8 +122,7 @@ export function stripMetainfo(text) {
     .replace(/\s+/g, " ")
     .trim();
 
-  
-  if (result.length < 7) return "";
+
 
 
   const VALID_DECLARATIVE_ENDING = /(?:다|함|임|됨|음|였음|했음|있음|없음)\.?$/;
