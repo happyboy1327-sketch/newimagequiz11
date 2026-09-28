@@ -300,7 +300,7 @@ export function buildDescription(
   aliases = [],
   extraCount = 3,
   anchorCount = 3,
-  maxLength = 750,
+  maxLength = 850,
   sectionTitle = "",
   docTitle = ""
 ) {
@@ -501,7 +501,7 @@ export function buildDescription(
 
 export function summarizeText(text, topN = 3, docTitle = "") {
   return {
-    summary: buildDescription(text, "", [], topN - 1, 2, 750, "", docTitle),
+    summary: buildDescription(text, "", [], topN - 1, 2, 850, "", docTitle),
     sentenceCount: splitSentences(text).length,
     usedSentences: topN,
   };
