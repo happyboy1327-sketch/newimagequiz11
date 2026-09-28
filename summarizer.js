@@ -49,6 +49,7 @@ export function cleanWikiText(text) {
     .replace(/<ref\b[^>]*>[\s\S]*?<\/ref>/gi, "")
     .replace(/<ref\b[^>]*\/>/gi, "")
     .replace(/<blockquote\b[^>]*>[\s\S]*?<\/blockquote>/gi, "")
+    .replace(/\{\|[\s\S]*?\|\}/g, "")
     .replace(/\{\{인용문\s*\|[\s\S]*?\}\}/g, "")
     .replace(/\s+/g, " ")
     .trim();
