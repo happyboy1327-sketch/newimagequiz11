@@ -376,7 +376,7 @@ export function buildDescription(
       return { sentence, score: 0, index };
     }
 
-    if (UNIVERSAL_NOISE_RULES.some((rule) => rule.test(sentence))) {
+    if (UNIVERSAL_NOISE_RULES.some(rule => rule.test(sentence))) {
       return { sentence, score: 0, index };
     }
 
