@@ -41,11 +41,10 @@ const RE_SENTENCE_SPLIT = /(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd
 export function cleanWikiText(text) {
   if (!text) return "";
   return text
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "") // 수직 탭(\v) 포함 비표준 제어문자 제거
     .replace(/<rt[^>]*>[\s\S]*?<\/rt>/gi, "")
     .replace(/<rp[^>]*>[\s\S]*?<\/rp>/gi, "")
     .replace(/<[^>]+>/g, "")
-    .replace(/\[\d+\]|\[(?:각주|문헌|출처\s*필요|편집|주석)\]/g, "")
+    .replace(/\[\d+\]|\[(?:각주|출처\s*필요|편집|주석)\]/g, "")
     .replace(/<ref\b[^>]*>[\s\S]*?<\/ref>/gi, "")
     .replace(/<ref\b[^>]*\/>/gi, "")
     .replace(/<blockquote\b[^>]*>[\s\S]*?<\/blockquote>/gi, "")
