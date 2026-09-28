@@ -149,7 +149,7 @@ function hasForbiddenDescription(file) {
         "陵", "墓", "廟", "祠",
         "碑", "塔", "像", "銅像",
         "遺跡", "文化財",
-        "monument", "memorial", "landscape", 
+        "monument", "memorial", "landscape", "overlooking water", "hill", "overlooking", 
         "bust", "tomb", "grave", "mausoleum", "cemetery", "shrine",
         "temple", "pagoda", "building", "architecture", "heritage",
         "relic", "artifact", "scenery", "calligraphy", "coin",
