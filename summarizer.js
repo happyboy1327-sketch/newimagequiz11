@@ -65,6 +65,7 @@ export function stripMetainfo(text) {
   .replace(/^(?:이며|이고|이자|또한|그리고|한편)[\s,;:]*/, "")
   .replace(/^[\s,;:\)\>\.\-]+/, "");
 
+
   // 2) [보정] 생몰년 괄호 뒤 조사(은/는/이/가) 전 누락된 바깥 닫는 괄호 복원
   result = result.replace(/(\([^)]*?\d{3,4}년[^)]*?)\s*([은는이가]\b)/g, "$1)$2");
 
@@ -89,6 +90,9 @@ export function stripMetainfo(text) {
 
   // 추가: 닫히지 않고 남은 괄호 절삭
   result = result.replace(/\([^)]*$/, "").trim();
+
+  result = result
+    .replace(/(?:아명|아호|본관|시호|별호|태명|세례명|일명|법명|묘호|호|자)\s*(?:은|는|이|가)?\s*[^,;.\n]+(?:이고|이며|이자|;|,)?\s*/g, "")
 
 
   // 3) 범용 메타 서술절 제거
