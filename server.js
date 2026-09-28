@@ -147,7 +147,7 @@ function hasForbiddenDescription(file) {
         "유적", "유물", "문화재", "건물", "건축물",
         "영정", "초상화", "동전", "우표",
         "陵", "墓", "廟", "祠",
-        "碑", "塔", "像", "銅像",
+        "碑", "塔", "像", "銅像", "插画",
         "遺跡", "文化財", "mint", 
         "monument", "memorial", "landscape", "overlooking water", "hill", "overlooking", 
         "bust", "tomb", "grave", "mausoleum", "cemetery", "shrine",
