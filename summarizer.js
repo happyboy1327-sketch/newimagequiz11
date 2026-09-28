@@ -295,9 +295,6 @@ function cosineSimilarity(vecA, vecB) {
   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-function normalizeSentence(sentence) {
-  return sentence.replace(/[^가-힣a-zA-Z0-9]/g, "");
-}
 
 // ==========================================================
 // 5. 요약 생성 핵심
@@ -359,7 +356,7 @@ export function buildDescription(
     candidateSentences = bodySentences.slice(anchorCount);
   }
 
-  const seenNormalized = new Set(anchorSentences.map(normalizeSentence));
+
 
   const allSentences = [...anchorSentences, ...candidateSentences];
   if (allSentences.length === 0) return "";
@@ -372,12 +369,8 @@ export function buildDescription(
   const docVector = computeTFIDF(docTF, idfDict);
 
   const finalCandidates = candidateSentences.map((sentence, index) => {
-    const normalized = normalizeSentence(sentence);
+  
     const isFirstPart = index === 0 && anchorSentences.length < 2;
-
-    if (seenNormalized.has(normalized)) {
-      return { sentence, score: 0, index };
-    }
 
     if (!isValidSentenceStructure(sentence)) {
       return { sentence, score: 0, index };
@@ -454,11 +447,6 @@ export function buildDescription(
   const selected = [];
   for (const item of validCandidates) {
     if (selected.length >= extraCount) break;
-    const norm = normalizeSentence(item.sentence);
-    if (!seenNormalized.has(norm)) {
-      seenNormalized.add(norm);
-      selected.push(item);
-    }
   }
 
   selected.sort((a, b) => a.index - b.index);
