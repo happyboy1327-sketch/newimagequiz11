@@ -445,8 +445,10 @@ export function buildDescription(
   validCandidates.sort((a, b) => b.score - a.score);
 
   const selected = [];
+  const seen = new Set();
   for (const item of validCandidates) {
     if (selected.length >= extraCount) break;
+    seen.add(item.sentence);
     selected.push(item);
   }
 
