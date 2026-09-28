@@ -38,6 +38,7 @@ const RE_SENTENCE_SPLIT = /(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd
 // 2. 위키 원문 정제 & 문장 보정
 // ==========================================================
 
+
 export function cleanWikiText(text) {
   if (!text) return "";
   return text
@@ -53,31 +54,54 @@ export function cleanWikiText(text) {
     .trim();
 }
 
+
 export function stripMetainfo(text) {
   if (!text) return "";
   let result = text;
 
-  result = result.replace(/\(([^()]+)\)/g, (match, inner) => {
-    if (/(?:\d{3,4}년|~|음력)/.test(inner)) {
-      return `(${inner.replace(/^\s*,\s*/, "").trim()})`;
-    }
-    return "";
-  });
-
+  // 문두 잔여 쉼표 및 연결어 일괄 제거
   result = result
-    .replace(/(?:아명|아호|본관|시호|별호|태명|세례명|일명|법명|묘호|호|자)\s*(?:은|는|이|가)?\s*[^,;.\n]+(?:이고|이며|이자|;|,)?\s*/g, "")
-    .replace(/^[\s,;:\)>]+|^\.(?!\d)/, "")
-    .replace(/^(?:이며|이고|이자|또한|그리고|한편)[\s,;:]*/, "")
-    .replace(/^[\s,;:\)>\.\-]+/, "");
+  .replace(/^[\s,;:\)\>]+|^\.(?!\d)/, "")
+  .replace(/^(?:이며|이고|이자|또한|그리고|한편)[\s,;:]*/, "")
+  .replace(/^[\s,;:\)\>\.\-]+/, "");
 
+  // 2) [보정] 생몰년 괄호 뒤 조사(은/는/이/가) 전 누락된 바깥 닫는 괄호 복원
+  result = result.replace(/(\([^)]*?\d{3,4}년[^)]*?)\s*([은는이가]\b)/g, "$1)$2");
+
+  // [보정] 중첩 괄호(예: (음력 ...)) 내부 괄호 평탄화
   let prev;
   do {
     prev = result;
     result = result.replace(/\(([^()]*)\(([^()]+)\)([^()]*)\)/g, "($1 $2 $3)");
   } while (result !== prev);
 
+
+  // 2) 괄호 내부 메타 정보 제거 (연도/생몰년 보존)
+  result = result.replace(/\(([^()]+)\)/g, (match, inner) => {
+    if (/(?:\d{3,4}년|~|음력)/.test(inner)) {
+      return `(${inner.replace(/^\s*,\s*/, "").trim()})`;
+    }
+    if (/(?:본관|시호|아호|별호|아명|태명|세례명|일명|법명|묘호|호|자|부친|모친|조부|출처)/.test(inner)) {
+      return "";
+    }
+    return match;
+  });
+
+  // 추가: 닫히지 않고 남은 괄호 절삭
   result = result.replace(/\([^)]*$/, "").trim();
 
+
+  // 3) 범용 메타 서술절 제거
+  result = result
+    .replace(/(?<![가-힣])(?:자|호|본관|시호|아호|별호|태명|세례명|일명|아명)\b.*?(?:있다|있었다|전해진다)\.?/g, "")
+    .replace(/(?<![가-힣])(?:본관|시호|아호|별호|아명|법명|태명|세례명|일명|묘호|호|자)\s*[:=는은이]\s*(?:[^,;.\n]|\.(?=\d))+?(?=이며|이고|이자|이며,|이고,|이자,|;|\.(?!\d)|$)/g, "")
+    .replace(/^(?:이며|이고|이자)\s*/, "")
+    .replace(/,?\s*(?<![가-힣])(?:자|호|본관|시호|아호|별호|태명|세례명|일명|아명|법명|묘호)\s*는\s*.*$/g, "")
+    .replace(/^(?:이며|이고|이자)\s*/, "");
+
+  result = result.replace(/\([^)]*$/, "").trim();
+  
+  // 4) 불완전 어미 및 단절 조사 서술어 전환
   result = result
     .replace(/([가-힣]+)(?:했으며|하였으며|했으나|하였으나|했고|하였고|했지만)\s*\.?\s*$/g, "$1했다.")
     .replace(/([가-힣]+)(?:되었으며|되었으나|되었고|되었지만)\s*\.?\s*$/g, "$1되었다.")
@@ -86,18 +110,23 @@ export function stripMetainfo(text) {
     .replace(/([가-힣]+)(?:하며|하고|하나|하지만)\s*\.?\s*$/g, "$1한다.")
     .replace(/([가-힣]+)(?:의|과|와|및|에서|에게|으로|(?<!으)로|을|를|은|는|이|가)\s*\.?\s*$/g, "$1이다.");
 
+  // 5) 구두점 정리
   result = result
-    .replace(/\s*,/g, ",")
     .replace(/(?:,\s*)+,/g, ",")
     .replace(/,\s*\./g, ".")
     .replace(/^\s*,\s*/, "")
     .replace(/\s+/g, " ")
     .trim();
 
+  
   if (result.length < 13) return "";
+
 
   const VALID_DECLARATIVE_ENDING = /(?:다|함|임|됨|음|였음|했음|있음|없음)\.?$/;
   if (!VALID_DECLARATIVE_ENDING.test(result)) {
+    // 6단계 어미 치환 체인이 커버하지 못한 미지의 축약형/연결 어미(예: 였으며, 였고 등)로
+    // 끝난 경우, 억지로 "이다."를 이어붙이면 "~였으며이다."처럼 오염된 문장이 만들어진다.
+    // 정상적으로 종결시킬 수 없는 문장은 이다를 붙이지 말고 그냥 폐기한다.
     return "";
   } else if (!/[.!?]$/.test(result)) {
     result += ".";
@@ -107,7 +136,7 @@ export function stripMetainfo(text) {
 }
 
 // ==========================================================
-// 3. 문장 분리 & 타인 주어 필터링
+// 3. 문장 분리 (소수점/날짜 보호) & 타인 주어 필터링
 // ==========================================================
 
 export function splitSentences(text) {
@@ -115,10 +144,15 @@ export function splitSentences(text) {
   return text
     .replace(/\s+/g, " ")
     .trim()
+    // 숫자 바로 뒤 마침표(3.1 등) 및 주요 영문 약어 뒤의 마침표 분할 방지
     .split(/(?<!\d)(?<!\b(?:Op|No|Dr|Mr|Mrs|Ms|Prof|vs|Vol|St|Co|Inc|Ltd|etc)\.)(?<=[.!?])\s+(?=[가-힣A-Za-z0-9"'(])/i)
-    .map(s => s.trim())
-    .filter(s => s.length > 8);
+    .map((s) => s.trim())
+    .filter((s) => s.length > 8);
 }
+
+// ==========================================================
+// 3. 문장 분리 & 타인 주어 필터링
+// ==========================================================
 
 export function extractAnnotatedParagraphs(rawText) {
   if (!rawText) return [];
