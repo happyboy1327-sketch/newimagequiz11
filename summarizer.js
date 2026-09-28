@@ -330,8 +330,10 @@ export function buildDescription(
 
   const rawIntroSentences = splitSentences(cleanWikiText(introText));
   const rawBodySentences = splitSentences(cleanWikiText(bodyText));
+  const parsedIntroParagraphs = extractAnnotatedParagraphs(introText);
+  const parsedBodyParagraphs = extractAnnotatedParagraphs(bodyText);
 
-  const bookTitles = extractBookTitles(rawBodySentences);
+  const bookTitles = extractBookTitles(rawBodySentences)
 
   const introSentences = rawIntroSentences
     .map((s) => stripMetainfo(s))
