@@ -537,7 +537,7 @@ async function fillCache() {
     isCaching = false;
 
     if (QUIZ_CACHE.length <= 30) {
-        setTimeout(fillCache, 3000);
+        setTimeout(fillCache, 2200);
     }
 }
 
