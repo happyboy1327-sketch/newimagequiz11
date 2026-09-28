@@ -148,7 +148,7 @@ function hasForbiddenDescription(file) {
         "영정", "초상화", "동전", "우표",
         "陵", "墓", "廟", "祠",
         "碑", "塔", "像", "銅像", "插画",
-        "遺跡", "文化財", "mint", 
+        "遺跡", "文化財", "mint", "seal", 
         "monument", "memorial", "landscape", "overlooking water", "hill", "overlooking", 
         "bust", "tomb", "grave", "mausoleum", "cemetery", "shrine",
         "temple", "pagoda", "building", "architecture", "heritage",
@@ -171,7 +171,7 @@ function isValidImageUrl(url) {
 
     const Keywords = [
         "coat_of_arms", "emblem", "flag", "icon", "grave", "tomb", "map", "moon",
-        "signature", "sword", "sabre", "saber", "weapon", "monument",
+        "signature", "sword", "sabre", "saber", "weapon", "monument", "seal", "mint", 
         "feather", "quill", "symbol", "insignia", "coin", "cross",
         "black dot", "black_dot", "black-dot", "placeholder", "no image", "no_image",
         "question", "default", "missing",
