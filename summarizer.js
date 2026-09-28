@@ -334,14 +334,14 @@ export function buildDescription(
   const bookTitles = extractBookTitles(rawBodySentences);
 
   const introSentences = rawIntroSentences
-    .map(s => stripMetainfo(s))
+    .map((s) => stripMetainfo(s))
     .filter(Boolean)
-    .filter(s => !BAD_WIKI_SENTENCE_REGEX.test(s));
+    .filter((s) => !BAD_WIKI_SENTENCE_REGEX.test(s));
 
   const bodySentences = rawBodySentences
-    .map(s => stripMetainfo(s))
+    .map((s) => stripMetainfo(s))
     .filter(Boolean)
-    .filter(s => !BAD_WIKI_SENTENCE_REGEX.test(s));
+    .filter((s) => !BAD_WIKI_SENTENCE_REGEX.test(s));
 
   let anchorSentences = [];
   let candidateSentences = [];
