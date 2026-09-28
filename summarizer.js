@@ -373,6 +373,7 @@ export function buildDescription(
 
   const finalCandidates = candidateSentences.map((sentence, index) => {
     const normalized = normalizeSentence(sentence);
+    const isFirstPart = index === 0 && anchorSentences.length < 2;
 
     if (seenNormalized.has(normalized)) {
       return { sentence, score: 0, index };
